@@ -1,0 +1,36 @@
+{
+  "slug": "aipia",
+  "appName": "AIPIA",
+  "appId": "kr.co.aipia.app",
+  "startUrl": "https://aipia.co.kr",
+  "version": { "name": "1.0.0", "code": 1 },
+  "theme": {
+    "primary": "#1A73E8",
+    "statusBarStyle": "light",
+    "background": "#FFFFFF"
+  },
+  "assets": { "icon": "icon.png", "splash": "splash.png" },
+  "features": {
+    "push": true,
+    "deepLink": true,
+    "deferredDeepLink": { "enabled": true, "provider": "appsflyer" },
+    "biometric": true,
+    "share": true,
+    "camera": true,
+    "forceUpdate": { "enabled": true, "minVersionUrl": "https://aipia.co.kr/min-version.json" },
+    "secureStorage": true,
+    "localNotification": true,
+    "haptics": true,
+    "clipboard": true,
+    "geolocation": true
+  },
+  "navigation": {
+    "allowedDomains": ["aipia.co.kr", "*.aipia.co.kr"],
+    "externalInBrowser": true
+  },
+  "marketing": {
+    "attribution": { "provider": "appsflyer", "deferredDeepLink": true },
+    "analytics": { "provider": null },
+    "crm": { "provider": null }
+  }
+}
