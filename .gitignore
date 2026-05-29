@@ -1,0 +1,41 @@
+# 생성된 앱 프로젝트 / 빌드 산출물 — config 와 에셋(apps/)만 git 으로 관리한다
+/build/
+
+# Gradle / 네이티브 빌드 캐시 (브릿지 플러그인 컴파일 산출물 등 모든 중첩 build 디렉터리)
+build/
+.gradle/
+*.iml
+.idea/
+local.properties
+captures/
+.cxx/
+
+# Node
+node_modules/
+npm-debug.log*
+.pnpm-debug.log*
+
+# 자격증명 / 시크릿 — 절대 커밋 금지
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+fastlane/.env
+fastlane/.env.*
+!fastlane/.env.example
+**/google-services.json
+**/GoogleService-Info.plist
+**/api-key*.json
+**/service-account*.json
+
+# fastlane 산출물
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# OS
+.DS_Store
+Thumbs.db

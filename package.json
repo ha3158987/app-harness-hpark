@@ -1,0 +1,17 @@
+{
+  "name": "web-native-harness",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "여러 웹 서비스를 하나의 얇은 Capacitor 셸 + 공유 브릿지로 감싸 iOS/Android 앱으로 반복 추출하는 하네스.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-app.mjs",
+    "check": "node --check scripts/generate-app.mjs"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0"
+  }
+}

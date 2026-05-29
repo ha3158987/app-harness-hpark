@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <!-- viewport-fit=cover: 노치/Dynamic Island/제스처바 세이프에어리어 대응 (DEVICE-SUPPORT) -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <title>로딩 중…</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!--
+    server.url 로 원격 웹을 직접 로드하므로 이 화면은 평소엔 보이지 않는다.
+    네트워크 단절 / 원격 로드 실패 시의 오프라인 폴백 셸이다.
+    (Capacitor 는 webDir 에 index.html 이 반드시 존재하길 요구한다.)
+  -->
+  <main class="shell" role="main">
+    <div class="shell__box">
+      <div class="shell__spinner" aria-hidden="true"></div>
+      <h1 class="shell__title" id="title">연결 중…</h1>
+      <p class="shell__msg" id="msg">잠시만 기다려 주세요.</p>
+      <button class="shell__retry" id="retry" hidden>다시 시도</button>
+    </div>
+  </main>
+  <script src="shell.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "name": "@harness/bridge",
+  "version": "1.0.0",
+  "description": "공유 JS 브릿지 SDK + 커스텀 Capacitor 플러그인(AppBridge). 각 웹 서비스가 import 하고, 셸이 네이티브 기능을 열어준다.",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "android/src/",
+    "android/build.gradle",
+    "ios/Sources/",
+    "HarnessBridge.podspec"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  }
+}

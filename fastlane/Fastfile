@@ -1,0 +1,96 @@
+# Fastfile — 멀티앱 하네스용 빌드/업로드 lane.
+#
+# 모든 lane 은 slug 파라미터를 받아 build/<slug> 프로젝트를 대상으로 한다.
+#   bundle exec fastlane android beta slug:service-a
+#   bundle exec fastlane ios beta slug:service-a
+#
+# 안전 원칙 (README/STRATEGY):
+#  - 자격증명은 여기 평문으로 두지 않는다. fastlane match / 환경변수(.env)로만.
+#  - 자동화 범위 = 베타/내부 트랙 업로드까지. 프로덕션 공개는 사람이 콘솔에서.
+
+require 'json'
+
+REPO_ROOT = File.expand_path('..', __dir__)
+
+def app_config(slug)
+  path = File.join(REPO_ROOT, 'apps', slug, 'app.config.json')
+  UI.user_error!("apps/#{slug}/app.config.json 없음") unless File.exist?(path)
+  JSON.parse(File.read(path))
+end
+
+def build_dir(slug)
+  dir = File.join(REPO_ROOT, 'build', slug)
+  UI.user_error!("build/#{slug} 없음 — generate-app 먼저 실행하세요") unless Dir.exist?(dir)
+  dir
+end
+
+def require_slug(options)
+  slug = options[:slug]
+  UI.user_error!('slug 파라미터 필요: fastlane <lane> slug:<slug>') if slug.nil? || slug.empty?
+  slug
+end
+
+# ──────────────────────────── iOS ────────────────────────────
+platform :ios do
+  desc 'iOS 아카이브(.ipa) 빌드. 서명은 match 로.'
+  lane :build do |options|
+    slug = require_slug(options)
+    cfg = app_config(slug)
+    workspace = File.join(build_dir(slug), 'ios', 'App', 'App.xcworkspace')
+
+    # 인증서/프로비저닝: 암호화 git repo(match)에서 가져온다. 읽기전용으로.
+    match(type: 'appstore', app_identifier: cfg['appId'], readonly: true)
+
+    build_app(
+      workspace: workspace,
+      scheme: 'App',
+      export_method: 'app-store',
+      output_directory: File.join(build_dir(slug), 'ios', 'output'),
+      output_name: "#{slug}.ipa",
+      clean: true
+    )
+  end
+
+  desc 'TestFlight 업로드 (베타). 프로덕션 공개 아님.'
+  lane :beta do |options|
+    slug = require_slug(options)
+    build(options) unless options[:skip_build]
+    upload_to_testflight(
+      ipa: File.join(build_dir(slug), 'ios', 'output', "#{slug}.ipa"),
+      skip_waiting_for_build_processing: true,
+      distribute_external: false # 내부 테스터까지만. 외부 배포/심사 제출은 사람이.
+    )
+    UI.success("TestFlight 업로드 완료 (#{slug}). 외부 배포/심사 제출은 App Store Connect 에서 직접.")
+  end
+end
+
+# ──────────────────────────── Android ────────────────────────────
+platform :android do
+  desc 'Android 릴리즈 번들(.aab) 빌드. 서명은 환경변수/gradle.properties 로 주입.'
+  lane :build do |options|
+    slug = require_slug(options)
+    gradle(
+      project_dir: File.join(build_dir(slug), 'android'),
+      task: 'bundle',
+      build_type: 'Release'
+    )
+  end
+
+  desc 'Play 내부 트랙 업로드 (베타). 프로덕션 승격 아님.'
+  lane :beta do |options|
+    slug = require_slug(options)
+    cfg = app_config(slug)
+    build(options) unless options[:skip_build]
+    upload_to_play_store(
+      package_name: cfg['appId'],
+      track: options[:track] || 'internal', # internal | beta. production 금지(수동 게이트)
+      aab: File.join(build_dir(slug), 'android', 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab'),
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: 'draft'
+    )
+    UI.success("Play #{options[:track] || 'internal'} 트랙 업로드 완료 (#{slug}). 프로덕션 승격은 Play Console 에서 직접.")
+  end
+end

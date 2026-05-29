@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(npx --version)",
+      "Bash(java -version)",
+      "Bash(ruby -v)",
+      "Bash(fastlane -v)",
+      "Bash(node --check scripts/generate-app.mjs)",
+      "Bash(node --check scripts/lib/config.mjs)",
+      "Bash(node --check scripts/lib/log.mjs)",
+      "Bash(node -e \"import\\('./template/bridge/dist/index.js'\\).catch\\(e=>{console.log\\('index.js parse:',e.code||e.message\\)}\\)\")",
+      "Bash(node --check template/bridge/dist/web.js)",
+      "Bash(node --check template/bridge/dist/index.js)",
+      "Bash(node scripts/generate-app.mjs --slug smoke-test --skip-install)",
+      "Bash(node -e \"console.log\\(Object.keys\\(require\\('./build/smoke-test/package.json'\\).dependencies\\).join\\(', '\\)\\)\")",
+      "PowerShell(winget install -e --id Microsoft.OpenJDK.17 --accept-source-agreements --accept-package-agreements --silent 2>&1)",
+      "Bash(APPSFLYER_DEV_KEY=TESTKEY123 APPSFLYER_IOS_APP_ID=6480000000 node scripts/generate-app.mjs --slug mk-test --skip-install)",
+      "Bash(node -e \"const j=require\\('./build/mk-test/android/app/src/main/assets/public/app-config.json'\\);console.log\\(JSON.stringify\\(j.marketing.attribution,null,1\\)\\)\")",
+      "Bash(node -e \"const j=require\\('./build/mk-test/www/app-config.json'\\);console.log\\('appsflyer in www?', !!j.marketing.attribution.appsflyer\\)\")",
+      "Bash(node --check scripts/generate-app.mjs && echo OK *)",
+      "Bash(node scripts/generate-app.mjs --slug test-harness --skip-install)",
+      "PowerShell($jh = [Environment]::GetEnvironmentVariable\\(\"JAVA_HOME\",\"User\"\\); $ah = [Environment]::GetEnvironmentVariable\\(\"ANDROID_HOME\",\"User\"\\); Write-Output \"JAVA_HOME\\(User\\)=$jh\"; Write-Output \"ANDROID_HOME\\(User\\)=$ah\"; if \\($jh\\) { & \"$jh\\\\bin\\\\java.exe\" -version }; Write-Output \"---SDK---\"; if \\($ah\\) { Get-ChildItem \"$ah\" -Name })",
+      "PowerShell($env:JAVA_HOME = [Environment]::GetEnvironmentVariable\\(\"JAVA_HOME\",\"User\"\\); $env:ANDROID_HOME = [Environment]::GetEnvironmentVariable\\(\"ANDROID_HOME\",\"User\"\\); $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME; $env:Path = \"$env:JAVA_HOME\\\\bin;$env:ANDROID_HOME\\\\platform-tools;\" + $env:Path; node scripts/generate-app.mjs --slug test-harness --platform android)",
+      "Bash(git --version)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(gh auth *)",
+      "Bash(git -c user.name=bada -c user.email=bada@aipia.co.kr commit -q -m ' *)"
+    ]
+  }
+}

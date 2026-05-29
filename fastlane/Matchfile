@@ -1,0 +1,8 @@
+# Matchfile — iOS 인증서/프로비저닝을 암호화 git repo 로 관리(fastlane match).
+# git_url 은 비공개 레포(자격증명 저장소). 비밀번호(MATCH_PASSWORD)는 환경변수로만.
+
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+type("appstore")            # 기본 타입. 개발용은 lane 에서 type 지정.
+readonly(true)              # CI/자동화는 읽기전용. 새 인증서 생성은 사람이 1회 수행.
+# app_identifier 는 slug 별로 Fastfile 의 match(app_identifier:) 에서 주입한다.

@@ -1,0 +1,11 @@
+# Appfile — 계정 식별자만. app_identifier 는 slug 별로 Fastfile 에서 app.config.json 으로 주입.
+# 실제 값은 커밋하지 말고 환경변수(.env)로 둔다.
+
+apple_id(ENV["FASTLANE_APPLE_ID"])                       # App Store Connect 로그인 계정
+itc_team_id(ENV["FASTLANE_ITC_TEAM_ID"])                 # App Store Connect 팀 ID
+team_id(ENV["FASTLANE_DEV_TEAM_ID"])                     # Apple Developer 팀 ID
+
+# Android: Play Console 서비스 계정 JSON 경로 (커밋 금지 — gitignore 처리됨)
+for_platform :android do
+  json_key_file(ENV["SUPPLY_JSON_KEY_FILE"])
+end
