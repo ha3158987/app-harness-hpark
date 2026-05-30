@@ -39,7 +39,9 @@
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('idp/realm-aipia.json','utf8'\\)\\);console.log\\('realm JSON valid'\\)\")",
       "Bash(npm install *)",
       "Bash(node -e \"const c=JSON.parse\\(require\\('fs'\\).readFileSync\\('build/aipia/android/app/src/main/assets/public/app-config.json','utf8'\\)\\); console.log\\(JSON.stringify\\(c.auth,null,2\\)\\)\")",
-      "Bash(awk '{print $5, $9}')"
+      "Bash(awk '{print $5, $9}')",
+      "Bash(python -c \"import yaml,sys; yaml.safe_load\\(open\\('.github/workflows/release.yml',encoding='utf-8'\\)\\); print\\('release.yml valid YAML'\\)\")",
+      "Bash(python3 -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/release.yml',encoding='utf-8'\\)\\); print\\('release.yml valid YAML'\\)\")"
     ]
   }
 }

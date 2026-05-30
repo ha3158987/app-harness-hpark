@@ -1,0 +1,156 @@
+# 앱 빌드 → 스토어 자동 배포 (베타/내부 트랙까지). 프로덕션 공개는 수동(STRATEGY 안전원칙).
+#
+# 트리거 2가지:
+#   1) 태그 푸시:   <slug>-v<버전>   예) aipia-v1.2.0   → slug=aipia, 양쪽 플랫폼, internal 트랙
+#   2) 수동 실행:   Actions 탭에서 slug/platform/track 선택
+#
+# 필요한 GitHub Secrets 는 DEPLOY.md 참조. 시크릿 없으면 해당 잡은 실패(빌드까지는 가능).
+name: release
+
+on:
+  push:
+    tags:
+      - '*-v*'            # 예: aipia-v1.2.0
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: '앱 slug (apps/<slug>)'
+        required: true
+        type: string
+      platform:
+        description: '빌드 플랫폼'
+        required: true
+        default: 'both'
+        type: choice
+        options: [android, ios, both]
+      track:
+        description: 'Android 트랙 (iOS는 항상 TestFlight)'
+        required: true
+        default: 'internal'
+        type: choice
+        options: [internal, beta]
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      slug: ${{ steps.r.outputs.slug }}
+      platform: ${{ steps.r.outputs.platform }}
+      track: ${{ steps.r.outputs.track }}
+    steps:
+      - id: r
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "slug=${{ inputs.slug }}"        >> "$GITHUB_OUTPUT"
+            echo "platform=${{ inputs.platform }}" >> "$GITHUB_OUTPUT"
+            echo "track=${{ inputs.track }}"       >> "$GITHUB_OUTPUT"
+          else
+            TAG="${GITHUB_REF_NAME}"     # 예: aipia-v1.2.0
+            echo "slug=${TAG%-v*}"  >> "$GITHUB_OUTPUT"
+            echo "platform=both"    >> "$GITHUB_OUTPUT"
+            echo "track=internal"   >> "$GITHUB_OUTPUT"
+          fi
+      - run: echo "slug=${{ steps.r.outputs.slug }} platform=${{ steps.r.outputs.platform }} track=${{ steps.r.outputs.track }}"
+
+  android:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.platform == 'android' || needs.resolve.outputs.platform == 'both' }}
+    runs-on: ubuntu-latest
+    env:
+      SLUG: ${{ needs.resolve.outputs.slug }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+      - uses: android-actions/setup-android@v3
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3' }
+      - run: gem install fastlane --no-document
+
+      - name: Capacitor 프로젝트 생성/동기화
+        run: node scripts/generate-app.mjs --slug "$SLUG" --platform android
+
+      - name: 아이콘/스플래시 (소스 있을 때만)
+        run: |
+          if [ -f "apps/$SLUG/icon.png" ]; then
+            cd "build/$SLUG"
+            npx --yes @capacitor/assets generate --assetPath "../../apps/$SLUG"
+            npx cap sync android
+          else
+            echo "apps/$SLUG/icon.png 없음 — 기본 아이콘으로 진행"
+          fi
+
+      - name: 릴리즈 keystore 주입 (시크릿 → 파일)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "build/$SLUG/android/release.keystore"
+          cat > "build/$SLUG/android/keystore.properties" <<EOF
+          storeFile=release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+
+      - name: Play 업로드 (fastlane, 내부/베타 트랙)
+        env:
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          APPSFLYER_DEV_KEY: ${{ secrets.APPSFLYER_DEV_KEY }}
+        run: fastlane android beta slug:"$SLUG" track:"${{ needs.resolve.outputs.track }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SLUG }}-aab
+          path: build/${{ env.SLUG }}/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
+
+  ios:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.platform == 'ios' || needs.resolve.outputs.platform == 'both' }}
+    runs-on: macos-latest
+    env:
+      SLUG: ${{ needs.resolve.outputs.slug }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3' }
+      - run: gem install fastlane --no-document
+
+      - name: Capacitor 프로젝트 생성/동기화 (iOS 포함)
+        run: node scripts/generate-app.mjs --slug "$SLUG" --platform ios
+
+      - name: 아이콘/스플래시 (소스 있을 때만)
+        run: |
+          if [ -f "apps/$SLUG/icon.png" ]; then
+            cd "build/$SLUG"
+            npx --yes @capacitor/assets generate --assetPath "../../apps/$SLUG"
+            npx cap sync ios
+          else
+            echo "apps/$SLUG/icon.png 없음 — 기본 아이콘으로 진행"
+          fi
+
+      - name: TestFlight 업로드 (fastlane match + pilot)
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.ASC_KEY_P8 }}
+          APPSFLYER_DEV_KEY: ${{ secrets.APPSFLYER_DEV_KEY }}
+          APPSFLYER_IOS_APP_ID: ${{ secrets.APPSFLYER_IOS_APP_ID }}
+        run: fastlane ios beta slug:"$SLUG"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SLUG }}-ipa
+          path: build/${{ env.SLUG }}/ios/output/*.ipa
+          if-no-files-found: warn

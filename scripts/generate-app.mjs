@@ -436,6 +436,42 @@ ${block}</dict>
   log.ok('iOS App.entitlements: Sign in with Apple');
 }
 
+// 릴리즈 서명 배선: keystore.properties(=build/<slug>/android/keystore.properties)가 있으면
+// 릴리즈 서명을 적용하고, 없으면 건드리지 않는다(디버그 빌드/CI 외 로컬에 안전). CI 가 시크릿으로 주입.
+const ANDROID_SIGNING_SNIPPET = `
+// harness-signing: 릴리즈 서명 (generate-app 자동 주입). keystore.properties 있을 때만 적용.
+def harnessKsFile = rootProject.file("keystore.properties")
+if (harnessKsFile.exists()) {
+    def harnessKs = new Properties()
+    harnessKsFile.withInputStream { harnessKs.load(it) }
+    android {
+        signingConfigs {
+            release {
+                storeFile file(harnessKs['storeFile'])
+                storePassword harnessKs['storePassword']
+                keyAlias harnessKs['keyAlias']
+                keyPassword harnessKs['keyPassword']
+            }
+        }
+        buildTypes {
+            release {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+`;
+
+function patchAndroidSigning(buildDir) {
+  const gradleFile = join(buildDir, 'android', 'app', 'build.gradle');
+  if (!existsSync(gradleFile)) return;
+  let txt = readFileSync(gradleFile, 'utf8');
+  if (txt.includes('harness-signing')) return; // idempotent
+  txt += `\n${ANDROID_SIGNING_SNIPPET}\n`;
+  writeFileSync(gradleFile, txt);
+  log.ok('android/app/build.gradle: 릴리즈 서명 설정(keystore.properties 조건부)');
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -552,6 +588,7 @@ function main() {
         log.ok('gradle.properties: android.overridePathCheck=true (non-ASCII 경로 우회)');
       }
     }
+    patchAndroidSigning(buildDir); // 릴리즈 서명(keystore.properties 조건부) — CI 배포용
   }
   if (existsSync(join(buildDir, 'ios'))) {
     const dst = join(buildDir, 'ios', 'App', 'App', 'public', 'app-config.json');

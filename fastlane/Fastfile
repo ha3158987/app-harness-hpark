@@ -32,6 +32,18 @@ end
 
 # ──────────────────────────── iOS ────────────────────────────
 platform :ios do
+  # CI: App Store Connect API 키가 env 로 있으면 사용(Apple ID 2FA 회피). 없으면 기존 방식.
+  before_all do
+    if ENV['APP_STORE_CONNECT_API_KEY_KEY_ID'] && ENV['APP_STORE_CONNECT_API_KEY_KEY']
+      app_store_connect_api_key(
+        key_id: ENV['APP_STORE_CONNECT_API_KEY_KEY_ID'],
+        issuer_id: ENV['APP_STORE_CONNECT_API_KEY_ISSUER_ID'],
+        key_content: ENV['APP_STORE_CONNECT_API_KEY_KEY'],
+        in_house: false
+      )
+    end
+  end
+
   desc 'iOS 아카이브(.ipa) 빌드. 서명은 match 로.'
   lane :build do |options|
     slug = require_slug(options)
