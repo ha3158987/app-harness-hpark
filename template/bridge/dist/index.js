@@ -178,7 +178,7 @@ class AppBridgeImpl {
       });
     }
     return new Promise((resolve) => {
-      const done = (token) => resolve({ granted: true, token });
+      const done = (token) => { if (token) this._registerDeviceToken(token); resolve({ granted: true, token }); };
       PushNotifications.addListener('registration', (t) => done(t.value));
       PushNotifications.addListener('registrationError', () => resolve({ granted: true }));
       PushNotifications.register();
@@ -675,6 +675,45 @@ class AppBridgeImpl {
   async getLastLogin() {
     const provider = await this.getPref('last_login_provider');
     return provider ? { provider } : null;
+  }
+
+  // ── 기기 바인딩(실로그인 후) ───────────────────────────────────────────
+  /**
+   * 생체인증 빠른 재로그인 켜기/끄기. 실로그인 직후 호출하면, 다음 실행부터 소셜 라운드트립 없이
+   * Face ID/지문으로 잠금 해제(세션 토큰은 이미 secureStorage 에 기기 바인딩됨).
+   */
+  async enableBiometricLogin(enabled = true) {
+    if (enabled && this.isNative && this.capabilities.biometric) {
+      const r = await this.authenticate({ reason: '생체 인증으로 빠른 로그인을 설정합니다' });
+      if (!r.success) return { ok: false, reason: r.reason };
+    }
+    await this.setPref('biometric_login', !!enabled);
+    return { ok: true, enabled: !!enabled };
+  }
+
+  async biometricLoginEnabled() { return !!(await this.getPref('biometric_login')); }
+
+  /**
+   * 앱 시작 시 잠금 해제. 생체 빠른 로그인이 켜져 있으면 생체인증을 요구한다.
+   * 반환 { unlocked, reason }. (서버 세션 유효성은 별도로 /auth/me 로 확인)
+   */
+  async unlock() {
+    if (!(await this.biometricLoginEnabled())) return { unlocked: true, reason: 'not-required' };
+    const r = await this.authenticate({ reason: '잠금을 해제하려면 인증하세요' });
+    return { unlocked: !!r.success, reason: r.reason };
+  }
+
+  // 푸시 토큰을 계정에 등록(기기↔계정 바인딩). auth.deviceEndpoint 설정 시.
+  async _registerDeviceToken(pushToken) {
+    const endpoint = this.config && this.config.auth && this.config.auth.deviceEndpoint;
+    if (!endpoint) return;
+    try {
+      await fetch(endpoint, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pushToken, deviceId: await this._deviceId(), platform: this.platform }),
+      });
+    } catch { /* noop */ }
   }
 
   // 기기 식별자 캐시 (백엔드 세션/기기 관리에 함께 보냄)

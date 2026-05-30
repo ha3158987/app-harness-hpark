@@ -225,6 +225,21 @@ async function mergeGuest(req, realUserId) {
   for (const [sid, s] of sessions) if (s.userId === g.id) sessions.delete(sid);
 }
 
+// ── 기기 등록(푸시 토큰 ↔ 계정 바인딩) ──────────────────────────────────────
+// 같은 계정의 어느 기기로 푸시할지 + 기기/세션 관리에 사용. (→ 실제로는 기기 테이블)
+const devices = new Map(); // userId -> [{ deviceId, platform, pushToken, updatedAt }]
+app.post('/auth/device', async (req, res) => {
+  const u = await currentUser(req);
+  if (!u) return res.status(401).json({ error: 'no-session' });
+  const { deviceId, platform, pushToken } = req.body || {};
+  const list = devices.get(u.id) || [];
+  const i = list.findIndex((d) => d.deviceId === deviceId);
+  const rec = { deviceId, platform, pushToken, updatedAt: Date.now() };
+  if (i >= 0) list[i] = rec; else list.push(rec);
+  devices.set(u.id, list);
+  return res.json({ ok: true, devices: list.length });
+});
+
 // ── 회원탈퇴 / 계정삭제 (스토어 필수) ───────────────────────────────────────
 app.post('/auth/delete', async (req, res) => {
   const u = await currentUser(req);

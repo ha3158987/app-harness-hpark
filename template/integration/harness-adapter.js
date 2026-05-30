@@ -81,6 +81,18 @@ export async function lastLogin() {
   return AppBridge.getLastLogin();
 }
 
+/** 생체 빠른 재로그인 켜기/끄기(실로그인 직후 권유). 웹은 noop. */
+export async function enableBiometricLogin(enabled = true) {
+  if (!AppBridge.isNative) return { ok: false, reason: 'web' };
+  return AppBridge.enableBiometricLogin(enabled);
+}
+
+/** 앱 시작 시 잠금 해제(생체 빠른 로그인 켜져 있으면 생체 요구). 웹은 항상 unlocked. */
+export async function unlock() {
+  if (!AppBridge.isNative) return { unlocked: true, reason: 'web' };
+  return AppBridge.unlock();
+}
+
 /**
  * 결제. 앱이면 스토어 IAP(디지털 재화 필수), 웹이면 webFallback(웹 PG).
  * 둘 다 같은 서버 지갑에 적립되도록 백엔드를 맞춘다.

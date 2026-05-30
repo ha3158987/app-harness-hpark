@@ -197,6 +197,12 @@ export interface AppBridgeSDK {
   /** 이 기기에서 마지막으로 성공한 로그인 수단(재가입 방지 UX: "마지막 로그인: 카카오") */
   getLastLogin(): Promise<{ provider: AuthProvider } | null>;
 
+  /** 생체인증 빠른 재로그인 켜기/끄기(실로그인 직후). 다음 실행부터 Face ID/지문으로 잠금 해제. */
+  enableBiometricLogin(enabled?: boolean): Promise<{ ok: boolean; enabled?: boolean; reason?: string }>;
+  biometricLoginEnabled(): Promise<boolean>;
+  /** 앱 시작 시 잠금 해제(생체 빠른 로그인이 켜져 있으면 생체인증 요구). */
+  unlock(): Promise<{ unlocked: boolean; reason?: string }>;
+
   /** 로그아웃: 시큐어 토큰 삭제 + (설정 시) 백엔드 세션 종료 + 새로고침 */
   logout(opts?: { endpoint?: string; reload?: boolean }): Promise<{ ok: boolean }>;
 
