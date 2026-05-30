@@ -627,12 +627,29 @@ class AppBridgeImpl {
   // 범용 OAuth2 Authorization Code + PKCE (시스템 브라우저 + 딥링크 복귀)
   async _oauth2(provider, opts) {
     const auth = this.config.auth || {};
-    const conf = (auth.oauth && auth.oauth[provider]) || {};
-    const preset = OAUTH_PRESETS[provider] || {};
-    const clientId = conf.clientId;
-    const authorizeUrl = conf.authorizeUrl || preset.authorizeUrl;
-    const redirectUri = conf.redirectUri || this._defaultRedirect(provider);
-    const scopes = conf.scopes || preset.scopes || [];
+    const idp = auth.idp;
+    let clientId, authorizeUrl, redirectUri, scopes, extraQuery;
+
+    if (idp && (idp.issuer || idp.authorizeUrl)) {
+      // 중앙 IdP 모드: 앱은 IdP 하나만 바라본다. IdP 가 구글/카카오/… 를 페더레이션한다.
+      // hintParam(예: Keycloak kc_idp_hint)로 특정 소셜로 바로 점프해 네이티브 버튼 UX 유지.
+      clientId = idp.clientId;
+      authorizeUrl = idp.authorizeUrl
+        || `${String(idp.issuer).replace(/\/$/, '')}/protocol/openid-connect/auth`;
+      redirectUri = idp.redirectUri || this._defaultRedirect(provider);
+      scopes = idp.scopes || ['openid', 'email', 'profile'];
+      const alias = (idp.hints && idp.hints[provider]) || provider;
+      if (idp.hintParam && alias) extraQuery = `${idp.hintParam}=${encodeURIComponent(alias)}`;
+    } else {
+      // 직접 모드: 공급자 OAuth 엔드포인트를 앱이 직접 호출.
+      const conf = (auth.oauth && auth.oauth[provider]) || {};
+      const preset = OAUTH_PRESETS[provider] || {};
+      clientId = conf.clientId;
+      authorizeUrl = conf.authorizeUrl || preset.authorizeUrl;
+      redirectUri = conf.redirectUri || this._defaultRedirect(provider);
+      scopes = conf.scopes || preset.scopes || [];
+      extraQuery = conf.extraQuery;
+    }
     if (!clientId || !authorizeUrl) return { ok: false, reason: 'oauth-misconfigured', provider };
 
     const codeVerifier = this._randomString(64);
@@ -648,7 +665,7 @@ class AppBridgeImpl {
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
     });
-    const url = `${authorizeUrl}?${params.toString()}${conf.extraQuery ? '&' + conf.extraQuery : ''}`;
+    const url = `${authorizeUrl}?${params.toString()}${extraQuery ? '&' + extraQuery : ''}`;
 
     const res = await this._awaitOAuthRedirect(state, opts.timeoutMs || 180000, () =>
       this.openExternal(url, { system: true }));
