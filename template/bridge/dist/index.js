@@ -583,11 +583,13 @@ class AppBridgeImpl {
     if (provider === 'email') return { ok: false, reason: 'email-handled-by-web' }; // 웹이 직접 처리
     if (!this.isNative) return { ok: false, reason: 'web-should-redirect' };          // 브라우저는 일반 리다이렉트로
 
-    // 1) 자격증명 획득. Apple/iOS 는 네이티브 우선(미설치/실패 시 범용 OAuth 폴백)
+    // 1) 자격증명 획득.
+    //    - 직접 모드 + Apple/iOS: 네이티브 Sign in with Apple 우선(미설치/실패 시 OAuth 폴백)
+    //    - IdP 모드: Apple 도 IdP 경유해야 사용자 풀이 IdP 한 곳에 모인다(SSO 일관성)
+    const idpMode = !!(auth.idp && (auth.idp.issuer || auth.idp.authorizeUrl));
     let credential;
-    if (provider === 'apple' && this.platform === 'ios') {
-      credential = await this._appleNative(opts);
-      if (!credential) credential = await this._oauth2(provider, opts);
+    if (provider === 'apple' && this.platform === 'ios' && !idpMode) {
+      credential = (await this._appleNative(opts)) || (await this._oauth2(provider, opts));
     } else {
       credential = await this._oauth2(provider, opts);
     }

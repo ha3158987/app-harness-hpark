@@ -15,6 +15,10 @@ node_modules/
 npm-debug.log*
 .pnpm-debug.log*
 
+# 환경변수/시크릿 (백엔드 .env 등)
+.env
+!**/.env.example
+
 # 자격증명 / 시크릿 — 절대 커밋 금지
 *.keystore
 *.jks

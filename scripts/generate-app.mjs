@@ -79,13 +79,25 @@ const AUTH_NATIVE_PLUGINS = {
   apple: ['@capacitor-community/apple-sign-in'], // iOS 네이티브 Sign in with Apple
 };
 
+// 중앙 IdP 모드 여부 (auth.idp 에 issuer/authorizeUrl 있음)
+function isIdpMode(cfg) {
+  const i = cfg.auth?.idp;
+  return !!(i && (i.issuer || i.authorizeUrl));
+}
+
 // 인증 플러그인 + 경고(Apple 4.8 / clientId 누락) 수집
 function authSetup(cfg) {
   const providers = cfg.auth?.providers || [];
   const plugins = [];
   const warnings = [];
   const social = providers.filter((p) => p !== 'email');
-  for (const p of providers) (AUTH_NATIVE_PLUGINS[p] || []).forEach((x) => plugins.push(x));
+  const idp = isIdpMode(cfg);
+
+  // 네이티브 플러그인: IdP 모드면 Apple 도 IdP 경유 → apple-sign-in 플러그인 불필요.
+  for (const p of providers) {
+    if (p === 'apple' && idp) continue;
+    (AUTH_NATIVE_PLUGINS[p] || []).forEach((x) => plugins.push(x));
+  }
 
   // Apple App Store 4.8: 제3자 소셜 로그인을 제공하면 Sign in with Apple 도 제공해야 한다(iOS).
   const hasOtherSocial = social.some((p) => p !== 'apple');
@@ -93,15 +105,24 @@ function authSetup(cfg) {
     warnings.push('소셜 로그인 제공 시 Apple 가이드라인 4.8 에 따라 "apple"(Sign in with Apple) 도 ' +
       'providers 에 추가해야 합니다 — 없으면 iOS 심사에서 리젝될 수 있음.');
   }
-  // 시스템 브라우저 OAuth 공급자는 공개 clientId 가 필요(없으면 런타임 misconfigured)
-  for (const p of social) {
-    if (p === 'apple') continue;
-    if (!cfg.auth?.oauth?.[p]?.clientId) {
-      warnings.push(`auth.oauth.${p}.clientId 누락 — OAuth 가 런타임에 동작하지 않음(빌드는 됨). ` +
-        '공개 clientId 를 config 에 넣거나 빌드 시 주입하세요(client secret 은 백엔드 전용).');
+
+  if (idp) {
+    // IdP 모드: clientId 는 IdP 클라이언트 하나. 공급자별 oauth.clientId 는 보지 않는다.
+    if (!cfg.auth?.idp?.clientId) {
+      warnings.push('auth.idp.clientId 누락 — 중앙 IdP 클라이언트 ID 가 필요합니다(런타임 misconfigured).');
+    }
+  } else {
+    // 직접 모드: 시스템 브라우저 OAuth 공급자는 공개 clientId 필요
+    for (const p of social) {
+      if (p === 'apple') continue;
+      if (!cfg.auth?.oauth?.[p]?.clientId) {
+        warnings.push(`auth.oauth.${p}.clientId 누락 — OAuth 가 런타임에 동작하지 않음(빌드는 됨). ` +
+          '공개 clientId 를 config 에 넣거나 빌드 시 주입하세요(client secret 은 백엔드 전용).');
+      }
     }
   }
-  return { plugins, warnings, hasOAuth: social.some((p) => p !== 'apple') || social.length > 0 };
+  // OAuth 복귀 URL scheme 은 두 모드 다 필요(IdP/공급자가 appId://oauth/... 로 복귀)
+  return { plugins, warnings, hasOAuth: social.length > 0, idp };
 }
 
 // 베이크 전용 시크릿을 환경변수에서 읽어 주입한다. 절대 source config/레포에 두지 않는다.
@@ -553,7 +574,8 @@ function main() {
     log.step('인증 네이티브 배선 (OAuth URL scheme / Apple Sign In)');
     patchAndroidAuthScheme(buildDir, cfg);
     patchIosAuthScheme(buildDir, cfg);
-    patchIosAppleEntitlement(buildDir, cfg);
+    // IdP 모드면 Apple 도 IdP 경유 → 네이티브 Sign in with Apple 엔타이틀먼트 불필요
+    if (!authConf.idp) patchIosAppleEntitlement(buildDir, cfg);
   }
 
   // 8) 동기화

@@ -34,7 +34,12 @@
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('idp/realm-aipia.json','utf8'\\)\\); console.log\\('realm JSON valid'\\)\")",
       "Bash(docker --version)",
       "Bash(docker info *)",
-      "PowerShell($d = Get-Command docker -ErrorAction SilentlyContinue; if \\($d\\) { Write-Output \"docker: $\\($d.Source\\)\"; docker --version } else { Write-Output \"docker: NOT INSTALLED\" }; $dd = Test-Path \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\"; Write-Output \"Docker Desktop installed: $dd\")"
+      "PowerShell($d = Get-Command docker -ErrorAction SilentlyContinue; if \\($d\\) { Write-Output \"docker: $\\($d.Source\\)\"; docker --version } else { Write-Output \"docker: NOT INSTALLED\" }; $dd = Test-Path \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\"; Write-Output \"Docker Desktop installed: $dd\")",
+      "Bash(node --check backend/auth-reference/server.mjs)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('idp/realm-aipia.json','utf8'\\)\\);console.log\\('realm JSON valid'\\)\")",
+      "Bash(npm install *)",
+      "Bash(node -e \"const c=JSON.parse\\(require\\('fs'\\).readFileSync\\('build/aipia/android/app/src/main/assets/public/app-config.json','utf8'\\)\\); console.log\\(JSON.stringify\\(c.auth,null,2\\)\\)\")",
+      "Bash(awk '{print $5, $9}')"
     ]
   }
 }

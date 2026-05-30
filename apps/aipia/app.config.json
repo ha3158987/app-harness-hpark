@@ -38,14 +38,14 @@
     "sessionEndpoint": "https://aipia.co.kr/auth/native",
     "signupEndpoint": "https://aipia.co.kr/auth/signup",
     "logoutEndpoint": "https://aipia.co.kr/auth/logout",
-    "oauth": {
-      "google": { "clientId": "" },
-      "naver": { "clientId": "" },
-      "kakao": { "clientId": "" },
-      "facebook": { "clientId": "" },
-      "x": { "clientId": "" },
-      "threads": { "clientId": "" },
-      "apple": { "clientId": "kr.co.aipia.app", "redirectUri": "https://aipia.co.kr/auth/apple/callback" }
+    "idp": {
+      "issuer": "https://auth.aipia.co.kr/realms/aipia",
+      "clientId": "aipia-app",
+      "hintParam": "kc_idp_hint",
+      "hints": {
+        "google": "google", "kakao": "kakao", "naver": "naver", "apple": "apple",
+        "facebook": "facebook", "x": "twitter", "threads": "threads"
+      }
     }
   }
 }
