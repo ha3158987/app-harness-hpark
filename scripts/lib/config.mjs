@@ -43,6 +43,7 @@ const DEFAULT_MARKETING = {
 const DEFAULT_AUTH = {
   providers: [],            // ['email','apple','google','naver','kakao','facebook','x','threads']
   sessionEndpoint: null,    // 네이티브 자격증명을 받아 세션쿠키를 발급하는 백엔드 URL (선택)
+  signupEndpoint: null,     // 신규 회원의 약관동의+추가정보를 받아 가입 확정하는 백엔드 URL (선택)
   logoutEndpoint: null,
   oauth: {},                // { google: { clientId, scopes?, redirectUri?, authorizeUrl?, extraQuery? }, ... }
 };

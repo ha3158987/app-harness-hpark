@@ -676,6 +676,9 @@ class AppBridgeImpl {
   }
 
   // 로그인 마무리: sessionEndpoint 가 있으면 자격증명을 백엔드로 보내 세션쿠키 발급받음.
+  // 백엔드가 신규 회원이라 추가정보/약관동의가 필요하다고 알리면(아래 플래그) 새로고침하지 않고
+  // 그대로 반환 → 웹이 온보딩(약관+추가정보) 화면을 띄운다.
+  //   백엔드 응답 플래그: { isNew, needsProfile, needsConsent, complete:false } 중 하나면 "미완료"
   async _finishLogin(credential, opts) {
     if (!credential || !credential.ok) return credential;
     const endpoint = (this.config.auth && this.config.auth.sessionEndpoint) || opts.sessionEndpoint;
@@ -686,12 +689,44 @@ class AppBridgeImpl {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credential),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data && data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }
-      if (res.ok && opts.reload !== false) location.reload();
-      return { ...credential, session: res.ok, user: data.user || credential.user, backend: data };
+      const data = (await res.json().catch(() => ({}))) || {};
+      const incomplete = data.complete === false || !!data.isNew || !!data.needsProfile || !!data.needsConsent;
+      if (res.ok && data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }
+      // 가입이 끝난 기존 회원만 새로고침. 신규(온보딩 필요)면 웹이 화면을 띄우게 둔다.
+      if (res.ok && !incomplete && opts.reload !== false) location.reload();
+      return {
+        ...credential,
+        session: res.ok,
+        user: data.user || credential.user,
+        isNew: !!data.isNew,
+        needsProfile: !!(data.needsProfile || data.needsConsent),
+        backend: data,
+      };
     } catch {
       return { ...credential, session: false, reason: 'session-endpoint-failed' };
+    }
+  }
+
+  /**
+   * 회원가입 마무리. login() 이 needsProfile/isNew 를 반환한 신규 회원에 대해, 웹이 약관 동의 +
+   * 추가정보를 수집한 뒤 이 한 줄로 백엔드에 확정 전송한다(이후 세션쿠키 발급 → 새로고침).
+   * profile 예: { nickname, birth, consents: { tos:true, privacy:true, age14:true, marketing:false } }
+   */
+  async completeSignup(profile, opts = {}) {
+    const endpoint = (this.config && this.config.auth && this.config.auth.signupEndpoint) || opts.endpoint;
+    if (!endpoint) return { ok: false, reason: 'no-signup-endpoint' };
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile || {}),
+      });
+      const data = (await res.json().catch(() => ({}))) || {};
+      if (res.ok && data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }
+      if (res.ok && opts.reload !== false) location.reload();
+      return { ok: res.ok, user: data.user, backend: data };
+    } catch {
+      return { ok: false, reason: 'signup-endpoint-failed' };
     }
   }
 

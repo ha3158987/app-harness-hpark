@@ -36,6 +36,7 @@
   "auth": {
     "providers": ["email", "apple", "google", "naver", "kakao", "facebook", "x", "threads"],
     "sessionEndpoint": "https://aipia.co.kr/auth/native",
+    "signupEndpoint": "https://aipia.co.kr/auth/signup",
     "logoutEndpoint": "https://aipia.co.kr/auth/logout",
     "oauth": {
       "google": { "clientId": "" },

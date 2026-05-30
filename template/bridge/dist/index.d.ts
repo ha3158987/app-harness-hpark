@@ -35,6 +35,10 @@ export interface AuthResult2 {
   user?: { id?: string; email?: string; name?: string };
   /** sessionEndpoint 설정 시 백엔드 세션 발급 성공 여부 */
   session?: boolean;
+  /** 백엔드가 신규 회원이라고 알림 → 웹은 온보딩(약관+추가정보) 화면을 띄워야 함 */
+  isNew?: boolean;
+  /** 추가정보/약관동의가 더 필요함 (이 경우 브릿지는 새로고침하지 않음) */
+  needsProfile?: boolean;
   backend?: unknown;
   reason?: string;
 }
@@ -154,6 +158,14 @@ export interface AppBridgeSDK {
   login(provider: AuthProvider, opts?: {
     sessionEndpoint?: string; timeoutMs?: number; reload?: boolean;
   }): Promise<AuthResult2>;
+
+  /**
+   * 회원가입 마무리. 신규 회원(login 이 isNew/needsProfile 반환)이 약관 동의 + 추가정보를
+   * 입력한 뒤 호출. config.auth.signupEndpoint 로 전송하고 세션쿠키 발급 후 새로고침.
+   * profile 예: { nickname, birth, consents: { tos, privacy, age14, marketing } }
+   */
+  completeSignup(profile: Record<string, unknown>, opts?: { endpoint?: string; reload?: boolean }):
+    Promise<{ ok: boolean; user?: unknown; backend?: unknown; reason?: string }>;
 
   /** 로그아웃: 시큐어 토큰 삭제 + (설정 시) 백엔드 세션 종료 + 새로고침 */
   logout(opts?: { endpoint?: string; reload?: boolean }): Promise<{ ok: boolean }>;

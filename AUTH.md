@@ -84,14 +84,58 @@
 
 ---
 
+## 3-4. 회원가입(신규) vs 로그인(기존) — 분기
+
+소셜 로그인은 **신원만** 준다. 약관 동의·추가정보는 공급자가 주지 않으므로 **첫 가입 시 따로 받아야**
+한다. 백엔드가 신규/기존을 판단하고, 신규면 브릿지가 **자동 새로고침을 멈춰** 웹이 온보딩을 띄운다.
+
+```
+login('google') → POST {sessionEndpoint}
+  ├─ 기존 회원   → 200 { user }                          → 브릿지가 새로고침 = 로그인 완료
+  └─ 신규 회원   → 200 { isNew:true, needsProfile:true }  → 새로고침 안 함, 웹이 온보딩 표시
+                    → 웹이 약관+추가정보 수집 → completeSignup() → POST {signupEndpoint}
+                    → 200 { user, token } → 세션쿠키 발급 → 새로고침 = 가입 완료
+```
+
+`{sessionEndpoint}` 응답으로 "미완료"를 알리는 플래그(아무거나): `isNew` | `needsProfile` |
+`needsConsent` | `complete:false`. 이 중 하나라도 있으면 브릿지는 새로고침하지 않는다.
+
+`{signupEndpoint}` 가 받는 body 예:
+```jsonc
+{ "nickname": "바다", "birth": "1998-03-01",
+  "consents": { "tos": true, "privacy": true, "age14": true, "marketing": false } }
+```
+> 세션쿠키는 `{signupEndpoint}` 응답에서도 `Set-Cookie` 로 내려준다(가입 직후 로그인 상태).
+
+### 한국 법상 필수 동의 (회원가입 시)
+| 항목 | 필수 |
+|---|---|
+| 서비스 이용약관 | 필수 |
+| 개인정보 수집·이용 | 필수 |
+| 만 14세 이상 확인 | 필수 (미만은 법정대리인 동의) |
+| 마케팅 정보 수신 | 선택 (푸시/AppsFlyer 동의와 연결) |
+
+### Apple 특이사항 (반드시)
+- **name/email 은 최초 인증 1회만** 전달된다 → 백엔드가 첫 `sessionEndpoint` 응답에서 **즉시 저장**.
+- 사용자가 **"이메일 가리기"(relay)** 를 쓰면 가짜 이메일이 옴 → 메일 발송은 Apple relay 경유.
+
+## 3-5. 회원탈퇴 / 계정 삭제 (스토어 필수)
+계정 생성을 지원하면 **앱 내 회원탈퇴**가 의무다(Apple 5.1.1(v), Google 정책). 웹에 탈퇴 화면을
+두고(이미 웹이면 그대로), Play Console 엔 데이터 삭제 URL 을 등록한다. 탈퇴 후 브릿지 `logout()` 호출.
+
 ## 4. 웹에서 쓰는 법
 
 ```js
 import { AppBridge } from '@harness/bridge';
 
-// sessionEndpoint 를 config 에 넣었으면 이 한 줄로 끝(브릿지가 백엔드까지 처리 후 새로고침)
+// sessionEndpoint 를 config 에 넣었으면 이 한 줄로 끝(기존 회원이면 자동 새로고침)
 const res = await AppBridge.login('google');
-if (!res.ok) showError(res.reason);
+if (!res.ok) { showError(res.reason); }
+else if (res.isNew || res.needsProfile) {
+  // 신규 회원 → 약관 동의 + 추가정보 화면(웹 UI) 표시 후 가입 확정
+  const profile = await showOnboarding();  // { nickname, birth, consents:{...} }
+  await AppBridge.completeSignup(profile);  // → 가입 완료 후 새로고침
+}
 
 // sessionEndpoint 없이 직접 처리하려면 반환된 code 를 웹이 백엔드로 전송
 const r = await AppBridge.login('kakao');
