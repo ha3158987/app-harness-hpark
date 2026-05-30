@@ -7,6 +7,18 @@
 - 앱 = `server.url` 로 **당신 웹사이트를 그대로 로드**하는 셸. 프론트 변경은 **웹만 배포하면 앱에 즉시 반영**(앱 재배포 불필요).
 - 당신이 할 일은 두 가지: ① 웹에 `@harness/bridge` 추가 + 호출, ② 하네스에 `apps/<slug>/app.config.json` 등록(ONBOARDING.md).
 
+## 추천: 어댑터 패턴 + 자동 연동(integrate-web 스킬)
+call site 를 여기저기 고치는 대신 **어댑터 한 곳**(`template/integration/harness-adapter.js` 를 웹에 복사)
+에서만 앱/웹 분기를 한다. 그러면 연동이 결정론적이라 **`integrate-web` 스킬**로 자동화된다("이 웹 레포를
+하네스에 연결해줘" → AI 가 어댑터 배치 + call site 분기 + app.config 등록 + diff 보고).
+```js
+import { initHarness, login, buy } from './harness-adapter';
+await initHarness({ onDeepLink: (url) => router.push(new URL(url).pathname) });
+loginBtn.onclick = () => login('google', () => startWebGoogleOAuth());  // 앱=IdP, 웹=기존
+buyBtn.onclick   = () => buy('coin_100', () => myWebCheckout('coin_100'));
+```
+아래는 어댑터 없이 브릿지를 직접 쓰는 저수준 사용법이다.
+
 ## 1. 설치 / 부트스트랩
 ```bash
 npm i @harness/bridge   # (모노레포면 file:/workspace 의존성)

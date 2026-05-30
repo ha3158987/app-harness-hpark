@@ -48,7 +48,8 @@
       "Bash(node scripts/doctor.mjs)",
       "Bash(echo \"\\(exit=$?\\)\")",
       "Bash(npm view *)",
-      "Bash(awk '{print \"APK:\", $5, $9}')"
+      "Bash(awk '{print \"APK:\", $5, $9}')",
+      "Bash(node --check template/integration/harness-adapter.js)"
     ]
   }
 }
