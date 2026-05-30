@@ -167,6 +167,9 @@ export interface AppBridgeSDK {
   /** 앱 포그라운드 복귀 시 실행(지갑/세션 갱신용). 웹은 focus/visibility 폴백. 반환=해제 함수. */
   onResume(handler: () => void): () => void;
 
+  /** 안전영역 인셋(px) — 노치/펀치홀/제스처바. CSS 만으로 되면 var(--safe-area-inset-*) 직접 사용 권장. */
+  getSafeAreaInsets(): { top: number; bottom: number; left: number; right: number };
+
   /** 백엔드에 보낼 실행 컨텍스트(앱/웹·플랫폼·버전) — 서버가 이벤트/가격/콘텐츠 분기에 사용. */
   context(): { isApp: boolean; platform: Platform; appVersion: string | null; slug: string | null };
 

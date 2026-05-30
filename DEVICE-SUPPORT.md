@@ -125,6 +125,27 @@
 
 ---
 
+## 4b. 디스플레이 다양성 대응 레시피 (해상도/종횡비/컷아웃/폴더블)
+
+거의 다 **웹 CSS**로 푼다. 하네스는 안전영역 정보를 보장한다(`@capacitor-community/safe-area` 가
+`--safe-area-inset-*` CSS 변수 주입 + edge-to-edge; shell 은 `viewport-fit=cover`).
+
+```css
+/* 노치/펀치홀/제스처바: 플러그인이 주입한 변수 사용(Android env() 불안정 보완) */
+.header { padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); }
+.footer { padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
+
+/* 100vh 금지 → dvh (주소창/키보드로 높이 변함) */
+.screen { min-height: 100dvh; }
+
+/* 해상도/DPI: 고정 px 대신 반응형 단위 + 이미지 srcset/WebP */
+```
+- **상단 중앙 카메라 컷아웃**: `safe-area-inset-top` 이 콘텐츠를 그 아래로 밀어줌 → 최상단 중앙(상태바 존)에
+  탭 타깃 두지 말 것.
+- **폴더블(갤럭시 Z)**: `window.addEventListener('resize')` / `matchMedia` 로 펼침·접힘 레이아웃 전환. 고정 종횡비 가정 금지.
+- **JS 로 인셋이 필요하면**: `AppBridge.getSafeAreaInsets()` (또는 어댑터 `safeAreaInsets()`).
+- 실기기 확인: 노치 아이폰 + 펀치홀 갤럭시 + 폴더블 1대(§3 매트릭스).
+
 ## 5. 한 줄 운영 가이드
 - iOS: 4년 내 기기 = 거의 다 iOS 26 → **iOS 18~26만 잘 보면 됨**, 18 미만은 폴백.
 - Android: **13(알림권한) · 15/16(edge-to-edge)** 이 2개만 놓쳐도 "푸시 안 옴 / UI 잘림"이 바로 터짐.

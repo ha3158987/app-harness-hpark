@@ -37,6 +37,7 @@ const BASE_PLUGINS = [
   '@capacitor/network',      // 오프라인 감지 → 에러 화면
   '@capacitor/device',
   '@capacitor/preferences',
+  '@capacitor-community/safe-area', // 노치/펀치홀/제스처바 안전영역 CSS 변수 주입 + edge-to-edge
 ];
 // 기능 토글 → 추가 플러그인 (브릿지 SDK 의 capability/메서드와 1:1)
 const FEATURE_PLUGINS = {
@@ -254,6 +255,8 @@ function buildCapacitorConfig(cfg) {
       },
       // 입력 시 웹뷰를 키보드 높이만큼 리사이즈(레이아웃 가림 방지). onKeyboard 이벤트도 함께 동작.
       Keyboard: { resize: 'native' },
+      // 노치/펀치홀/제스처바 안전영역을 --safe-area-inset-* CSS 변수로 주입(Android env() 불안정 보완).
+      SafeArea: { enabled: true },
       ...(cfg.features.push ? { PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] } } : {}),
     },
     ios: { contentInset: 'always' },

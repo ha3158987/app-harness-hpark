@@ -585,6 +585,21 @@ class AppBridgeImpl {
     };
   }
 
+  // 안전영역 인셋(px). safe-area 플러그인이 주입한 --safe-area-inset-* (없으면 env() 폴백)을 읽는다.
+  // 레이아웃을 JS 로 계산할 때 사용. CSS 만으로 되면 var(--safe-area-inset-top) 을 직접 써도 됨.
+  getSafeAreaInsets() {
+    try {
+      const s = getComputedStyle(document.documentElement);
+      const px = (name) => parseInt(s.getPropertyValue(name), 10) || 0;
+      return {
+        top: px('--safe-area-inset-top'),
+        bottom: px('--safe-area-inset-bottom'),
+        left: px('--safe-area-inset-left'),
+        right: px('--safe-area-inset-right'),
+      };
+    } catch { return { top: 0, bottom: 0, left: 0, right: 0 }; }
+  }
+
   // 백엔드에 보낼 실행 컨텍스트. 서버가 앱/웹·플랫폼·버전별로 이벤트/가격/콘텐츠를 분기하는 데 쓴다.
   context() {
     return {

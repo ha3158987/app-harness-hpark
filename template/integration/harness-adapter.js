@@ -129,6 +129,9 @@ export const onResume = (handler) => AppBridge.onResume(handler);
 /** 백엔드에 보낼 컨텍스트(앱/웹·플랫폼·버전) — 서버가 이벤트/가격 분기에 사용. */
 export const context = () => AppBridge.context();
 
+/** 안전영역 인셋(px). CSS 만으로 되면 var(--safe-area-inset-*) 직접 사용 권장. */
+export const safeAreaInsets = () => AppBridge.getSafeAreaInsets();
+
 /**
  * 서버 권위 지갑 잔액 조회 헬퍼. 구매/로그인 직후 + onResume 에서 호출.
  * 잔액은 계정(SSO)에 묶여 웹/앱이 같은 값. 클라는 진실을 들지 않고 항상 서버에서 읽는다.
