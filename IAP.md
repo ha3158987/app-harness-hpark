@@ -12,18 +12,41 @@
 - 한국 대체결제는 혜택이 작아 보통 미사용(앱엔 스토어 IAP 만).
 - **소비형(consumable, 코인) = 가장 단순.** 구독은 갱신/유예/취소 등 생명주기 + 서버알림 필수라 난도 ↑.
 
-## 2. "같은 웹, 두 가격" 분기 (피처 디텍션)
+## 2. "같은 웹, 두 가격" 분기 — **페이지 분리 불필요**
+
+같은 페이지가 "앱인지 웹인지" 보고 **그 부분만 다르게 렌더**한다(반응형과 동일). 두 벌 유지 X.
+**앱 가격은 코드에 박지 말고 스토어에서 읽는다**(실제 청구가=스토어 티어; 표시가≠청구가면 리젝/혼란).
+
+### 방법 1 — 클라이언트 분기 (SPA/클라 렌더, 추천)
 ```js
 import { AppBridge } from '@harness/bridge';
 if (AppBridge.isNative) {
-  const products = await AppBridge.getProducts();      // 앱: 스토어 현지화 가격(120원 티어)
-  const r = await AppBridge.purchase('coin_100');       // → 스토어 IAP → 백엔드 검증 → 서버지갑 적립
-  if (r.ok) refreshWallet();
+  const [p] = await AppBridge.getProducts();   // 앱: 스토어 현지화 가격(₩120 티어, 통화포맷까지)
+  priceEl.textContent = p.price;               // "₩1,200"
+  buyBtn.onclick = async () => { const r = await AppBridge.purchase('coin_100'); if (r.ok) refreshWallet(); };
 } else {
-  // 웹: 100원 표시 + 기존 웹 PG 결제 → 같은 서버지갑에 적립
+  priceEl.textContent = krw(webPrice);         // 웹: 100원(백엔드/웹 설정) + 기존 PG
 }
 ```
-> **지갑은 서버 한 곳**(SSO 계정에 묶임). 앱 IAP든 웹 PG든 **같은 계정 잔액**에 적립. (인증/SSO 작업 위에 얹힘)
+
+### 방법 2 — 서버 분기 (SSR 사이트)
+서버에서 렌더하면 앱 WebView 의 **User-Agent 표식**으로 판별한다(하네스가 자동 주입):
+```
+User-Agent 에 "HarnessApp/<slug>/<version>" 포함  → 앱 요청
+```
+```js
+// 서버(예시)
+const isApp = /HarnessApp\//.test(req.headers['user-agent'] || '');
+res.render('store', { price: isApp ? null /*스토어가 표시*/ : 100, showWebPay: !isApp });
+```
+
+### ⚠️ 가격보다 중요한 분기 = anti-steering
+앱에선 **웹 결제 유도(배너/링크/웹 PG 버튼)를 숨겨야** 한다(리젝 사유):
+```js
+if (!AppBridge.isNative) showWebPromo();   // 웹에서만 노출
+```
+
+> **지갑은 서버 한 곳**(SSO 계정에 묶임). 앱 IAP든 웹 PG든 **같은 계정 잔액**에 적립. (인증/SSO 위에 얹힘)
 
 ## 3. config (`apps/<slug>/app.config.json`)
 ```jsonc

@@ -49,7 +49,10 @@
       "Bash(echo \"\\(exit=$?\\)\")",
       "Bash(npm view *)",
       "Bash(awk '{print \"APK:\", $5, $9}')",
-      "Bash(node --check template/integration/harness-adapter.js)"
+      "Bash(node --check template/integration/harness-adapter.js)",
+      "Bash(node scripts/generate-app.mjs --slug aipia --skip-install --skip-sync)",
+      "Bash(node -e \"const c=JSON.parse\\(require\\('fs'\\).readFileSync\\('build/aipia/capacitor.config.json','utf8'\\)\\);console.log\\('appendUserAgent =', c.appendUserAgent\\)\")",
+      "Bash(rm -rf build/aipia)"
     ]
   }
 }

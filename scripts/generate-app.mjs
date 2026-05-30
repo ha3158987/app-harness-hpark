@@ -231,6 +231,9 @@ function buildCapacitorConfig(cfg) {
     appId: cfg.appId,
     appName: cfg.appName,
     webDir: 'www',
+    // 앱 WebView UA 에 표식 추가 → 서버가 "앱에서 온 요청"을 판별(SSR 가격/결제 분기, anti-steering).
+    //   감지: User-Agent 에 "HarnessApp/<slug>" 포함. 클라이언트는 AppBridge.isNative 사용.
+    appendUserAgent: `HarnessApp/${cfg.slug}/${cfg.version.name}`,
     // 원격 서비스를 직접 로드. allowNavigation 으로 화이트리스트 도메인만 셸 내부 탐색 허용.
     server: {
       url: cfg.startUrl,
