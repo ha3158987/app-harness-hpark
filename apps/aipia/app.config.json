@@ -38,6 +38,7 @@
     "sessionEndpoint": "https://aipia.co.kr/auth/native",
     "signupEndpoint": "https://aipia.co.kr/auth/signup",
     "logoutEndpoint": "https://aipia.co.kr/auth/logout",
+    "deleteEndpoint": "https://aipia.co.kr/auth/delete",
     "idp": {
       "issuer": "https://auth.aipia.co.kr/realms/aipia",
       "clientId": "aipia-app",
@@ -54,5 +55,8 @@
       { "id": "coin_100", "storeId": "kr.co.aipia.app.coin100", "type": "consumable" },
       { "id": "coin_500", "storeId": "kr.co.aipia.app.coin500", "type": "consumable" }
     ]
+  },
+  "monitoring": {
+    "crash": { "provider": "sentry", "dsn": "", "environment": "production" }
   }
 }

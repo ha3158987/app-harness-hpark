@@ -188,6 +188,17 @@ export interface AppBridgeSDK {
   /** 로그아웃: 시큐어 토큰 삭제 + (설정 시) 백엔드 세션 종료 + 새로고침 */
   logout(opts?: { endpoint?: string; reload?: boolean }): Promise<{ ok: boolean }>;
 
+  /** 회원탈퇴/계정삭제(스토어 필수). 백엔드(auth.deleteEndpoint)가 삭제. 확인 UI 는 웹이. */
+  deleteAccount(opts?: { endpoint?: string; reload?: boolean }): Promise<{ ok: boolean; reason?: string }>;
+
+  /** iOS 추적 동의(ATT). initMarketing 전에 호출 권장. iOS 외엔 not-applicable. */
+  requestTracking(): Promise<{ status: string }>;
+
+  /** 크래시/에러 모니터링 초기화(보통 자동). config.monitoring.crash 설정 시 ready()에서 1회. */
+  initMonitoring(): Promise<void>;
+  /** 수동 에러 보고 */
+  reportError(err: unknown, context?: Record<string, unknown>): void;
+
   /**
    * 마케팅 SDK 초기화(앱 시작 시 1회). 키는 네이티브 베이크 config 에서 읽는다.
    * 현재 자동 배선: AppsFlyer(어트리뷰션+디퍼드 딥링크). 그 외 벤더는 슬롯만.

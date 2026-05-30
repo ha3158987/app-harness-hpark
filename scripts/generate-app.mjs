@@ -267,6 +267,10 @@ function pluginsFor(cfg) {
   marketingSetup(cfg).plugins.forEach((p) => set.add(p));
   authSetup(cfg).plugins.forEach((p) => set.add(p));
   iapSetup(cfg).plugins.forEach((p) => set.add(p));
+  // 어트리뷰션 있으면 iOS ATT(추적동의) 플러그인
+  if (cfg.marketing?.attribution?.provider) set.add('capacitor-plugin-app-tracking-transparency');
+  // 크래시 리포트(@sentry/capacitor)는 프레임워크 형제(@sentry/react|vue|angular)를 peer 로 요구하므로
+  // 하네스가 자동설치하지 않는다 — 웹 앱이 자기 프레임워크에 맞춰 설치(INTEGRATION.md). 브릿지는 graceful.
   return [...set];
 }
 
@@ -367,6 +371,10 @@ function patchIosUsageStrings(buildDir, cfg) {
   const add = {};
   for (const feat of Object.keys(IOS_USAGE)) {
     if (cfg.features[feat] === true || cfg.features[feat]?.enabled) Object.assign(add, IOS_USAGE[feat]);
+  }
+  // ATT: 어트리뷰션(AppsFlyer 등) 있으면 추적 사용 설명 필수(없으면 ATT 호출 시 크래시)
+  if (cfg.marketing?.attribution?.provider) {
+    add.NSUserTrackingUsageDescription = '맞춤형 콘텐츠와 광고 제공을 위해 활동을 추적합니다.';
   }
   const entries = Object.entries(add).filter(([k]) => !xml.includes(`<key>${k}</key>`));
   if (!entries.length) return;
@@ -491,6 +499,25 @@ function patchAndroidSigning(buildDir) {
   txt += `\n${ANDROID_SIGNING_SNIPPET}\n`;
   writeFileSync(gradleFile, txt);
   log.ok('android/app/build.gradle: 릴리즈 서명 설정(keystore.properties 조건부)');
+}
+
+// iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(CODE_SIGN_ENTITLEMENTS). App.entitlements 가 있을 때만.
+// App 타깃 빌드설정(= PRODUCT_BUNDLE_IDENTIFIER 보유 블록)에 경로를 주입한다. (수동 Xcode 단계 제거)
+// ⚠️ iOS 빌드는 현재 미검증 환경 — 첫 macOS 빌드에서 확인 권장.
+function patchIosPbxEntitlements(buildDir) {
+  const pbx = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+  const ent = join(buildDir, 'ios', 'App', 'App', 'App.entitlements');
+  if (!existsSync(pbx) || !existsSync(ent)) return;
+  let txt = readFileSync(pbx, 'utf8');
+  if (txt.includes('CODE_SIGN_ENTITLEMENTS')) return; // 이미 연결됨
+  const before = txt;
+  txt = txt.replace(
+    /(\n(\s*)PRODUCT_BUNDLE_IDENTIFIER = [^\n]*;)/g,
+    '$1\n$2CODE_SIGN_ENTITLEMENTS = App/App.entitlements;',
+  );
+  if (txt === before) return;
+  writeFileSync(pbx, txt);
+  log.ok('iOS project.pbxproj: CODE_SIGN_ENTITLEMENTS = App/App.entitlements 연결');
 }
 
 function main() {
@@ -639,6 +666,9 @@ function main() {
     // IdP 모드면 Apple 도 IdP 경유 → 네이티브 Sign in with Apple 엔타이틀먼트 불필요
     if (!authConf.idp) patchIosAppleEntitlement(buildDir, cfg);
   }
+
+  // 7d) iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(App.entitlements 있을 때만)
+  patchIosPbxEntitlements(buildDir);
 
   // 8) 동기화
   if (!args.skipSync) {

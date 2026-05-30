@@ -42,7 +42,13 @@
       "Bash(awk '{print $5, $9}')",
       "Bash(python -c \"import yaml,sys; yaml.safe_load\\(open\\('.github/workflows/release.yml',encoding='utf-8'\\)\\); print\\('release.yml valid YAML'\\)\")",
       "Bash(python3 -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/release.yml',encoding='utf-8'\\)\\); print\\('release.yml valid YAML'\\)\")",
-      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('apps/aipia/app.config.json','utf8'\\)\\);console.log\\('aipia config valid JSON'\\)\")"
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('apps/aipia/app.config.json','utf8'\\)\\);console.log\\('aipia config valid JSON'\\)\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('apps/aipia/app.config.json','utf8'\\)\\);console.log\\('aipia config valid'\\)\")",
+      "Bash(node --check scripts/doctor.mjs)",
+      "Bash(node scripts/doctor.mjs)",
+      "Bash(echo \"\\(exit=$?\\)\")",
+      "Bash(npm view *)",
+      "Bash(awk '{print \"APK:\", $5, $9}')"
     ]
   }
 }

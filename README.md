@@ -6,6 +6,26 @@
 
 ---
 
+## 📚 문서 색인
+
+| 문서 | 내용 |
+|---|---|
+| **README**(이 문서) | 스택/레이아웃/`app.config.json` 스키마/기능 매핑 |
+| `ONBOARDING.md` | **새 서비스 추가** 전체 흐름(회사 개발자용 시작점) |
+| `INTEGRATION.md` | **프론트엔드 통합** — `@harness/bridge` 사용법 + API 레퍼런스 |
+| `STRATEGY.md` | 전략/의사결정/로드맵 |
+| `AUTH.md` | 로그인/SSO/회원가입/중앙 IdP(Keycloak)/백엔드 규약 |
+| `IAP.md` | 인앱결제(디지털 재화)/웹앱 가격분기/백엔드 검증 |
+| `DEPLOY.md` | CI/CD 자동배포(GitHub Actions)/시크릿/서명 |
+| `MARKETING.md` | 마케팅 SDK(AppsFlyer 등) |
+| `DEVICE-SUPPORT.md` | 기기/OS 지원 매트릭스 |
+| `REFERENCES.md` | 외부 참조 |
+| `idp/README.md` | Keycloak 로컬 구동 + 소셜 연결 |
+| `backend/auth-reference/` | 인증+IAP 백엔드 레퍼런스(Node) |
+| 점검 | `node scripts/doctor.mjs` (환경+모든 앱 config) |
+
+---
+
 ## 1. 스택 & 버전 (2026-05 기준)
 
 | 영역 | 선택 | 비고 |

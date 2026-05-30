@@ -93,6 +93,7 @@ class AppBridgeImpl {
           const iapProducts = (cfg && cfg.iap && cfg.iap.products) || [];
           this.capabilities.iap = iapProducts.length > 0;
           this._validateCapabilities();
+          this.initMonitoring().catch(() => {}); // 크래시 리포트 가능한 한 일찍
           this._autoInit();
           return this.capabilities;
         })
@@ -167,6 +168,15 @@ class AppBridgeImpl {
       perm = await PushNotifications.requestPermissions();
     }
     if (perm.receive !== 'granted') return { granted: false };
+    // 푸시 탭 → 딥링크 라우팅: data.url | data.deep_link | data.deep_link_value 를 통합 딥링크로.
+    if (!this._pushRoutingSet) {
+      this._pushRoutingSet = true;
+      PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+        const d = (action && action.notification && action.notification.data) || {};
+        const url = d.url || d.deep_link || d.deep_link_value;
+        if (url) this._emitDeepLink(url, action);
+      });
+    }
     return new Promise((resolve) => {
       const done = (token) => resolve({ granted: true, token });
       PushNotifications.addListener('registration', (t) => done(t.value));
@@ -628,6 +638,72 @@ class AppBridgeImpl {
     if (endpoint) { try { await fetch(endpoint, { method: 'POST', credentials: 'include' }); } catch { /* noop */ } }
     if (opts.reload !== false && this.isNative) location.reload();
     return { ok: true };
+  }
+
+  /**
+   * 회원탈퇴/계정 삭제. 스토어 정책상 계정 생성을 지원하면 앱 내 탈퇴가 필수(Apple 5.1.1(v)).
+   * 백엔드(auth.deleteEndpoint)가 계정/데이터 삭제 후 세션 종료. 확인 UI 는 웹이 띄운다.
+   */
+  async deleteAccount(opts = {}) {
+    const endpoint = (this.config && this.config.auth && this.config.auth.deleteEndpoint) || opts.endpoint;
+    if (!endpoint) return { ok: false, reason: 'no-delete-endpoint' };
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: await this._deviceId() }),
+      });
+      if (res.ok) {
+        try { await this.secureRemove('auth_token'); } catch { /* noop */ }
+        try { await this.removePref('last_login_provider'); } catch { /* noop */ }
+        if (opts.reload !== false && this.isNative) location.reload();
+      }
+      return { ok: res.ok };
+    } catch {
+      return { ok: false, reason: 'delete-endpoint-failed' };
+    }
+  }
+
+  /**
+   * iOS App Tracking Transparency 동의 요청. AppsFlyer 등 어트리뷰션 정확도에 필요.
+   * initMarketing 전에 호출 권장. 반환 status: authorized|denied|restricted|notDetermined|not-applicable.
+   */
+  async requestTracking() {
+    if (this.platform !== 'ios') return { status: 'not-applicable' };
+    try {
+      const { AppTrackingTransparency } = await import('capacitor-plugin-app-tracking-transparency');
+      const r = await AppTrackingTransparency.requestPermission();
+      return { status: (r && r.status) || 'notDetermined' };
+    } catch {
+      return { status: 'unavailable' };
+    }
+  }
+
+  // 크래시/에러 모니터링 초기화. config.monitoring.crash 설정 시 ready() 에서 자동 1회.
+  // 현재 자동 배선: Sentry(@sentry/capacitor). dsn 은 공개값이라 config 에 둬도 됨.
+  async initMonitoring() {
+    if (this._monitoringStarted) return;
+    const m = this.config && this.config.monitoring && this.config.monitoring.crash;
+    if (!m || !m.provider) return;
+    this._monitoringStarted = true;
+    if (m.provider === 'sentry') {
+      if (!m.dsn) return;
+      try {
+        const Sentry = await import('@sentry/capacitor');
+        Sentry.init({
+          dsn: m.dsn,
+          release: this.config.version && `${this.config.appId}@${this.config.version.name}`,
+          environment: m.environment || 'production',
+        });
+        this._sentry = Sentry;
+      } catch { /* 플러그인 미설치 → 무시 */ }
+    }
+  }
+
+  /** 수동 에러 보고(웹에서 catch 한 에러 등) */
+  reportError(err, context) {
+    try { if (this._sentry) this._sentry.captureException(err, context ? { extra: context } : undefined); }
+    catch { /* noop */ }
   }
 
   // 범용 OAuth2 Authorization Code + PKCE (시스템 브라우저 + 딥링크 복귀)

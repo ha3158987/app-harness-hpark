@@ -186,16 +186,94 @@ app.post('/auth/logout', (req, res) => {
 
 // 현재 로그인 사용자 확인(웹이 부팅 시 호출)
 app.get('/auth/me', async (req, res) => {
+  const u = await currentUser(req);
+  if (!u) return res.status(401).json({ error: 'no-session' });
+  return res.json({ user: publicUser(u) });
+});
+
+// 세션쿠키 → 사용자
+async function currentUser(req) {
   try {
     const raw = req.cookies?.aipia_session;
-    if (!raw) return res.status(401).json({ error: 'no-session' });
+    if (!raw) return null;
     const { payload } = await jwtVerify(raw, sessionKey);
-    const user = users.get(payload.uid);
-    if (!user || !sessions.has(payload.sid)) return res.status(401).json({ error: 'invalid-session' });
-    return res.json({ user: publicUser(user) });
-  } catch {
-    return res.status(401).json({ error: 'invalid-session' });
-  }
+    if (!sessions.has(payload.sid)) return null;
+    return users.get(payload.uid) || null;
+  } catch { return null; }
+}
+
+// ── 회원탈퇴 / 계정삭제 (스토어 필수) ───────────────────────────────────────
+app.post('/auth/delete', async (req, res) => {
+  const u = await currentUser(req);
+  if (!u) return res.status(401).json({ error: 'no-session' });
+  users.delete(u.id);
+  wallet.delete(u.id);
+  for (const [sid, s] of sessions) if (s.userId === u.id) sessions.delete(sid);
+  res.clearCookie('aipia_session', { domain: COOKIE_DOMAIN });
+  return res.json({ ok: true });
 });
+
+// ── 인앱결제 검증 + 서버 지갑 ───────────────────────────────────────────────
+// 서버 지갑(=진실). 앱 IAP/웹 PG 둘 다 같은 잔액에 적립. (→ 실제로는 DB + 트랜잭션)
+const wallet = new Map();          // userId -> coin balance
+const processedTx = new Set();      // 멱등: 처리한 거래ID
+const PRODUCT_COINS = { coin_100: 100, coin_500: 550 }; // storeId/SKU -> 적립 코인 (→ 실제로는 config/DB)
+
+function creditWallet(userId, coins, txId) {
+  if (processedTx.has(txId)) return false; // 중복/리플레이 차단
+  processedTx.add(txId);
+  wallet.set(userId, (wallet.get(userId) || 0) + coins);
+  return true;
+}
+
+// 지갑 잔액 조회
+app.get('/wallet', async (req, res) => {
+  const u = await currentUser(req);
+  if (!u) return res.status(401).json({ error: 'no-session' });
+  return res.json({ balance: wallet.get(u.id) || 0 });
+});
+
+// cordova-plugin-purchase 의 validator 가 영수증을 POST 한다.
+// ⚠️ 스텁이다. 실제로는: (1) Apple App Store Server API / Google purchases.products 로 영수증 검증
+//    (Google 은 acknowledge 필수, 3일 내), (2) productId→coins 적립(멱등), (3) 플러그인 validator
+//    프로토콜에 맞는 응답 반환. 응답 포맷은 cordova-plugin-purchase 문서(Receipt Validator) 참고.
+app.post('/iap/verify', async (req, res) => {
+  const u = await currentUser(req);
+  if (!u) return res.status(401).json({ ok: false, code: 6778001, message: 'no-session' });
+
+  const body = req.body || {};
+  // 플러그인이 보내는 형태는 스토어/버전에 따라 다름. 핵심 식별자만 방어적으로 추출(스텁).
+  const productId = body.id || body.productId || body?.products?.[0]?.id;
+  const txId = body.transactionId || body?.transaction?.id || `${productId}:${Date.now()}`;
+  const platform = body.platform || body?.transaction?.type;
+
+  // TODO(실구현): platform 별 영수증 검증
+  //   - Apple: App Store Server API 로 JWS 거래 검증
+  //   - Google: androidpublisher purchases.products.get + purchases.products.acknowledge
+  const verified = true; // 스텁: 항상 통과(절대 운영 금지)
+
+  if (!verified) return res.status(400).json({ ok: false, code: 6778003, message: 'invalid-receipt' });
+
+  const coins = PRODUCT_COINS[productId] || 0;
+  const credited = creditWallet(u.id, coins, txId);
+
+  // 플러그인 validator 가 기대하는 성공 응답(요지). 정확한 스키마는 플러그인 문서 기준으로 맞출 것.
+  return res.json({
+    ok: true,
+    data: {
+      id: productId,
+      latest_receipt: true,
+      transaction: { id: txId, type: platform || 'test' },
+      // 적립 결과를 앱이 참고하도록(선택)
+      wallet: { balance: wallet.get(u.id) || 0, credited: credited ? coins : 0 },
+    },
+  });
+});
+
+// ── 환불/취소 웹훅 (코인 회수) — 스텁 ───────────────────────────────────────
+// Apple App Store Server Notifications v2 / Google Real-time Developer Notifications(Pub/Sub).
+// 실제로는 서명 검증 후 환불 거래의 사용자/코인을 찾아 차감. (consumable 도 환불 발생)
+app.post('/webhooks/apple', (req, res) => { /* TODO: ASSN v2 서명검증 → 환불 시 차감 */ res.sendStatus(200); });
+app.post('/webhooks/google', (req, res) => { /* TODO: RTDN Pub/Sub → 환불 시 차감 */ res.sendStatus(200); });
 
 app.listen(Number(PORT), () => console.log(`auth-reference on :${PORT} (issuer=${IDP_ISSUER || 'unset'})`));

@@ -45,6 +45,7 @@ const DEFAULT_AUTH = {
   sessionEndpoint: null,    // 네이티브 자격증명을 받아 세션쿠키를 발급하는 백엔드 URL (선택)
   signupEndpoint: null,     // 신규 회원의 약관동의+추가정보를 받아 가입 확정하는 백엔드 URL (선택)
   logoutEndpoint: null,
+  deleteEndpoint: null,     // 회원탈퇴/계정삭제 백엔드 URL (스토어 정책상 사실상 필수)
   // 중앙 IdP 모드(패밀리 SSO): 설정 시 앱은 IdP 하나만 바라본다. IdP 가 소셜을 페더레이션.
   //   { issuer | authorizeUrl, clientId, hintParam?, hints?, scopes?, redirectUri? }
   //   빈 객체({})면 미설정 = 직접 모드. (merge 가 null+객체에서 깨지므로 기본은 {})
@@ -56,6 +57,10 @@ const KNOWN_AUTH_PROVIDERS = ['email', 'apple', 'google', 'naver', 'kakao', 'fac
 // 인앱결제 슬롯. 디지털 재화는 스토어 IAP 강제. 영수증 검증은 백엔드(verifyEndpoint).
 // products: [{ id(웹SKU), storeId(스토어 상품ID), type: 'consumable' }]  — 가격은 스토어 콘솔에서.
 const DEFAULT_IAP = { products: [], verifyEndpoint: null };
+
+// 모니터링(크래시/에러). dsn 은 공개값이라 config 가능. 현재 자동배선 벤더: sentry.
+const DEFAULT_MONITORING = { crash: { provider: null, dsn: null, environment: 'production' } };
+const KNOWN_CRASH_PROVIDERS = [null, 'sentry'];
 
 // 현재 generate-app 이 npm 설치까지 자동 배선하는 벤더 (나머지는 슬롯만 + 수동 안내)
 const WIRED_PROVIDERS = { attribution: ['appsflyer'] };
@@ -180,9 +185,15 @@ export function loadConfig(repoRoot, slug) {
     if (!p || typeof p.id !== 'string') err(slug, 'iap.products 각 항목에 문자열 id 필요');
   }
 
+  // monitoring 정규화 + 검증
+  const monitoring = merge(DEFAULT_MONITORING, raw.monitoring ?? {});
+  if (!KNOWN_CRASH_PROVIDERS.includes(monitoring.crash.provider)) {
+    err(slug, `monitoring.crash.provider 는 ${KNOWN_CRASH_PROVIDERS.filter(Boolean).join(' | ')} (또는 null)`);
+  }
+
   return {
     slug, appName: raw.appName, appId: raw.appId, startUrl: raw.startUrl,
-    version, theme, features, navigation, assets, marketing, auth, iap,
+    version, theme, features, navigation, assets, marketing, auth, iap, monitoring,
     _appDir: appDir,
   };
 }
@@ -203,6 +214,7 @@ export function runtimeConfig(cfg) {
     marketing: cfg.marketing, // 벤더 선택만 포함. 키/시크릿은 generate-app 이 별도 주입.
     auth: cfg.auth,           // 공급자 목록 + 공개 clientId/엔드포인트. client secret 은 미포함(백엔드 전용).
     iap: cfg.iap,             // 상품 매핑 + 검증 엔드포인트. 가격/시크릿은 스토어/백엔드.
+    monitoring: cfg.monitoring, // 크래시/에러 벤더 + 공개 dsn.
   };
 }
 
