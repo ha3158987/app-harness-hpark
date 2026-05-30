@@ -92,4 +92,21 @@ export const registerPush = () => AppBridge.registerPush();
 /** 이벤트 로깅(앱: 마케팅 SDK, 웹: 필요시 자체 처리). */
 export const track = (event, params) => AppBridge.track(event, params);
 
+/** 앱 포그라운드 복귀(웹은 focus/visibility) → 지갑/세션 갱신용. 반환=해제 함수. */
+export const onResume = (handler) => AppBridge.onResume(handler);
+
+/** 백엔드에 보낼 컨텍스트(앱/웹·플랫폼·버전) — 서버가 이벤트/가격 분기에 사용. */
+export const context = () => AppBridge.context();
+
+/**
+ * 서버 권위 지갑 잔액 조회 헬퍼. 구매/로그인 직후 + onResume 에서 호출.
+ * 잔액은 계정(SSO)에 묶여 웹/앱이 같은 값. 클라는 진실을 들지 않고 항상 서버에서 읽는다.
+ */
+export async function fetchWallet(url = '/wallet') {
+  const r = await fetch(url, { credentials: 'include' });
+  if (!r.ok) return null;
+  const data = await r.json();
+  return data.balance;
+}
+
 export { AppBridge };

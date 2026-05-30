@@ -97,6 +97,23 @@ npm i @sentry/capacitor @sentry/react   # (당신 프레임워크에 맞게)
 ```
 미설치면 브릿지는 조용히 no-op(에러 없음). 수동 보고는 `AppBridge.reportError(e)`.
 
+## 4c. 웹/앱에서 다른 이벤트·콘텐츠 (+ 지갑 갱신)
+가격뿐 아니라 **이벤트/배너/쿠폰/섹션도 앱/웹 다르게** 가능. 자주 바뀌므로 **백엔드 주도** 권장:
+클라가 컨텍스트를 보내고 서버가 맞는 캠페인을 내려준다(→ 앱/웹 재배포 없이 이벤트 교체, 앱 전용 이벤트도).
+```js
+import { context, onResume, fetchWallet } from './harness-adapter';
+const campaigns = await fetch('/campaigns', {
+  method: 'POST', credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(context()),       // { isApp, platform, appVersion, slug }
+}).then(r => r.json());                   // 서버가 앱/웹별 이벤트 반환
+
+// 지갑 잔액(계정에 묶임 = 웹/앱 동일). 복귀 시 자동 갱신
+onResume(async () => { walletEl.textContent = await fetchWallet(); });
+```
+> 클라 분기로 간단히 `if (isApp()) showAppEvent()` 도 가능하나, 운영성(무재배포 교체)은 백엔드 주도가 우월.
+> 서버 렌더(SSR)면 컨텍스트 대신 UA 표식(`HarnessApp/...`)으로 분기(IAP.md §2).
+
 ## 4. 주의
 - **앱/브라우저 둘 다 잘 돌게**: 항상 `isNative`/`capabilities` 로 분기하고 폴백 가정.
 - **민감정보는 `secureSet`**(토큰/세션). `setPref` 는 비암호화.

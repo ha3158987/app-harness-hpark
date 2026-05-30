@@ -70,6 +70,18 @@ if (!AppBridge.isNative) showWebPromo();   // 웹에서만 노출
 
 웹(앱 아님)에서 `purchase()` 는 `reason:'web-should-use-pg'` 반환 → 웹은 자체 PG 사용.
 
+## 4c. 지갑 정합성 — 웹/앱 같은 잔액
+**잔액은 "기기"가 아니라 "계정(SSO)"에 묶인 서버 데이터.** 클라는 진실을 들지 않고 항상 서버에서 읽는다.
+- 웹 PG 적립이든 앱 IAP 적립이든 백엔드의 **같은 `userId` 잔액**에 들어감(멱등: 거래ID 중복차단).
+- 재조회 시점: **구매 직후 / 로그인 직후 / 앱 포그라운드 복귀**(다른 데서 충전했을 수 있음).
+```js
+import { fetchWallet, onResume } from './harness-adapter';
+async function refresh() { walletEl.textContent = await fetchWallet(); }
+await refresh();                 // 로그인/구매 후
+onResume(refresh);              // 앱 복귀 시(웹은 focus/visibility) 자동 갱신
+```
+> 동시에 두 기기에서 보고 있으면: 폴링(onResume) 또는 서버 푸시(WebSocket/SSE)로 동기화. 보통 onResume + 구매후 갱신이면 충분.
+
 ## 5. 백엔드가 구현할 것 (직접 방식)
 브릿지는 `cordova-plugin-purchase` 의 validator 로 **영수증을 `verifyEndpoint` 로 POST** 한다.
 백엔드는:

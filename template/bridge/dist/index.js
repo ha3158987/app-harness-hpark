@@ -565,6 +565,36 @@ class AppBridgeImpl {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }
 
+  // 앱이 포그라운드로 복귀할 때 핸들러 실행(지갑/세션 갱신용). 웹은 focus/visibility 폴백.
+  onResume(handler) {
+    if (typeof handler !== 'function') return () => {};
+    if (this.isNative) {
+      let remove = () => {};
+      import('@capacitor/app').then(({ App }) => {
+        App.addListener('appStateChange', ({ isActive }) => { if (isActive) handler(); })
+          .then((h) => { remove = () => h.remove(); });
+      }).catch(() => {});
+      return () => remove();
+    }
+    const onVis = () => { if (document.visibilityState === 'visible') handler(); };
+    window.addEventListener('focus', handler);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('focus', handler);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }
+
+  // 백엔드에 보낼 실행 컨텍스트. 서버가 앱/웹·플랫폼·버전별로 이벤트/가격/콘텐츠를 분기하는 데 쓴다.
+  context() {
+    return {
+      isApp: this.isNative,
+      platform: this.platform,
+      appVersion: (this.config && this.config.version && this.config.version.name) || null,
+      slug: (this.config && this.config.slug) || null,
+    };
+  }
+
   // ── 키보드 (base) ───────────────────────────────────────────────────────
   /** 키보드 표시/숨김 이벤트. handler({ visible, height }). @returns 해제 함수 */
   onKeyboard(handler) {

@@ -164,6 +164,12 @@ export interface AppBridgeSDK {
   /** 키보드 표시/숨김 이벤트(반환=해제 함수) */
   onKeyboard(handler: (info: { visible: boolean; height: number }) => void): () => void;
 
+  /** 앱 포그라운드 복귀 시 실행(지갑/세션 갱신용). 웹은 focus/visibility 폴백. 반환=해제 함수. */
+  onResume(handler: () => void): () => void;
+
+  /** 백엔드에 보낼 실행 컨텍스트(앱/웹·플랫폼·버전) — 서버가 이벤트/가격/콘텐츠 분기에 사용. */
+  context(): { isApp: boolean; platform: Platform; appVersion: string | null; slug: string | null };
+
   /**
    * 소셜/이메일 로그인. 인증은 WebView 밖(시스템 브라우저 OAuth2+PKCE, Apple은 네이티브)에서
    * 수행하고 딥링크로 복귀한다. authorization code 를 반환하며(백엔드가 secret 으로 교환),
