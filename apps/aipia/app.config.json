@@ -32,5 +32,19 @@
     "attribution": { "provider": "appsflyer", "deferredDeepLink": true },
     "analytics": { "provider": null },
     "crm": { "provider": null }
+  },
+  "auth": {
+    "providers": ["email", "apple", "google", "naver", "kakao", "facebook", "x", "threads"],
+    "sessionEndpoint": "https://aipia.co.kr/auth/native",
+    "logoutEndpoint": "https://aipia.co.kr/auth/logout",
+    "oauth": {
+      "google": { "clientId": "" },
+      "naver": { "clientId": "" },
+      "kakao": { "clientId": "" },
+      "facebook": { "clientId": "" },
+      "x": { "clientId": "" },
+      "threads": { "clientId": "" },
+      "apple": { "clientId": "kr.co.aipia.app", "redirectUri": "https://aipia.co.kr/auth/apple/callback" }
+    }
   }
 }

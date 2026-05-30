@@ -109,6 +109,10 @@ harness/
 > **네이티브 번들에만 베이크**된다(웹 폴백 config 엔 키가 들어가지 않음). 자세한 건 `MARKETING.md` 참조.
 > `features.deferredDeepLink` 는 하위호환으로 `marketing.attribution` 으로 자동 매핑된다.
 
+> **인증/SSO**는 `auth` 블록으로 정의한다(email/apple/google/naver/kakao/facebook/x/threads).
+> 인증은 WebView 밖(시스템 브라우저 OAuth2+PKCE, Apple은 네이티브)에서 수행하고 딥링크로 복귀하며,
+> client secret 은 앱에 없고 백엔드가 교환한다. 웹은 `AppBridge.login('google')` 한 줄. 상세·백엔드 규약은 `AUTH.md`.
+
 > 브릿지는 런타임에 `features`를 읽어 `AppBridge.capabilities`를 채우고, 웹은
 > `if (AppBridge.capabilities.biometric)` 식 피처 디텍션으로 분기한다. (OS 분기 로직은 셸/브릿지에만)
 > 브릿지는 `ready()` 시 켜진 capability 에 대응 메서드가 없으면 콘솔 경고로 불일치를 알린다(거짓 약속 방지).

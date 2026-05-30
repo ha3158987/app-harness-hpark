@@ -73,6 +73,37 @@ const MARKETING_PLUGINS = {
   attribution: { appsflyer: ['appsflyer-capacitor-plugin'] },
 };
 
+// 인증: 네이티브 SDK 가 필요한 공급자만 플러그인 설치. 나머지(google/naver/kakao/facebook/x/threads)는
+// 시스템 브라우저 OAuth2(PKCE)로 처리 → 추가 플러그인 불필요(@capacitor/browser 는 base).
+const AUTH_NATIVE_PLUGINS = {
+  apple: ['@capacitor-community/apple-sign-in'], // iOS 네이티브 Sign in with Apple
+};
+
+// 인증 플러그인 + 경고(Apple 4.8 / clientId 누락) 수집
+function authSetup(cfg) {
+  const providers = cfg.auth?.providers || [];
+  const plugins = [];
+  const warnings = [];
+  const social = providers.filter((p) => p !== 'email');
+  for (const p of providers) (AUTH_NATIVE_PLUGINS[p] || []).forEach((x) => plugins.push(x));
+
+  // Apple App Store 4.8: 제3자 소셜 로그인을 제공하면 Sign in with Apple 도 제공해야 한다(iOS).
+  const hasOtherSocial = social.some((p) => p !== 'apple');
+  if (hasOtherSocial && !providers.includes('apple')) {
+    warnings.push('소셜 로그인 제공 시 Apple 가이드라인 4.8 에 따라 "apple"(Sign in with Apple) 도 ' +
+      'providers 에 추가해야 합니다 — 없으면 iOS 심사에서 리젝될 수 있음.');
+  }
+  // 시스템 브라우저 OAuth 공급자는 공개 clientId 가 필요(없으면 런타임 misconfigured)
+  for (const p of social) {
+    if (p === 'apple') continue;
+    if (!cfg.auth?.oauth?.[p]?.clientId) {
+      warnings.push(`auth.oauth.${p}.clientId 누락 — OAuth 가 런타임에 동작하지 않음(빌드는 됨). ` +
+        '공개 clientId 를 config 에 넣거나 빌드 시 주입하세요(client secret 은 백엔드 전용).');
+    }
+  }
+  return { plugins, warnings, hasOAuth: social.some((p) => p !== 'apple') || social.length > 0 };
+}
+
 // 베이크 전용 시크릿을 환경변수에서 읽어 주입한다. 절대 source config/레포에 두지 않는다.
 // 슬러그별 우선: APPSFLYER_DEV_KEY_<SLUG대문자_하이픈→언더스코어> → 없으면 APPSFLYER_DEV_KEY
 function envFor(slug, base) {
@@ -193,6 +224,7 @@ function pluginsFor(cfg) {
     if (cfg.features[feat]) pkgs.forEach((p) => set.add(p));
   }
   marketingSetup(cfg).plugins.forEach((p) => set.add(p));
+  authSetup(cfg).plugins.forEach((p) => set.add(p));
   return [...set];
 }
 
@@ -304,6 +336,85 @@ function patchIosUsageStrings(buildDir, cfg) {
   log.ok(`iOS Info.plist: 권한 사용 설명 ${entries.length}개 주입`);
 }
 
+// ── 인증 네이티브 배선 ──────────────────────────────────────────────────────
+// OAuth 복귀용 커스텀 URL scheme(= appId) 등록 + Apple Sign In 엔타이틀먼트.
+
+function patchAndroidAuthScheme(buildDir, cfg) {
+  const manifest = join(buildDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+  if (!existsSync(manifest)) return;
+  let xml = readFileSync(manifest, 'utf8');
+  const MARK = 'harness-oauth';
+  if (xml.includes(MARK)) return;
+  const scheme = cfg.appId; // 예: kr.co.aipia.app://oauth/<provider>
+  const filter =
+`            <!-- ${MARK}: OAuth 복귀 커스텀 스킴 (generate-app 자동 주입) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${scheme}" />
+            </intent-filter>
+`;
+  const actClose = xml.indexOf('</activity>');
+  if (actClose === -1) return;
+  xml = xml.slice(0, actClose) + filter + '        ' + xml.slice(actClose);
+  writeFileSync(manifest, xml);
+  log.ok(`AndroidManifest: OAuth URL scheme "${scheme}://"`);
+}
+
+function patchIosAuthScheme(buildDir, cfg) {
+  const plistFile = join(buildDir, 'ios', 'App', 'App', 'Info.plist');
+  if (!existsSync(plistFile)) return;
+  let xml = readFileSync(plistFile, 'utf8');
+  if (xml.includes('CFBundleURLTypes')) return; // 이미 있으면 수동 병합 필요
+  const scheme = cfg.appId;
+  const block =
+`\t<key>CFBundleURLTypes</key>
+\t<array>
+\t\t<dict>
+\t\t\t<key>CFBundleURLSchemes</key>
+\t\t\t<array>
+\t\t\t\t<string>${scheme}</string>
+\t\t\t</array>
+\t\t</dict>
+\t</array>
+`;
+  const close = xml.lastIndexOf('</dict>');
+  if (close === -1) return;
+  xml = xml.slice(0, close) + block + xml.slice(close);
+  writeFileSync(plistFile, xml);
+  log.ok(`iOS Info.plist: OAuth URL scheme "${scheme}://"`);
+}
+
+// Apple Sign In 엔타이틀먼트(applesignin) 추가. iOS 플랫폼 + apple 공급자일 때만.
+function patchIosAppleEntitlement(buildDir, cfg) {
+  const iosAppDir = join(buildDir, 'ios', 'App', 'App');
+  if (!existsSync(iosAppDir)) return;
+  if (!(cfg.auth?.providers || []).includes('apple')) return;
+  const entFile = join(iosAppDir, 'App.entitlements');
+  const KEY = 'com.apple.developer.applesignin';
+  const block = `\t<key>${KEY}</key>\n\t<array>\n\t\t<string>Default</string>\n\t</array>\n`;
+  if (existsSync(entFile)) {
+    let xml = readFileSync(entFile, 'utf8');
+    if (xml.includes(KEY)) return;
+    const close = xml.lastIndexOf('</dict>');
+    if (close === -1) return;
+    xml = xml.slice(0, close) + block + xml.slice(close);
+    writeFileSync(entFile, xml);
+  } else {
+    const plist =
+`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+${block}</dict>
+</plist>
+`;
+    writeFileSync(entFile, plist);
+  }
+  log.ok('iOS App.entitlements: Sign in with Apple');
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -331,6 +442,10 @@ function main() {
     .filter(Boolean);
   if (activeMkt.length) log.info(`마케팅: ${activeMkt.join(', ')}`);
   mkt.warnings.forEach((w) => log.warn(w));
+  // 인증/SSO 안내
+  const authConf = authSetup(cfg);
+  if ((cfg.auth?.providers || []).length) log.info(`인증: ${cfg.auth.providers.join(', ')}`);
+  authConf.warnings.forEach((w) => log.warn(w));
 
   const buildDir = join(ROOT, 'build', cfg.slug);
   const wwwDir = join(buildDir, 'www');
@@ -432,6 +547,14 @@ function main() {
   }
   log.step('iOS 권한 사용 설명(Info.plist) 점검');
   patchIosUsageStrings(buildDir, cfg);
+
+  // 7c) 인증 네이티브 배선 (OAuth 복귀 URL scheme + Apple Sign In)
+  if (authConf.hasOAuth || (cfg.auth?.providers || []).includes('apple')) {
+    log.step('인증 네이티브 배선 (OAuth URL scheme / Apple Sign In)');
+    patchAndroidAuthScheme(buildDir, cfg);
+    patchIosAuthScheme(buildDir, cfg);
+    patchIosAppleEntitlement(buildDir, cfg);
+  }
 
   // 8) 동기화
   if (!args.skipSync) {

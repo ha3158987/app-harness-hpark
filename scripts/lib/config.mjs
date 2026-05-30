@@ -38,6 +38,16 @@ const DEFAULT_MARKETING = {
   // 공통 동선(화면전환/앱오픈/딥링크)을 브릿지가 코드 없이 자동 수집할지. 끄려면 false.
   autoCapture: true,
 };
+// 인증/SSO 슬롯. providers 에 켤 공급자만 나열. client secret 은 절대 여기 두지 않는다(백엔드 전용).
+// clientId 는 공개값이라 oauth.<provider>.clientId 로 둘 수 있다(또는 빌드 시 환경변수 베이크).
+const DEFAULT_AUTH = {
+  providers: [],            // ['email','apple','google','naver','kakao','facebook','x','threads']
+  sessionEndpoint: null,    // 네이티브 자격증명을 받아 세션쿠키를 발급하는 백엔드 URL (선택)
+  logoutEndpoint: null,
+  oauth: {},                // { google: { clientId, scopes?, redirectUri?, authorizeUrl?, extraQuery? }, ... }
+};
+const KNOWN_AUTH_PROVIDERS = ['email', 'apple', 'google', 'naver', 'kakao', 'facebook', 'x', 'threads'];
+
 // 현재 generate-app 이 npm 설치까지 자동 배선하는 벤더 (나머지는 슬롯만 + 수동 안내)
 const WIRED_PROVIDERS = { attribution: ['appsflyer'] };
 const KNOWN_PROVIDERS = {
@@ -145,9 +155,18 @@ export function loadConfig(repoRoot, slug) {
     }
   }
 
+  // auth 정규화 + 검증 (공급자명만 검증, clientId 누락은 generate-app 이 경고)
+  const auth = merge(DEFAULT_AUTH, raw.auth ?? {});
+  if (!Array.isArray(auth.providers)) err(slug, 'auth.providers 는 배열이어야 함');
+  for (const p of auth.providers) {
+    if (!KNOWN_AUTH_PROVIDERS.includes(p)) {
+      err(slug, `auth.providers 의 "${p}" 미지원. 가능: ${KNOWN_AUTH_PROVIDERS.join(' | ')}`);
+    }
+  }
+
   return {
     slug, appName: raw.appName, appId: raw.appId, startUrl: raw.startUrl,
-    version, theme, features, navigation, assets, marketing,
+    version, theme, features, navigation, assets, marketing, auth,
     _appDir: appDir,
   };
 }
@@ -166,7 +185,8 @@ export function runtimeConfig(cfg) {
     features: cfg.features,
     navigation: cfg.navigation,
     marketing: cfg.marketing, // 벤더 선택만 포함. 키/시크릿은 generate-app 이 별도 주입.
+    auth: cfg.auth,           // 공급자 목록 + 공개 clientId/엔드포인트. client secret 은 미포함(백엔드 전용).
   };
 }
 
-export { WIRED_PROVIDERS, KNOWN_PROVIDERS };
+export { WIRED_PROVIDERS, KNOWN_PROVIDERS, KNOWN_AUTH_PROVIDERS };

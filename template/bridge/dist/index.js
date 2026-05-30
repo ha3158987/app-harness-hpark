@@ -29,8 +29,21 @@ function deriveCapabilities(features) {
     haptics: flag(f.haptics),
     clipboard: flag(f.clipboard),
     geolocation: flag(f.geolocation),
+    auth: false, // config.auth.providers 로 ready() 에서 채움 (features 가 아니라 별도 블록)
   };
 }
+
+// 범용 OAuth2(시스템 브라우저) 공급자 프리셋. config.auth.oauth.<provider> 가 덮어쓴다.
+// 비밀키(client secret)는 앱에 없음 — authorization code 를 백엔드가 교환(PKCE).
+const OAUTH_PRESETS = {
+  google:   { authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth', scopes: ['openid', 'email', 'profile'] },
+  naver:    { authorizeUrl: 'https://nid.naver.com/oauth2.0/authorize', scopes: [] },
+  kakao:    { authorizeUrl: 'https://kauth.kakao.com/oauth/authorize', scopes: [] },
+  facebook: { authorizeUrl: 'https://www.facebook.com/v19.0/dialog/oauth', scopes: ['public_profile', 'email'] },
+  x:        { authorizeUrl: 'https://twitter.com/i/oauth2/authorize', scopes: ['tweet.read', 'users.read', 'offline.access'] },
+  threads:  { authorizeUrl: 'https://threads.net/oauth/authorize', scopes: ['threads_basic'] },
+  apple:    { authorizeUrl: 'https://appleid.apple.com/auth/authorize', scopes: ['name', 'email'] },
+};
 
 const NO_CAPS = deriveCapabilities({});
 
@@ -48,6 +61,7 @@ const CAP_METHOD = {
   haptics: 'haptic',
   clipboard: 'copyToClipboard',
   geolocation: 'getLocation',
+  auth: 'login',
 };
 
 class AppBridgeImpl {
@@ -72,6 +86,8 @@ class AppBridgeImpl {
         .then((cfg) => {
           this.config = cfg;
           this.capabilities = deriveCapabilities(cfg && cfg.features);
+          const authProviders = (cfg && cfg.auth && cfg.auth.providers) || [];
+          this.capabilities.auth = authProviders.length > 0;
           this._validateCapabilities();
           this._autoInit();
           return this.capabilities;
@@ -547,6 +563,159 @@ class AppBridgeImpl {
         .then((h) => removers.push(() => h.remove()));
     }).catch(() => {});
     return () => removers.forEach((r) => r());
+  }
+
+  // ── 인증 / SSO ─────────────────────────────────────────────────────────
+  /**
+   * 소셜/이메일 로그인. 핵심 원칙: 인증은 WebView 밖에서 한다(임베디드 webview 는
+   * Google 등이 차단). 시스템 브라우저로 OAuth2(PKCE) → 딥링크로 복귀 → authorization
+   * code 를 백엔드가 교환(secret 은 앱에 없음). Apple(iOS)은 네이티브 SDK 우선.
+   *
+   * 반환(웹이 백엔드로 보내거나, sessionEndpoint 설정 시 브릿지가 자동 전송):
+   *   { ok, provider, authorizationCode?, codeVerifier?, redirectUri?, idToken?, user?, session? }
+   * @param provider 'email'|'apple'|'google'|'naver'|'kakao'|'facebook'|'x'|'threads'
+   */
+  async login(provider, opts = {}) {
+    await this.ready();
+    const auth = (this.config && this.config.auth) || {};
+    const providers = auth.providers || [];
+    if (!providers.includes(provider)) return { ok: false, reason: 'provider-not-enabled' };
+    if (provider === 'email') return { ok: false, reason: 'email-handled-by-web' }; // 웹이 직접 처리
+    if (!this.isNative) return { ok: false, reason: 'web-should-redirect' };          // 브라우저는 일반 리다이렉트로
+
+    // Apple on iOS: 네이티브 Sign in with Apple 우선(실패/미설치 시 범용 OAuth 폴백)
+    if (provider === 'apple' && this.platform === 'ios') {
+      const native = await this._appleNative(opts);
+      if (native) return this._finishLogin(native, opts);
+    }
+    return this._oauth2(provider, opts);
+  }
+
+  /** 로그아웃: 시큐어 토큰 삭제 + (설정 시) 백엔드 세션 종료 + 새로고침 */
+  async logout(opts = {}) {
+    try { await this.secureRemove('auth_token'); } catch { /* noop */ }
+    const endpoint = (this.config && this.config.auth && this.config.auth.logoutEndpoint) || opts.endpoint;
+    if (endpoint) { try { await fetch(endpoint, { method: 'POST', credentials: 'include' }); } catch { /* noop */ } }
+    if (opts.reload !== false && this.isNative) location.reload();
+    return { ok: true };
+  }
+
+  // 범용 OAuth2 Authorization Code + PKCE (시스템 브라우저 + 딥링크 복귀)
+  async _oauth2(provider, opts) {
+    const auth = this.config.auth || {};
+    const conf = (auth.oauth && auth.oauth[provider]) || {};
+    const preset = OAUTH_PRESETS[provider] || {};
+    const clientId = conf.clientId;
+    const authorizeUrl = conf.authorizeUrl || preset.authorizeUrl;
+    const redirectUri = conf.redirectUri || this._defaultRedirect(provider);
+    const scopes = conf.scopes || preset.scopes || [];
+    if (!clientId || !authorizeUrl) return { ok: false, reason: 'oauth-misconfigured', provider };
+
+    const codeVerifier = this._randomString(64);
+    const codeChallenge = await this._pkceChallenge(codeVerifier);
+    const state = this._randomString(24);
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: scopes.join(' '),
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+    const url = `${authorizeUrl}?${params.toString()}${conf.extraQuery ? '&' + conf.extraQuery : ''}`;
+
+    const res = await this._awaitOAuthRedirect(state, opts.timeoutMs || 180000, () =>
+      this.openExternal(url, { system: true }));
+    if (!res.ok) return { ok: false, reason: res.reason, provider };
+
+    return { ok: true, provider, authorizationCode: res.code, codeVerifier, redirectUri, state };
+  }
+
+  // 딥링크 복귀를 state 로 매칭해 authorization code 를 회수. 시스템 브라우저는 닫는다.
+  _awaitOAuthRedirect(state, timeoutMs, trigger) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; unsub(); clearTimeout(t); resolve(v); };
+      const unsub = this.onDeepLink((url) => {
+        let u; try { u = new URL(url); } catch { return; }
+        const code = u.searchParams.get('code');
+        const st = u.searchParams.get('state');
+        const err = u.searchParams.get('error');
+        if (!code && !err) return;          // 우리 OAuth 복귀가 아님
+        if (state && st !== state) return;  // 다른 흐름의 복귀 — 무시
+        import('@capacitor/browser').then(({ Browser }) => Browser.close()).catch(() => {});
+        finish(err ? { ok: false, reason: `oauth-error:${err}` } : { ok: true, code });
+      });
+      const t = setTimeout(() => finish({ ok: false, reason: 'timeout' }), timeoutMs);
+      Promise.resolve(trigger()).catch(() => finish({ ok: false, reason: 'open-failed' }));
+    });
+  }
+
+  // Apple 네이티브 Sign in with Apple (플러그인 미설치 시 null → 범용 OAuth 폴백)
+  async _appleNative(opts) {
+    let SignInWithApple;
+    try { ({ SignInWithApple } = await import('@capacitor-community/apple-sign-in')); }
+    catch { return null; }
+    const conf = (this.config.auth && this.config.auth.oauth && this.config.auth.oauth.apple) || {};
+    try {
+      const res = await SignInWithApple.authorize({
+        clientId: conf.clientId || this.config.appId,
+        redirectURI: conf.redirectUri || this._defaultRedirect('apple'),
+        scopes: 'name email',
+        state: this._randomString(16),
+      });
+      const r = res.response || {};
+      return {
+        ok: true, provider: 'apple', native: true,
+        idToken: r.identityToken, authorizationCode: r.authorizationCode,
+        user: { id: r.user, email: r.email, name: r.givenName && `${r.givenName} ${r.familyName || ''}`.trim() },
+      };
+    } catch { return null; }
+  }
+
+  // 로그인 마무리: sessionEndpoint 가 있으면 자격증명을 백엔드로 보내 세션쿠키 발급받음.
+  async _finishLogin(credential, opts) {
+    if (!credential || !credential.ok) return credential;
+    const endpoint = (this.config.auth && this.config.auth.sessionEndpoint) || opts.sessionEndpoint;
+    if (!endpoint) return credential; // 웹이 직접 백엔드로 전송
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credential),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data && data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }
+      if (res.ok && opts.reload !== false) location.reload();
+      return { ...credential, session: res.ok, user: data.user || credential.user, backend: data };
+    } catch {
+      return { ...credential, session: false, reason: 'session-endpoint-failed' };
+    }
+  }
+
+  _defaultRedirect(provider) {
+    return `${(this.config && this.config.appId) || 'app'}://oauth/${provider}`;
+  }
+
+  // PKCE / state 용 난수 (Web Crypto — https origin = secure context 에서 동작)
+  _randomString(len) {
+    const bytes = new Uint8Array(len);
+    crypto.getRandomValues(bytes);
+    return this._base64url(bytes).slice(0, len);
+  }
+
+  async _pkceChallenge(verifier) {
+    const data = new TextEncoder().encode(verifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return this._base64url(new Uint8Array(digest));
+  }
+
+  _base64url(bytes) {
+    let str = '';
+    for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+    return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
   // ── 마케팅 SDK ─────────────────────────────────────────────────────────

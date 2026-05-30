@@ -17,6 +17,26 @@ export interface AppCapabilities {
   haptics: boolean;
   clipboard: boolean;
   geolocation: boolean;
+  auth: boolean;
+}
+
+export type AuthProvider = 'email' | 'apple' | 'google' | 'naver' | 'kakao' | 'facebook' | 'x' | 'threads';
+
+export interface AuthResult2 {
+  ok: boolean;
+  provider?: AuthProvider;
+  /** 백엔드가 secret 으로 교환할 OAuth authorization code (PKCE) */
+  authorizationCode?: string;
+  codeVerifier?: string;
+  redirectUri?: string;
+  state?: string;
+  /** Apple 네이티브 등에서 직접 받는 id token */
+  idToken?: string;
+  user?: { id?: string; email?: string; name?: string };
+  /** sessionEndpoint 설정 시 백엔드 세션 발급 성공 여부 */
+  session?: boolean;
+  backend?: unknown;
+  reason?: string;
 }
 
 export interface AppRuntimeConfig {
@@ -124,6 +144,19 @@ export interface AppBridgeSDK {
 
   /** 키보드 표시/숨김 이벤트(반환=해제 함수) */
   onKeyboard(handler: (info: { visible: boolean; height: number }) => void): () => void;
+
+  /**
+   * 소셜/이메일 로그인. 인증은 WebView 밖(시스템 브라우저 OAuth2+PKCE, Apple은 네이티브)에서
+   * 수행하고 딥링크로 복귀한다. authorization code 를 반환하며(백엔드가 secret 으로 교환),
+   * config.auth.sessionEndpoint 설정 시 브릿지가 자동으로 백엔드에 보내 세션쿠키를 받는다.
+   * 'email' 은 웹이 직접 처리(ok:false, reason:'email-handled-by-web').
+   */
+  login(provider: AuthProvider, opts?: {
+    sessionEndpoint?: string; timeoutMs?: number; reload?: boolean;
+  }): Promise<AuthResult2>;
+
+  /** 로그아웃: 시큐어 토큰 삭제 + (설정 시) 백엔드 세션 종료 + 새로고침 */
+  logout(opts?: { endpoint?: string; reload?: boolean }): Promise<{ ok: boolean }>;
 
   /**
    * 마케팅 SDK 초기화(앱 시작 시 1회). 키는 네이티브 베이크 config 에서 읽는다.
