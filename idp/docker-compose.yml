@@ -1,0 +1,49 @@
+# 로컬 Keycloak (중앙 IdP) — 패밀리 SSO 검증용.
+# 실행:  docker compose -f idp/docker-compose.yml up
+# 어드민: http://localhost:8080  (admin / admin)
+# 첫 기동 시 realm-aipia.json 을 자동 import (realm "aipia" + 앱 클라이언트들).
+#
+# ⚠️ 이건 로컬/개발용 설정이다. 운영(auth.aipia.co.kr)에서는:
+#   - start-dev → start, HTTPS(KC_HOSTNAME/인증서), 강한 어드민 비번, DB 백업
+#   - 소셜 clientId/secret 은 어드민 UI 또는 env 로 주입(레포 금지)
+services:
+  postgres:
+    image: postgres:16
+    container_name: aipia-idp-db
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - idp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    container_name: aipia-idp
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      # KC 26: 부트스트랩 어드민 (최초 1회 생성)
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      # 소셜 secret 을 env 로 주입하고 싶으면 여기에(레포엔 빈 값/미커밋):
+      # KC_SOCIAL_GOOGLE_SECRET: ${KC_SOCIAL_GOOGLE_SECRET:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./realm-aipia.json:/opt/keycloak/data/import/realm-aipia.json:ro
+
+volumes:
+  idp_pgdata:
