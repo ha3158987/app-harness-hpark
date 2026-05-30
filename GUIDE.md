@@ -1,0 +1,288 @@
+# GUIDE — Appharness 마스터 가이드
+
+> 이 문서 하나로 **무엇이 지원되는지 · 무엇을 읽어야 하는지 · 무엇을 직접 해야 하는지(필수 입력)** 를 파악한다.
+> 서식: Markdown + Mermaid(다이어그램) + 최소한의 HTML(표/접기). AI가 읽고 사람이 시각화하기 위한 공통 서식만 사용.
+
+---
+
+## 0. 한 줄 정의
+여러 **웹 서비스**를 하나의 얇은 **Capacitor 네이티브 셸 + 공유 브릿지**로 감싸 iOS/Android 앱으로 찍어내는 하네스.
+앱은 `server.url` 로 **배포된 웹을 원격 로드**하고, 웹은 `@harness/bridge` 로 네이티브 기능을 호출한다. 모든 작업은 **Claude Code 스킬**로 자동화.
+
+---
+
+## 1. 아키텍처
+
+```mermaid
+flowchart TB
+  subgraph web["프론트 레포 (서비스마다, 별도 배포)"]
+    W["웹앱 + @harness/bridge<br/>(harness-adapter)"]
+  end
+  subgraph harness["하네스 레포 (이 저장소)"]
+    CFG["apps/&lt;slug&gt;/app.config.json"]
+    GEN["scripts/generate-app.mjs"]
+    BR["template/bridge (공유 브릿지)"]
+  end
+  subgraph shell["생성된 네이티브 셸 (build/&lt;slug&gt;)"]
+    APP["Capacitor 앱 (APK/IPA)<br/>server.url → 원격 웹 로드"]
+  end
+  BE["백엔드 (당신)<br/>세션·지갑·영수증검증·성인인증"]
+  IDP["중앙 IdP (Keycloak, 당신 서버)<br/>소셜 페더레이션 + SSO"]
+  STORE["App Store / Play"]
+
+  CFG --> GEN --> APP
+  BR --> APP
+  W -- "원격 로드" --> APP
+  W <-- "login/purchase/track..." --> BR
+  W <--> BE
+  APP -- "OAuth(시스템브라우저)" --> IDP --> BE
+  APP -- "fastlane (CI)" --> STORE
+```
+
+**역할 분담(핵심 멘탈 모델)**
+
+| 주체 | 책임 |
+|---|---|
+| **하네스** | 네이티브 배관 + `AppBridge.*` API + 빌드/배포 자동화 (스킬) |
+| **웹(프론트)** | `@harness/bridge` import + `if(isNative) AppBridge.xxx()` 로 **연결** (기능당 1줄) |
+| **백엔드** | 토큰/영수증 **검증**, 세션, 지갑, 성인인증 **게이팅** (서버 권위) |
+| **콘솔(사람)** | 스토어 상품·개인정보 양식·연령등급, 소셜/서명 키 발급 |
+
+> 반복 원칙: **클라는 흐름을 열고 컨텍스트만, 검증·게이팅·신고는 서버/콘솔.**
+
+---
+
+## 2. 자동화 흐름 (스킬 체인)
+
+```mermaid
+flowchart LR
+  A["new-app<br/>정의 생성"] --> B["integrate-web<br/>웹 레포 연결"]
+  B --> C["generate-assets<br/>아이콘/스플래시"]
+  C --> D["generate-app<br/>Capacitor 프로젝트"]
+  D --> E["build-android / build-ios"]
+  E --> F["submit-store<br/>베타/내부 트랙"]
+  F -. "프로덕션 공개" .-> G["사람이 콘솔에서 수동"]
+  CI["CI: 태그 &lt;slug&gt;-v* 또는 수동 실행"] -.-> D
+```
+
+예) **"AIPIA 웹 레포 연결해서 양쪽 빌드하고 베타 올려줘"** → 위 체인을 AI가 엮어 실행(계정/키 준비 시).
+
+**스킬 목록**
+
+| 스킬 | 역할 |
+|---|---|
+| `new-app` | `apps/<slug>/app.config.json` 정의 생성 |
+| `integrate-web` | 웹 레포에 브릿지/어댑터 배치 + call site 분기(웹 경로 보존) |
+| `generate-assets` | 아이콘(1024²)/스플래시(2732²) 전 사이즈 생성 |
+| `bump-version` | version.name/code 올림 |
+| `build-android` | generate-app → gradle (AAB/APK), 헤드리스 |
+| `build-ios` | generate-app → xcodebuild (.ipa), **macOS 필요** |
+| `submit-store` | fastlane → TestFlight / Play 내부·베타 (프로덕션 제외) |
+
+점검 도구: `node scripts/doctor.mjs` (환경 + 모든 앱 config 검사)
+
+---
+
+## 3. 지원 기능 전체
+
+`AppBridge.ready()` 후 `AppBridge.capabilities` 로 피처 디텍션. 웹/브라우저에선 안전한 폴백.
+
+<details><summary><b>브릿지 API 전체 (펼치기)</b></summary>
+
+| 영역 | API | config 블록 | 문서 |
+|---|---|---|---|
+| 코어 | `ready` `isNative` `platform` `capabilities` `config` `context` | — | INTEGRATION |
+| 로그인/SSO | `login` `logout` `completeSignup` `deleteAccount` `getLastLogin` `guestLogin` `onDeepLink` | `auth` | AUTH |
+| 기기바인딩 | `enableBiometricLogin` `biometricLoginEnabled` `unlock` (+`registerPush`로 기기등록) | `auth.deviceEndpoint` | AUTH §3-7 |
+| 인앱결제 | `getProducts` `purchase` `restorePurchases` | `iap` | IAP |
+| 권한 | `getPermissionNotice` `requestPermission` `permissionStatus` | `permissions` | COMPLIANCE |
+| 추적동의 | `requestTracking` (iOS ATT) | `marketing` | DATA-COLLECTION |
+| 공유/링크 | `share` `openExternal` | `features.share` | INTEGRATION |
+| 푸시/알림 | `registerPush` `scheduleNotification` `cancelNotification` | `features.push`/`localNotification` | APP-FEATURES |
+| 강제업데이트 | `checkForceUpdate` (자동) | `features.forceUpdate` | README §4 |
+| 카메라/위치/햅틱/클립보드 | `takePhoto` `getLocation` `haptic` `copyToClipboard` `readClipboard` | `features.*` | APP-FEATURES |
+| 저장 | `secureSet/Get/Remove`(민감) `setPref/getPref/removePref` | `features.secureStorage` | APP-FEATURES |
+| 기기/네트워크/키보드/복귀 | `getDeviceInfo` `getNetworkStatus` `onNetworkChange` `onKeyboard` `onResume` | — | INTEGRATION |
+| 안전영역 | `getSafeAreaInsets` | (자동) | DEVICE-SUPPORT §4b |
+| 마케팅/분석 | `initMarketing` `track` `setUser` | `marketing` | MARKETING |
+| 모니터링 | `initMonitoring`(자동) `reportError` | `monitoring` | INTEGRATION §4b |
+| 백버튼 | `onBackButton` | — | APP-FEATURES |
+
+</details>
+
+**capabilities 플래그**: `push, deepLink, deferredDeepLink, biometric, share, camera, forceUpdate, secureStorage, localNotification, haptics, clipboard, geolocation, auth, iap`
+
+**인증/계정 지원 범위**: 이메일 + 소셜 8(apple/google/naver/kakao/facebook/x/threads) · 중앙 IdP(SSO) · 회원가입 온보딩(약관/추가정보) · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인 · 기기 등록.
+
+---
+
+## 4. 빠른 시작
+
+```mermaid
+flowchart TB
+  S1["1. 환경 준비<br/>JDK21·AndroidSDK·Node (iOS는 macOS/Xcode)"] --> S2
+  S2["2. new-app: apps/&lt;slug&gt; 정의"] --> S3
+  S3["3. integrate-web: 웹에 브릿지 연결"] --> S4
+  S4["4. 에셋(icon/splash) 넣기"] --> S5
+  S5["5. generate-app → 디버그 빌드 확인"] --> S6
+  S6["6. 백엔드/IdP/스토어 상품/키 준비 (필수 입력 §5)"] --> S7
+  S7["7. 시크릿 등록 → 태그 푸시 → CI 자동 배포(베타)"] --> S8
+  S8["8. 콘솔에서 프로덕션 공개 (사람)"]
+```
+
+문서 시작점: **새 서비스 추가 = `ONBOARDING.md`**, **프론트 통합 = `INTEGRATION.md`**.
+
+---
+
+## 5. 필수 입력 (사람이 준비해야 하는 것)
+
+> 하네스 코드 외에 **반드시 외부에서 발급/구축**해야 동작하는 것들. 없으면 빌드는 돼도 기능이 비활성.
+
+<details><summary><b>5-1. 계정 · 멤버십</b></summary>
+
+- Apple Developer Program ($99/년) — iOS 배포 전제
+- Google Play Console ($25 1회)
+- 소셜 OAuth 앱(키): Google/Apple/Facebook/X/Threads + **Naver/Kakao**(한국)
+- (성인 콘텐츠 시) 본인확인 PG 계약: NICE/PASS/KCB 등
+</details>
+
+<details><summary><b>5-2. 서명 · 시크릿 (GitHub Secrets — DEPLOY.md §4)</b></summary>
+
+| Secret | 용도 |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` / `_PASSWORD` / `ANDROID_KEY_ALIAS` / `_PASSWORD` | Android 릴리즈 서명 |
+| `PLAY_SERVICE_ACCOUNT_JSON` | Play 업로드 |
+| `MATCH_GIT_URL` / `MATCH_PASSWORD` / `MATCH_GIT_BASIC_AUTHORIZATION` | iOS 인증서(match) |
+| `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_P8` | App Store Connect API |
+| `APPSFLYER_DEV_KEY` / `APPSFLYER_IOS_APP_ID` | 마케팅(선택) |
+
+원칙: **시크릿/키는 절대 config·레포에 두지 않는다.** 공개값(clientId, Sentry dsn)만 config.
+</details>
+
+<details><summary><b>5-3. 백엔드 엔드포인트 (레퍼런스: backend/auth-reference)</b></summary>
+
+| 엔드포인트 | 역할 | 문서 |
+|---|---|---|
+| `POST /auth/native` | 소셜 자격증명 → 검증 → 세션 / 신규 온보딩 유도 | AUTH §3 |
+| `POST /auth/signup` | 약관+추가정보 → 가입 확정 | AUTH §3-4 |
+| `POST /auth/guest` | 게스트(익명) 계정 | AUTH §3-6 |
+| `POST /auth/logout` `/auth/delete` | 로그아웃 / 회원탈퇴 | AUTH §3-5 |
+| `POST /auth/device` | 푸시토큰·기기 등록 | AUTH §3-7 |
+| `GET /auth/me` `GET /wallet` | 세션 확인 / 지갑 잔액 | — |
+| `POST /iap/verify` | 영수증 검증 + 지갑 적립 | IAP §5 |
+| `POST /webhooks/apple` `/webhooks/google` | 환불 회수 | IAP §5 |
+| (성인) 본인확인 콜백 + 상태 | 성인 검증 저장/게이팅 | COMPLIANCE §3 |
+
+중앙 IdP(Keycloak)는 `idp/` 로 자기 서버에 배포(소셜 한 곳 등록 → 패밀리 앱 공유).
+</details>
+
+<details><summary><b>5-4. 스토어 콘솔 (사람)</b></summary>
+
+- IAP 상품 등록(Consumable, 가격 티어 = 앱 가격)
+- 개인정보 라벨 / 데이터 안전성 양식 → `DATA-COLLECTION.md` 대로(AppsFlyer 광고ID+ATT 주의)
+- 개인정보처리방침 URL(`legal.privacyUrl`), 연령 등급(Apple 17+/GRAC)
+- iOS 딥링크/소셜 복귀: 엔타이틀먼트는 generate-app 이 pbxproj 연결(첫 macOS 빌드서 확인)
+</details>
+
+<details><summary><b>5-5. 에셋</b></summary>
+
+- `apps/<slug>/icon.png` (1024×1024), `apps/<slug>/splash.png` (2732×2732)
+- 없으면 디버그 빌드는 되지만 스토어 제출엔 필요
+</details>
+
+---
+
+## 6. config 스키마 (단일 진실 공급원)
+
+`apps/<slug>/app.config.json`. 전체 블록 요약 (상세 스키마 = README §4, 블록별 = 각 문서).
+
+```jsonc
+{
+  "slug": "aipia", "appName": "AIPIA", "appId": "kr.co.aipia.app",
+  "startUrl": "https://aipia.co.kr",
+  "version": { "name": "1.0.0", "code": 1 },
+  "theme": { "primary": "#1A73E8", "statusBarStyle": "light", "background": "#FFFFFF" },
+  "assets": { "icon": "icon.png", "splash": "splash.png" },
+  "features": { "push": true, "deepLink": true, "biometric": true, "share": true,
+    "camera": true, "forceUpdate": { "enabled": true, "minVersionUrl": "..." },
+    "secureStorage": true, "localNotification": true, "haptics": true,
+    "clipboard": true, "geolocation": true },
+  "navigation": { "allowedDomains": ["aipia.co.kr", "*.aipia.co.kr"], "externalInBrowser": true },
+  "marketing": { "attribution": { "provider": "appsflyer", "deferredDeepLink": true } },
+  "auth": { "providers": ["email","apple","google","naver","kakao","facebook","x","threads"],
+    "idp": { "issuer": "https://auth.aipia.co.kr/realms/aipia", "clientId": "aipia-app",
+      "hintParam": "kc_idp_hint", "hints": { "x": "twitter" } },
+    "sessionEndpoint": "...", "signupEndpoint": "...", "logoutEndpoint": "...",
+    "deleteEndpoint": "...", "guestEndpoint": "...", "deviceEndpoint": "..." },
+  "iap": { "verifyEndpoint": "...", "products": [
+    { "id": "coin_100", "storeId": "kr.co.aipia.app.coin100", "type": "consumable" } ] },
+  "monitoring": { "crash": { "provider": "sentry", "dsn": "", "environment": "production" } },
+  "legal": { "privacyUrl": "...", "termsUrl": "...", "ageVerifyUrl": "..." },
+  "permissions": { "notifications": { "required": false, "purpose": "..." } }
+}
+```
+
+> ⚠️ **시크릿 금지**: client secret, 서명키, 스토어키, AppsFlyer devKey 는 config 에 두지 않는다(환경변수/Secrets).
+
+---
+
+## 7. 환경
+
+| 항목 | 값 |
+|---|---|
+| Capacitor | 8 |
+| Node | 20 LTS+ |
+| JDK (Android) | **21 필수** |
+| Android SDK | platform 35, build-tools 35 (targetSdk 35, 2026-08 이후 36) |
+| iOS | **macOS + Xcode 26** (또는 CI macOS 러너 — 맥 없이) |
+
+점검: `node scripts/doctor.mjs`
+
+---
+
+## 8. 문서 색인 — "무엇을 볼까"
+
+```mermaid
+mindmap
+  root((Appharness 문서))
+    시작
+      GUIDE(이 문서)
+      ONBOARDING(새 서비스 추가)
+      INTEGRATION(프론트 통합·API)
+    인증/결제
+      AUTH(로그인·SSO·게스트·탈퇴)
+      IAP(인앱결제·지갑)
+      COMPLIANCE(권한·성인인증)
+      DATA-COLLECTION(개인정보 양식)
+    빌드/배포
+      DEPLOY(CI·시크릿·서명)
+      DEVICE-SUPPORT(기기·안전영역)
+      idp/README(Keycloak)
+    참고
+      README(스키마·레이아웃)
+      STRATEGY MARKETING REFERENCES
+      backend/auth-reference
+```
+
+| 하고 싶은 것 | 볼 문서 |
+|---|---|
+| 새 서비스 앱화 | `ONBOARDING.md` |
+| 웹에 기능 연결 | `INTEGRATION.md` (+ `template/integration/harness-adapter.js`) |
+| 로그인/SSO/회원가입/게스트/탈퇴 | `AUTH.md` |
+| 인앱결제/지갑/웹앱 가격차 | `IAP.md` |
+| 권한 고지/개인정보/성인인증 | `COMPLIANCE.md` |
+| 스토어 개인정보 양식 채우기 | `DATA-COLLECTION.md` |
+| CI 자동배포/서명/시크릿 | `DEPLOY.md` |
+| 기기/해상도/노치/폴더블 | `DEVICE-SUPPORT.md` |
+| 중앙 IdP 띄우기 | `idp/README.md` |
+| config 스키마 상세 | `README.md` §4 |
+| 백엔드 구현 참고 | `backend/auth-reference/` |
+
+---
+
+## 9. 현재 상태 / 주의 (정직)
+
+- ✅ **검증됨**: Android `assembleDebug` 빌드(전 기능 + 8 소셜 + IAP + 안전영역 등), 백엔드 레퍼런스 스모크(게스트/기기/지갑).
+- ⚠️ **미검증**: **iOS 빌드**(Windows 환경) — 첫 macOS/CI 실행에서 엔타이틀먼트 pbxproj 연결 확인 필요.
+- ⚠️ **레퍼런스/스텁**: `backend/auth-reference`(인메모리), `/iap/verify` 검증 로직 → 실 DB·실 검증으로 교체.
+- 🙋 **사람/외부**: 계정·서명·소셜키·스토어 상품·본인확인 PG·IdP 배포 (§5). 하네스는 흐름을 열고 받을 뿐.
