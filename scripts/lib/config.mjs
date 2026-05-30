@@ -53,6 +53,10 @@ const DEFAULT_AUTH = {
 };
 const KNOWN_AUTH_PROVIDERS = ['email', 'apple', 'google', 'naver', 'kakao', 'facebook', 'x', 'threads'];
 
+// 인앱결제 슬롯. 디지털 재화는 스토어 IAP 강제. 영수증 검증은 백엔드(verifyEndpoint).
+// products: [{ id(웹SKU), storeId(스토어 상품ID), type: 'consumable' }]  — 가격은 스토어 콘솔에서.
+const DEFAULT_IAP = { products: [], verifyEndpoint: null };
+
 // 현재 generate-app 이 npm 설치까지 자동 배선하는 벤더 (나머지는 슬롯만 + 수동 안내)
 const WIRED_PROVIDERS = { attribution: ['appsflyer'] };
 const KNOWN_PROVIDERS = {
@@ -169,9 +173,16 @@ export function loadConfig(repoRoot, slug) {
     }
   }
 
+  // iap 정규화 + 검증
+  const iap = merge(DEFAULT_IAP, raw.iap ?? {});
+  if (!Array.isArray(iap.products)) err(slug, 'iap.products 는 배열이어야 함');
+  for (const p of iap.products) {
+    if (!p || typeof p.id !== 'string') err(slug, 'iap.products 각 항목에 문자열 id 필요');
+  }
+
   return {
     slug, appName: raw.appName, appId: raw.appId, startUrl: raw.startUrl,
-    version, theme, features, navigation, assets, marketing, auth,
+    version, theme, features, navigation, assets, marketing, auth, iap,
     _appDir: appDir,
   };
 }
@@ -191,6 +202,7 @@ export function runtimeConfig(cfg) {
     navigation: cfg.navigation,
     marketing: cfg.marketing, // 벤더 선택만 포함. 키/시크릿은 generate-app 이 별도 주입.
     auth: cfg.auth,           // 공급자 목록 + 공개 clientId/엔드포인트. client secret 은 미포함(백엔드 전용).
+    iap: cfg.iap,             // 상품 매핑 + 검증 엔드포인트. 가격/시크릿은 스토어/백엔드.
   };
 }
 

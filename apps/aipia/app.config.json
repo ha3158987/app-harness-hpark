@@ -47,5 +47,12 @@
         "facebook": "facebook", "x": "twitter", "threads": "threads"
       }
     }
+  },
+  "iap": {
+    "verifyEndpoint": "https://aipia.co.kr/iap/verify",
+    "products": [
+      { "id": "coin_100", "storeId": "kr.co.aipia.app.coin100", "type": "consumable" },
+      { "id": "coin_500", "storeId": "kr.co.aipia.app.coin500", "type": "consumable" }
+    ]
   }
 }

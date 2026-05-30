@@ -18,6 +18,21 @@ export interface AppCapabilities {
   clipboard: boolean;
   geolocation: boolean;
   auth: boolean;
+  iap: boolean;
+}
+
+export interface IapProduct {
+  id: string;            // 웹/내부 SKU
+  storeId: string;       // 스토어 상품 ID
+  title: string | null;
+  price: string | null;       // 현지화 가격 문자열(앱 가격 티어)
+  priceMicros: number | null;
+}
+export interface PurchaseResult {
+  ok: boolean;
+  productId?: string;
+  transactionId?: string;
+  reason?: string;
 }
 
 export type AuthProvider = 'email' | 'apple' | 'google' | 'naver' | 'kakao' | 'facebook' | 'x' | 'threads';
@@ -197,6 +212,16 @@ export interface AppBridgeSDK {
 
   /** Android 하드웨어 백버튼 핸들러 등록. handler 가 true 반환 시 기본 동작 억제. */
   onBackButton(handler: () => boolean | Promise<boolean>): () => void;
+
+  /**
+   * 인앱결제 상품 목록(스토어 현지화 가격 포함). 앱에서만 의미(웹은 빈 배열 → 웹 가격은 웹이 표시).
+   * 디지털 재화는 스토어 IAP 강제. 웹/앱 분기는 isNative 로.
+   */
+  getProducts(): Promise<IapProduct[]>;
+  /** 구매(앱 전용). 영수증은 백엔드가 검증(config.iap.verifyEndpoint)하고 서버 지갑에 적립. */
+  purchase(productId: string): Promise<PurchaseResult>;
+  /** 구매 복원(재설치/기기변경). 소비형 코인은 서버 지갑이 진실. */
+  restorePurchases(): Promise<{ ok: boolean; reason?: string }>;
 }
 
 export const AppBridge: AppBridgeSDK;

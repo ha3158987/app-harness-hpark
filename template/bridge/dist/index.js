@@ -30,6 +30,7 @@ function deriveCapabilities(features) {
     clipboard: flag(f.clipboard),
     geolocation: flag(f.geolocation),
     auth: false, // config.auth.providers 로 ready() 에서 채움 (features 가 아니라 별도 블록)
+    iap: false,  // config.iap.products 로 ready() 에서 채움
   };
 }
 
@@ -62,6 +63,7 @@ const CAP_METHOD = {
   clipboard: 'copyToClipboard',
   geolocation: 'getLocation',
   auth: 'login',
+  iap: 'purchase',
 };
 
 class AppBridgeImpl {
@@ -88,6 +90,8 @@ class AppBridgeImpl {
           this.capabilities = deriveCapabilities(cfg && cfg.features);
           const authProviders = (cfg && cfg.auth && cfg.auth.providers) || [];
           this.capabilities.auth = authProviders.length > 0;
+          const iapProducts = (cfg && cfg.iap && cfg.iap.products) || [];
+          this.capabilities.iap = iapProducts.length > 0;
           this._validateCapabilities();
           this._autoInit();
           return this.capabilities;
@@ -794,6 +798,88 @@ class AppBridgeImpl {
     let str = '';
     for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
     return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  // ── 인앱결제 (IAP) ─────────────────────────────────────────────────────
+  // 디지털 재화(코인/회차)는 스토어 IAP 강제. 영수증 검증은 백엔드가(플러그인이 verifyEndpoint 로 POST).
+  // 웹/앱 한 코드: 웹은 isNative=false → 기존 웹 PG, 앱은 purchase() → 스토어 IAP.
+  // 플러그인: cordova-plugin-purchase(v13, window.CdvPurchase). 통합 시 플러그인 API 재확인 권장.
+  async _iapInit() {
+    if (this._iapReadyP) return this._iapReadyP;
+    this._iapReadyP = (async () => {
+      if (!this.isNative || !this.capabilities.iap) return null;
+      const CdvPurchase = (typeof window !== 'undefined') && window.CdvPurchase;
+      if (!CdvPurchase || !CdvPurchase.store) return null;
+      const store = CdvPurchase.store;
+      const iap = this.config.iap || {};
+      const platform = this.platform === 'ios'
+        ? CdvPurchase.Platform.APPLE_APPSTORE : CdvPurchase.Platform.GOOGLE_PLAY;
+      if (iap.verifyEndpoint) store.validator = iap.verifyEndpoint; // 백엔드 영수증 검증으로 위임
+      const products = (iap.products || []).map((p) => ({
+        id: p.storeId || p.id,
+        type: CdvPurchase.ProductType.CONSUMABLE, // 코인=소비형
+        platform,
+      }));
+      if (products.length) store.register(products);
+      await store.initialize([platform]);
+      this._store = store;
+      return store;
+    })().catch(() => null);
+    return this._iapReadyP;
+  }
+
+  // storeId 해석 + 상품 메타(가격 등) 반환. 웹은 빈 배열(웹 가격은 웹이 직접 표시).
+  async getProducts() {
+    const store = await this._iapInit();
+    if (!store) return [];
+    return (this.config.iap.products || []).map((p) => {
+      const sid = p.storeId || p.id;
+      const prod = store.get ? store.get(sid) : null;
+      const offer = prod && prod.getOffer && prod.getOffer();
+      const phase = offer && offer.pricingPhases && offer.pricingPhases[0];
+      return {
+        id: p.id, storeId: sid,
+        title: (prod && prod.title) || null,
+        price: (phase && phase.price) || null,          // 스토어 현지화 가격(앱: 120원 티어)
+        priceMicros: (phase && phase.priceMicros) || null,
+      };
+    });
+  }
+
+  /**
+   * 구매. 앱에서만 동작(웹은 reason:'web-should-use-pg' — 웹은 자체 PG 사용).
+   * 흐름: order → approved → verify(백엔드) → verified → finish. 지갑 적립은 백엔드가 검증 시 수행.
+   * @returns { ok, productId, transactionId } | { ok:false, reason }
+   */
+  async purchase(productId) {
+    if (!this.isNative) return { ok: false, reason: 'web-should-use-pg' };
+    const store = await this._iapInit();
+    if (!store) return { ok: false, reason: 'iap-unavailable' };
+    const map = (this.config.iap.products || [])
+      .find((p) => p.id === productId || p.storeId === productId);
+    const sid = map ? (map.storeId || map.id) : productId;
+    const product = store.get(sid);
+    const offer = product && product.getOffer && product.getOffer();
+    if (!offer) return { ok: false, reason: 'product-not-found' };
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+      store.when()
+        .approved((t) => t.verify())                       // → 플러그인이 verifyEndpoint 로 영수증 검증
+        .verified((receipt) => { receipt.finish(); done({ ok: true, productId, transactionId: receipt.id }); })
+        .unverified(() => done({ ok: false, reason: 'verification-failed' }));
+      Promise.resolve(store.order(offer))
+        .catch((e) => done({ ok: false, reason: 'order-failed', detail: String((e && e.message) || e) }));
+    });
+  }
+
+  /** 구매 복원(기기 변경/재설치 시). 비소비성/구독에 의미. 소비형 코인은 보통 서버지갑이 진실. */
+  async restorePurchases() {
+    const store = await this._iapInit();
+    if (!store) return { ok: false, reason: 'iap-unavailable' };
+    try { await store.restorePurchases(); return { ok: true }; }
+    catch { return { ok: false, reason: 'restore-failed' }; }
   }
 
   // ── 마케팅 SDK ─────────────────────────────────────────────────────────

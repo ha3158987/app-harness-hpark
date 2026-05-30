@@ -125,6 +125,26 @@ function authSetup(cfg) {
   return { plugins, warnings, hasOAuth: social.length > 0, idp };
 }
 
+// 인앱결제: 상품이 있으면 IAP 플러그인 설치. 디지털 재화 결제는 스토어 IAP 강제.
+const IAP_PLUGIN = ['cordova-plugin-purchase'];
+function iapSetup(cfg) {
+  const products = cfg.iap?.products || [];
+  const plugins = [];
+  const warnings = [];
+  if (products.length) {
+    IAP_PLUGIN.forEach((p) => plugins.push(p));
+    if (!cfg.iap?.verifyEndpoint) {
+      warnings.push('iap.verifyEndpoint 누락 — 영수증 검증/지갑 적립 백엔드 URL 이 필요합니다(보안상 필수).');
+    }
+    for (const p of products) {
+      if (!p.storeId) {
+        warnings.push(`iap.products "${p.id}" 에 storeId 없음 — id 를 스토어 상품ID 로 간주합니다.`);
+      }
+    }
+  }
+  return { plugins, warnings };
+}
+
 // 베이크 전용 시크릿을 환경변수에서 읽어 주입한다. 절대 source config/레포에 두지 않는다.
 // 슬러그별 우선: APPSFLYER_DEV_KEY_<SLUG대문자_하이픈→언더스코어> → 없으면 APPSFLYER_DEV_KEY
 function envFor(slug, base) {
@@ -246,6 +266,7 @@ function pluginsFor(cfg) {
   }
   marketingSetup(cfg).plugins.forEach((p) => set.add(p));
   authSetup(cfg).plugins.forEach((p) => set.add(p));
+  iapSetup(cfg).plugins.forEach((p) => set.add(p));
   return [...set];
 }
 
@@ -503,6 +524,10 @@ function main() {
   const authConf = authSetup(cfg);
   if ((cfg.auth?.providers || []).length) log.info(`인증: ${cfg.auth.providers.join(', ')}`);
   authConf.warnings.forEach((w) => log.warn(w));
+  // 인앱결제 안내
+  const iapConf = iapSetup(cfg);
+  if ((cfg.iap?.products || []).length) log.info(`인앱결제: ${cfg.iap.products.length}개 상품(${cfg.iap.products.map((p) => p.id).join(', ')})`);
+  iapConf.warnings.forEach((w) => log.warn(w));
 
   const buildDir = join(ROOT, 'build', cfg.slug);
   const wwwDir = join(buildDir, 'www');
