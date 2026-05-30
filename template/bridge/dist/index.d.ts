@@ -215,6 +215,13 @@ export interface AppBridgeSDK {
   /** iOS 추적 동의(ATT). initMarketing 전에 호출 권장. iOS 외엔 not-applicable. */
   requestTracking(): Promise<{ status: string }>;
 
+  /** 이 앱이 쓰는 권한 목록(한국 "접근권한 안내" 화면용). capabilities + config.permissions 로 파생. */
+  getPermissionNotice(): Array<{ type: string; label: string; purpose: string; required: boolean }>;
+  /** 권한 현재 상태(granted/denied/prompt 등). */
+  permissionStatus(type: 'camera' | 'location' | 'notifications'): Promise<string>;
+  /** 권한 just-in-time 요청(기능 처음 쓸 때). 사전 설명은 웹이 먼저. */
+  requestPermission(type: 'camera' | 'location' | 'notifications'): Promise<string>;
+
   /** 크래시/에러 모니터링 초기화(보통 자동). config.monitoring.crash 설정 시 ready()에서 1회. */
   initMonitoring(): Promise<void>;
   /** 수동 에러 보고 */

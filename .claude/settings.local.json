@@ -52,7 +52,8 @@
       "Bash(node --check template/integration/harness-adapter.js)",
       "Bash(node scripts/generate-app.mjs --slug aipia --skip-install --skip-sync)",
       "Bash(node -e \"const c=JSON.parse\\(require\\('fs'\\).readFileSync\\('build/aipia/capacitor.config.json','utf8'\\)\\);console.log\\('appendUserAgent =', c.appendUserAgent\\)\")",
-      "Bash(rm -rf build/aipia)"
+      "Bash(rm -rf build/aipia)",
+      "Bash(node -e \"const c=JSON.parse\\(require\\('fs'\\).readFileSync\\('build/aipia/www/app-config.json','utf8'\\)\\);console.log\\('legal=',JSON.stringify\\(c.legal\\)\\);console.log\\('permissions=',JSON.stringify\\(c.permissions\\)\\)\")"
     ]
   }
 }

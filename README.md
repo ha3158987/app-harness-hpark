@@ -16,6 +16,8 @@
 | `STRATEGY.md` | 전략/의사결정/로드맵 |
 | `AUTH.md` | 로그인/SSO/회원가입/중앙 IdP(Keycloak)/백엔드 규약 |
 | `IAP.md` | 인앱결제(디지털 재화)/웹앱 가격분기/백엔드 검증 |
+| `COMPLIANCE.md` | 접근권한 고지/개인정보/성인인증(본인확인)/연령등급 |
+| `DATA-COLLECTION.md` | 스토어 개인정보 양식·처리방침용 수집 데이터 목록 |
 | `DEPLOY.md` | CI/CD 자동배포(GitHub Actions)/시크릿/서명 |
 | `MARKETING.md` | 마케팅 SDK(AppsFlyer 등) |
 | `DEVICE-SUPPORT.md` | 기기/OS 지원 매트릭스 |

@@ -64,6 +64,11 @@ const DEFAULT_IAP = { products: [], verifyEndpoint: null };
 const DEFAULT_MONITORING = { crash: { provider: null, dsn: null, environment: 'production' } };
 const KNOWN_CRASH_PROVIDERS = [null, 'sentry'];
 
+// 법무/정책 링크 (스토어 필수: 개인정보처리방침). 성인인증(본인확인) URL 도 여기.
+const DEFAULT_LEGAL = { privacyUrl: null, termsUrl: null, ageVerifyUrl: null };
+// 권한 고지 오버라이드: { camera:{required,purpose}, location:{...}, notifications:{...} }
+const DEFAULT_PERMISSIONS = {};
+
 // 현재 generate-app 이 npm 설치까지 자동 배선하는 벤더 (나머지는 슬롯만 + 수동 안내)
 const WIRED_PROVIDERS = { attribution: ['appsflyer'] };
 const KNOWN_PROVIDERS = {
@@ -193,9 +198,13 @@ export function loadConfig(repoRoot, slug) {
     err(slug, `monitoring.crash.provider 는 ${KNOWN_CRASH_PROVIDERS.filter(Boolean).join(' | ')} (또는 null)`);
   }
 
+  const legal = merge(DEFAULT_LEGAL, raw.legal ?? {});
+  const permissions = merge(DEFAULT_PERMISSIONS, raw.permissions ?? {});
+
   return {
     slug, appName: raw.appName, appId: raw.appId, startUrl: raw.startUrl,
     version, theme, features, navigation, assets, marketing, auth, iap, monitoring,
+    legal, permissions,
     _appDir: appDir,
   };
 }
@@ -217,6 +226,8 @@ export function runtimeConfig(cfg) {
     auth: cfg.auth,           // 공급자 목록 + 공개 clientId/엔드포인트. client secret 은 미포함(백엔드 전용).
     iap: cfg.iap,             // 상품 매핑 + 검증 엔드포인트. 가격/시크릿은 스토어/백엔드.
     monitoring: cfg.monitoring, // 크래시/에러 벤더 + 공개 dsn.
+    legal: cfg.legal,           // 개인정보처리방침/약관/성인인증 URL.
+    permissions: cfg.permissions, // 권한 고지 오버라이드.
   };
 }
 

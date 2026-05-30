@@ -60,5 +60,14 @@
   },
   "monitoring": {
     "crash": { "provider": "sentry", "dsn": "", "environment": "production" }
+  },
+  "legal": {
+    "privacyUrl": "https://aipia.co.kr/privacy",
+    "termsUrl": "https://aipia.co.kr/terms",
+    "ageVerifyUrl": "https://aipia.co.kr/verify/adult"
+  },
+  "permissions": {
+    "notifications": { "required": false, "purpose": "공지·소식 및 활동 알림 수신" },
+    "camera": { "required": false, "purpose": "프로필 사진 등록 및 첨부" }
   }
 }

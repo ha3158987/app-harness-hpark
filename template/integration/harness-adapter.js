@@ -132,6 +132,25 @@ export const context = () => AppBridge.context();
 /** 안전영역 인셋(px). CSS 만으로 되면 var(--safe-area-inset-*) 직접 사용 권장. */
 export const safeAreaInsets = () => AppBridge.getSafeAreaInsets();
 
+/** 접근권한 안내 목록(한국 필수 화면용): [{type,label,purpose,required}] */
+export const permissionNotice = () => AppBridge.getPermissionNotice();
+/** 권한 just-in-time 요청(기능 처음 쓸 때). 웹은 unsupported. */
+export const requestPermission = (type) => AppBridge.requestPermission(type);
+export const permissionStatus = (type) => AppBridge.permissionStatus(type);
+
+/**
+ * 성인인증(본인확인) 시작. config.legal.ageVerifyUrl(또는 url)을 시스템 브라우저로 연다.
+ * 본인확인기관이 서버로 콜백 → 복귀 후 onResume 에서 서버 상태(예: /me)로 성인여부 재확인.
+ * (PASS 앱-투-앱은 딥링크로 복귀 — onDeepLink 도 함께 동작)
+ */
+export async function startAgeVerification(url) {
+  const target = url || (AppBridge.config && AppBridge.config.legal && AppBridge.config.legal.ageVerifyUrl);
+  if (!target) return { ok: false, reason: 'no-age-verify-url' };
+  if (AppBridge.isNative) await AppBridge.openExternal(target, { system: true });
+  else window.location.href = target;
+  return { ok: true, opened: true }; // 결과는 서버 재확인(onResume)으로
+}
+
 /**
  * 서버 권위 지갑 잔액 조회 헬퍼. 구매/로그인 직후 + onResume 에서 호출.
  * 잔액은 계정(SSO)에 묶여 웹/앱이 같은 값. 클라는 진실을 들지 않고 항상 서버에서 읽는다.

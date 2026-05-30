@@ -787,6 +787,47 @@ class AppBridgeImpl {
     }
   }
 
+  // ── 권한 (just-in-time + 접근권한 안내) ────────────────────────────────
+  /**
+   * 이 앱이 쓰는 네이티브 권한 목록(한국 "접근권한 안내" 화면용). capabilities 에서 파생 +
+   * config.permissions 로 용도/필수여부 오버라이드. 가입 시 통째로 요청하지 말고 이 목록을 "고지"만.
+   * @returns [{ type, label, purpose, required }]
+   */
+  getPermissionNotice() {
+    const caps = this.capabilities;
+    const over = (this.config && this.config.permissions) || {};
+    const items = [];
+    const add = (type, label, purpose) => {
+      const o = over[type] || {};
+      items.push({ type, label, purpose: o.purpose || purpose, required: o.required === true });
+    };
+    if (caps.camera) add('camera', '카메라·사진', '사진 촬영 및 첨부');
+    if (caps.geolocation) add('location', '위치', '위치 기반 서비스 제공');
+    if (caps.push || caps.localNotification) add('notifications', '알림', '공지·소식 등 알림 수신');
+    return items;
+  }
+
+  async permissionStatus(type) {
+    if (!this.isNative) return 'unsupported';
+    try {
+      if (type === 'notifications') { const { PushNotifications } = await import('@capacitor/push-notifications'); return (await PushNotifications.checkPermissions()).receive; }
+      if (type === 'location') { const { Geolocation } = await import('@capacitor/geolocation'); return (await Geolocation.checkPermissions()).location; }
+      if (type === 'camera') { const { Camera } = await import('@capacitor/camera'); return (await Camera.checkPermissions()).camera; }
+    } catch { /* 미설치 */ }
+    return 'unknown';
+  }
+
+  /** 권한을 그 기능을 처음 쓸 때(just-in-time) 요청. 사전 설명(rationale)은 웹이 먼저 보여줄 것. */
+  async requestPermission(type) {
+    if (!this.isNative) return 'unsupported';
+    try {
+      if (type === 'notifications') { const { PushNotifications } = await import('@capacitor/push-notifications'); return (await PushNotifications.requestPermissions()).receive; }
+      if (type === 'location') { const { Geolocation } = await import('@capacitor/geolocation'); return (await Geolocation.requestPermissions()).location; }
+      if (type === 'camera') { const { Camera } = await import('@capacitor/camera'); return (await Camera.requestPermissions()).camera; }
+    } catch { /* 미설치 */ }
+    return 'unknown';
+  }
+
   // 크래시/에러 모니터링 초기화. config.monitoring.crash 설정 시 ready() 에서 자동 1회.
   // 현재 자동 배선: Sentry(@sentry/capacitor). dsn 은 공개값이라 config 에 둬도 됨.
   async initMonitoring() {
