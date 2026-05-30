@@ -135,7 +135,8 @@ app.post('/auth/native', async (req, res) => {
       return res.json({ isNew: true, needsProfile: true, prefill: { email, name } });
     }
 
-    // 기존 회원 → 세션 발급
+    // 기존 회원 → (게스트였다면 병합) → 세션 발급
+    await mergeGuest(req, user.id);
     const token = await setSession(res, user.id, { deviceId, platform });
     return res.json({ user: publicUser(user), token });
   } catch (e) {
@@ -165,6 +166,7 @@ app.post('/auth/signup', async (req, res) => {
     pending.delete(pendingId);
     res.clearCookie('aipia_pending');
 
+    await mergeGuest(req, user.id); // 게스트로 쌓은 지갑/진행상황을 신규 실계정으로 이전
     const token = await setSession(res, user.id, { deviceId, platform });
     return res.json({ user: publicUser(user), token });
   } catch (e) {
@@ -200,6 +202,27 @@ async function currentUser(req) {
     if (!sessions.has(payload.sid)) return null;
     return users.get(payload.uid) || null;
   } catch { return null; }
+}
+
+// ── 게스트(익명) 로그인 ─────────────────────────────────────────────────────
+// 자격증명 없이 서버 계정 생성 → 로그인 전에도 지갑/진행상황 보관(IAP 면 사실상 필요).
+app.post('/auth/guest', async (req, res) => {
+  const { deviceId, platform } = req.body || {};
+  const user = { id: `g_${seq++}`, isGuest: true, createdAt: Date.now() };
+  users.set(user.id, user);
+  const token = await setSession(res, user.id, { deviceId, platform });
+  return res.json({ user: { id: user.id, guest: true }, token });
+});
+
+// 게스트 → 실계정 병합: 현재 세션이 게스트면 지갑/진행상황을 실계정으로 옮기고 게스트 삭제.
+// (실제로는 진행상황/구매내역 등도 함께 이전 + 트랜잭션 처리)
+async function mergeGuest(req, realUserId) {
+  const g = await currentUser(req);
+  if (!g || !g.isGuest || g.id === realUserId) return;
+  wallet.set(realUserId, (wallet.get(realUserId) || 0) + (wallet.get(g.id) || 0));
+  wallet.delete(g.id);
+  users.delete(g.id);
+  for (const [sid, s] of sessions) if (s.userId === g.id) sessions.delete(sid);
 }
 
 // ── 회원탈퇴 / 계정삭제 (스토어 필수) ───────────────────────────────────────

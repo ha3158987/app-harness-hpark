@@ -46,6 +46,25 @@ export async function login(provider, webFallback, opts = {}) {
   return r;
 }
 
+/** 게스트(익명) 로그인 — 로그인 전 지갑/진행상황 보관(IAP 면 필요). 앱 전용(웹은 자체 처리). */
+export async function guestLogin() {
+  if (!AppBridge.isNative) return { ok: false, reason: 'web' };
+  return AppBridge.guestLogin();
+}
+
+/**
+ * 세션 보장: /auth/me 가 비로그인이면 게스트 로그인으로 신원 확보(IAP/지갑 동작용).
+ * 앱 시작 시 initHarness 직후 호출하면 "비로그인이라도 구매/적립 가능" 상태가 된다.
+ */
+export async function ensureSession(meUrl = '/auth/me') {
+  try {
+    const r = await fetch(meUrl, { credentials: 'include' });
+    if (r.ok) return { ok: true, guest: false };
+  } catch { /* 무시 */ }
+  if (AppBridge.isNative) return AppBridge.guestLogin();
+  return { ok: false, reason: 'web-anonymous' };
+}
+
 export async function logout(webFallback) {
   if (!AppBridge.isNative) return webFallback ? webFallback() : { ok: true };
   return AppBridge.logout();

@@ -647,6 +647,30 @@ class AppBridgeImpl {
     return result;
   }
 
+  /**
+   * 게스트(익명) 로그인. 자격증명 없이 서버 계정을 만들어 로그인 전에도 지갑/진행상황을 보관.
+   * IAP 를 쓰면 사실상 필요(결제를 담을 신원). 기기 게스트 토큰을 secureStorage 에 보관.
+   * 나중에 login() 으로 실계정 전환 시 백엔드가 게스트를 병합한다(아래 prevToken).
+   */
+  async guestLogin(opts = {}) {
+    const endpoint = (this.config && this.config.auth && this.config.auth.guestEndpoint) || opts.endpoint;
+    if (!endpoint) return { ok: false, reason: 'no-guest-endpoint' };
+    try {
+      const existing = await this.secureGet('auth_token').catch(() => null);
+      const res = await fetch(endpoint, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: await this._deviceId(), platform: this.platform, token: existing || undefined }),
+      });
+      if (!res.ok) return { ok: false, reason: 'guest-endpoint-failed' };
+      const data = (await res.json().catch(() => ({}))) || {};
+      if (data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }
+      return { ok: true, guest: true, user: data.user };
+    } catch {
+      return { ok: false, reason: 'guest-endpoint-failed' };
+    }
+  }
+
   /** 이 기기에서 마지막으로 성공한 로그인 수단. 로그인 화면에 "마지막 로그인: 카카오" 배지용. */
   async getLastLogin() {
     const provider = await this.getPref('last_login_provider');
@@ -837,10 +861,14 @@ class AppBridgeImpl {
     const endpoint = (this.config.auth && this.config.auth.sessionEndpoint) || opts.sessionEndpoint;
     if (!endpoint) return credential; // 웹이 직접 백엔드로 전송
     try {
+      const prevToken = await this.secureGet('auth_token').catch(() => null); // 게스트 병합용
       const res = await fetch(endpoint, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...credential, deviceId: await this._deviceId(), platform: this.platform }),
+        body: JSON.stringify({
+          ...credential, deviceId: await this._deviceId(), platform: this.platform,
+          prevToken: prevToken || undefined, // 백엔드: 게스트 계정 → 실계정 병합
+        }),
       });
       const data = (await res.json().catch(() => ({}))) || {};
       const incomplete = data.complete === false || !!data.isNew || !!data.needsProfile || !!data.needsConsent;
@@ -869,10 +897,14 @@ class AppBridgeImpl {
     const endpoint = (this.config && this.config.auth && this.config.auth.signupEndpoint) || opts.endpoint;
     if (!endpoint) return { ok: false, reason: 'no-signup-endpoint' };
     try {
+      const prevToken = await this.secureGet('auth_token').catch(() => null); // 게스트 병합용
       const res = await fetch(endpoint, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...(profile || {}), deviceId: await this._deviceId(), platform: this.platform }),
+        body: JSON.stringify({
+          ...(profile || {}), deviceId: await this._deviceId(), platform: this.platform,
+          prevToken: prevToken || undefined,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) || {};
       if (res.ok && data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }

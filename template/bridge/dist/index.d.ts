@@ -188,6 +188,12 @@ export interface AppBridgeSDK {
   completeSignup(profile: Record<string, unknown>, opts?: { endpoint?: string; reload?: boolean }):
     Promise<{ ok: boolean; user?: unknown; backend?: unknown; reason?: string }>;
 
+  /**
+   * 게스트(익명) 로그인. 자격증명 없이 서버 계정 생성 → 로그인 전 지갑/진행상황 보관(IAP 면 사실상 필요).
+   * 이후 login()/completeSignup() 으로 실계정 전환 시 백엔드가 게스트를 병합(prevToken 자동 전송).
+   */
+  guestLogin(opts?: { endpoint?: string }): Promise<{ ok: boolean; guest?: boolean; user?: unknown; reason?: string }>;
+
   /** 이 기기에서 마지막으로 성공한 로그인 수단(재가입 방지 UX: "마지막 로그인: 카카오") */
   getLastLogin(): Promise<{ provider: AuthProvider } | null>;
 

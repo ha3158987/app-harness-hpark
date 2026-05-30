@@ -46,6 +46,7 @@ const DEFAULT_AUTH = {
   signupEndpoint: null,     // 신규 회원의 약관동의+추가정보를 받아 가입 확정하는 백엔드 URL (선택)
   logoutEndpoint: null,
   deleteEndpoint: null,     // 회원탈퇴/계정삭제 백엔드 URL (스토어 정책상 사실상 필수)
+  guestEndpoint: null,      // 게스트(익명) 계정 생성 백엔드 URL (IAP/진행상황 보관 시)
   // 중앙 IdP 모드(패밀리 SSO): 설정 시 앱은 IdP 하나만 바라본다. IdP 가 소셜을 페더레이션.
   //   { issuer | authorizeUrl, clientId, hintParam?, hints?, scopes?, redirectUri? }
   //   빈 객체({})면 미설정 = 직접 모드. (merge 가 null+객체에서 깨지므로 기본은 {})

@@ -39,6 +39,7 @@
     "signupEndpoint": "https://aipia.co.kr/auth/signup",
     "logoutEndpoint": "https://aipia.co.kr/auth/logout",
     "deleteEndpoint": "https://aipia.co.kr/auth/delete",
+    "guestEndpoint": "https://aipia.co.kr/auth/guest",
     "idp": {
       "issuer": "https://auth.aipia.co.kr/realms/aipia",
       "clientId": "aipia-app",

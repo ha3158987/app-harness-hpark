@@ -142,6 +142,20 @@ login('google') → POST {sessionEndpoint}
 - **name/email 은 최초 인증 1회만** 전달된다 → 백엔드가 첫 `sessionEndpoint` 응답에서 **즉시 저장**.
 - 사용자가 **"이메일 가리기"(relay)** 를 쓰면 가짜 이메일이 옴 → 메일 발송은 Apple relay 경유.
 
+## 3-6. 게스트(익명) 로그인 + 병합
+로그인 전에도 **충전(IAP)/진행상황**을 보관하려면 신원이 필요하다 → 자격증명 없는 **게스트 계정**.
+- `AppBridge.guestLogin()` → `POST {guestEndpoint}` 가 익명 계정+세션 발급, 토큰을 secureStorage 에 보관.
+- 앱 시작 시 `ensureSession()`(어댑터): `/auth/me` 비로그인이면 자동 게스트 로그인.
+- **병합(중요)**: 게스트가 나중에 `login()`/`completeSignup()` 으로 실계정 전환하면, 브릿지가 기존
+  토큰을 `prevToken` 으로 보내고 **백엔드가 게스트의 지갑/진행상황을 실계정으로 이전 후 게스트 삭제**.
+- ⚠️ **익명 상태에선 웹 게스트 ≠ 앱 게스트**(공유 신원 없음). 실계정 로그인해야 합쳐진다.
+```js
+// 앱 시작
+await initHarness();
+await ensureSession();          // 비로그인이면 게스트 신원 확보 → 구매/적립 가능
+// 나중에 실계정 로그인하면 백엔드가 게스트 지갑을 병합
+```
+
 ## 3-5. 회원탈퇴 / 계정 삭제 (스토어 필수)
 계정 생성을 지원하면 **앱 내 회원탈퇴**가 의무다(Apple 5.1.1(v), Google 정책). 웹에 탈퇴 화면을
 두고(이미 웹이면 그대로), Play Console 엔 데이터 삭제 URL 을 등록한다. 탈퇴 후 브릿지 `logout()` 호출.
