@@ -64,15 +64,38 @@
 { "ok": true, "provider": "apple", "idToken": "...", "authorizationCode": "...",
   "user": { "id": "...", "email": "...", "name": "..." } }
 ```
+> 브릿지는 위 자격증명에 **`deviceId`(@capacitor/device) 와 `platform`** 을 자동으로 덧붙여 보낸다 →
+> 백엔드의 기기별 세션 관리/푸시토큰 매핑에 사용.
+
 백엔드 처리:
 1. `provider` 별 토큰 엔드포인트에 `authorizationCode` + `codeVerifier` + **client secret** 으로 교환
    (Apple 은 `idToken` 검증). PKCE 이므로 `code_verifier` 를 함께 전송.
-2. 공급자에서 사용자 프로필 조회 → 내부 계정 매핑(없으면 가입).
-3. **`Set-Cookie` 로 `aipia.co.kr` 세션쿠키 발급** (`Domain=.aipia.co.kr; Secure; HttpOnly; SameSite=Lax`).
-   → 이 쿠키가 `*.aipia.co.kr` 전체에 적용 = SSO.
-4. 응답 JSON: `{ "user": {...}, "token": "(선택) 시큐어스토리지에 보관할 토큰" }`.
-   - 요청은 `credentials:'include'` 로 가므로 Set-Cookie 가 WebView 쿠키스토어에 저장된다.
-   - `token` 을 주면 브릿지가 `secureSet('auth_token', token)` 으로 Keychain/Keystore 에 보관.
+2. 공급자에서 사용자 프로필 조회 → 내부 계정 매핑(없으면 신규로 표시 — §3-4).
+3. **`Set-Cookie` 로 세션쿠키 발급** (`Domain=.aipia.co.kr; Secure; HttpOnly; SameSite=Lax`).
+4. 응답 JSON:
+```jsonc
+// 기존 회원 (가입 완료)
+{ "user": { "id": "u_123", "nickname": "바다" }, "token": "(선택) 시큐어스토리지 보관용" }
+// 신규 회원 (온보딩 필요 — §3-4)
+{ "isNew": true, "needsProfile": true, "prefill": { "email": "...", "name": "..." } }
+```
+- 요청은 `credentials:'include'` 라 Set-Cookie 가 WebView 쿠키스토어에 저장된다.
+- `token` 을 주면 브릿지가 `secureSet('auth_token', token)` 으로 Keychain/Keystore 에 보관.
+- 신규면 `isNew`/`needsProfile` 만 주고 **세션쿠키는 §3-4 가입 확정 후** 발급(미완성 세션 방지).
+
+### 공급자별 토큰 교환 (백엔드, secret 사용)
+| provider | 교환 엔드포인트 | 보내는 것 | 받는 것 |
+|---|---|---|---|
+| google | `oauth2.googleapis.com/token` | code, code_verifier, client_id, **client_secret**, redirect_uri | `id_token`(OIDC) → email/sub |
+| kakao | `kauth.kakao.com/oauth/token` | code, client_id(REST키), **client_secret**, redirect_uri | access_token → `/v2/user/me` |
+| naver | `nid.naver.com/oauth2.0/token` | code, client_id, **client_secret**, state | access_token → `/v1/nid/me` |
+| facebook | `graph.facebook.com/v19.0/oauth/access_token` | code, client_id, **client_secret**, redirect_uri | access_token → `/me?fields=id,email` |
+| x | `api.twitter.com/2/oauth2/token` | code, code_verifier, client_id, (PKCE) | access_token → `/2/users/me` |
+| threads | `graph.threads.net/oauth/access_token` | code, client_id, **client_secret**, redirect_uri | access_token → 프로필 |
+| apple | (교환 불필요) | 브릿지가 준 `idToken` 을 Apple 공개키로 **검증** | sub/email |
+
+> redirect_uri 는 앱에서 보낸 `redirectUri`(예: `kr.co.aipia.app://oauth/google`) 와 **반드시 동일**해야
+> 토큰 교환이 성공한다. 공급자 콘솔에도 이 커스텀 스킴을 등록(§3-3).
 
 ### 3-2. `POST {logoutEndpoint}` — 세션 종료
 세션쿠키 무효화. 브릿지는 호출 후 시큐어 토큰을 지우고 새로고침한다.
@@ -150,7 +173,67 @@ await AppBridge.logout();
 
 ---
 
-## 5. 스토어 정책 (필수)
+## 5. SSO — 패밀리 사이트 여러 개 (중요)
+
+**"웹 쿠키 SSO" 와 "앱 SSO" 는 다르다.** 패밀리 사이트를 여러 개 만들 거면 이 구분이 핵심이다.
+
+### 케이스 A — 같은 도메인의 서브도메인 (a.aipia.co.kr, b.aipia.co.kr)
+세션쿠키를 `Domain=.aipia.co.kr` 로 발급하면 **모든 서브도메인이 자동 공유 = SSO 됨.** ✅
+(단, 한 앱의 WebView 안에서 서브도메인 간 이동일 때. `allowedDomains` 에 `*.aipia.co.kr` 포함 필요.)
+
+### 케이스 B — 패밀리 "앱"이 여러 개 (각각 별도 앱/스토어 등록)
+하네스에선 **사이트 1개 = 앱 1개**(별도 app.config.json/startUrl/번들ID). 그런데 **앱마다 WebView
+쿠키 저장소가 분리**돼 있어서, **쿠키만으로는 앱 A 로그인이 앱 B 로 안 넘어간다.** ❌
+→ 이건 쿠키가 아니라 **중앙 인증 서버(IdP)** 가 필요한 "진짜 SSO" 영역이다.
+
+**해결: 중앙 OIDC IdP (`auth.aipia.co.kr`) 를 둔다.**
+```
+각 패밀리 앱의 login() →  authorizeUrl = https://auth.aipia.co.kr/authorize  (구글 직접이 아니라)
+   → 중앙 IdP 가 구글/카카오 등으로 페더레이션 + 마스터 세션 보유
+   → 앱에 code 발급 → 각 앱 백엔드가 IdP 와 교환 → 각 사이트 세션쿠키
+```
+- 한 번 중앙 IdP 에 로그인하면, **다른 패밀리 앱도 시스템 브라우저의 IdP 세션을 재사용**해
+  로그인 화면을 건너뛴다(시스템 브라우저 쿠키 공유 — 이게 모바일 SSO 의 표준).
+- **하네스는 이미 준비됨**: config `auth.oauth.<provider>.authorizeUrl` 을 중앙 IdP 로 바꾸기만 하면 됨.
+  공급자 등록/페더레이션은 IdP(백엔드)에서 1번만 하고, 패밀리 앱들은 같은 config 패턴 복붙.
+- **IdP 자체(=`auth.aipia.co.kr`)는 당신이 구축할 백엔드.** Keycloak/Ory/Auth0/자체구현 중 택1.
+
+> 정리: **서브도메인 패밀리면 지금 바로 SSO 됨. 별도 앱 패밀리면 중앙 IdP 가 있어야 하고, 하네스는
+> 그쪽을 가리키도록 config 만 바꾸면 된다.** 패밀리가 늘 계획이면 처음부터 중앙 IdP 권장.
+
+## 6. 기기 / 세션 관리 — 누가 담당하나
+
+**전적으로 백엔드 책임.** 하네스(브릿지)는 토큰을 들고 자격증명을 보낼 뿐, 세션의 수명·중복·폐기는
+서버가 정한다. 하네스가 도와주는 것 / 백엔드가 해야 하는 것:
+
+| 항목 | 담당 | 비고 |
+|---|---|---|
+| `deviceId`/`platform` 전송 | 하네스 ✅ | 로그인·가입 요청에 자동 포함 |
+| 기기별 세션 레코드 | 백엔드 | deviceId 로 세션 테이블 관리 |
+| **동시 로그인 제한/중복 처리** | 백엔드 | "1계정 N기기" 정책, 초과 시 오래된 세션 폐기 |
+| 원격 로그아웃("다른 기기에서 로그아웃") | 백엔드 | 세션 무효화 → 앱은 401 받으면 재로그인 |
+| 토큰 갱신(refresh) | 백엔드 + 웹 | 만료 시 갱신 엔드포인트 |
+| 세션 만료(401) 감지 | 웹/하네스 | 웹 fetch 가 401 → `AppBridge.login()` 재호출 |
+| 푸시 토큰 ↔ 기기 매핑 | 백엔드 | `registerPush()` 토큰 + deviceId 저장 |
+
+> 하네스는 의도적으로 세션 정책을 안 가진다(앱마다 다르므로). deviceId 라는 **연결고리만** 제공.
+
+## 7. 계정 중복 방지 / 연결 (재가입 막기)
+
+소셜 수단이 8개라 **같은 사람이 다른 수단으로 또 가입**하는 문제가 생긴다. 두 층으로 막는다:
+
+1. **기기 힌트 (UX, 하네스 제공)**: 로그인 성공 시 수단을 기기에 저장 → 다음에 표시.
+   ```js
+   const last = await AppBridge.getLastLogin();   // { provider: 'kakao' } | null
+   if (last) highlight(last.provider);            // "카카오로 계속하기 (마지막 로그인)"
+   ```
+   → 같은 기기 재방문 시 같은 수단을 유도해 중복 가입을 크게 줄인다.
+2. **계정 연결 (백엔드, 본질적 해결)**: 토큰 교환 후 받은 **이메일을 기준키**로, 이미 그 이메일의
+   계정이 있으면 **새로 만들지 말고 소셜 연결(link)** 한다.
+   - 주의: **Apple "이메일 가리기" relay** 나 이메일 미제공 공급자는 이메일이 다를 수 있음 →
+     이때는 가입 후 "기존 계정과 연결하시겠어요?" 흐름을 제공.
+
+## 8. 스토어 정책 (필수)
 
 - **Apple 4.8**: 제3자 소셜 로그인을 제공하면 **Sign in with Apple 도 제공해야 한다**(iOS).
   `providers` 에 `apple` 이 없고 다른 소셜이 있으면 generate-app 이 경고 + 리젝 위험.

@@ -167,6 +167,9 @@ export interface AppBridgeSDK {
   completeSignup(profile: Record<string, unknown>, opts?: { endpoint?: string; reload?: boolean }):
     Promise<{ ok: boolean; user?: unknown; backend?: unknown; reason?: string }>;
 
+  /** 이 기기에서 마지막으로 성공한 로그인 수단(재가입 방지 UX: "마지막 로그인: 카카오") */
+  getLastLogin(): Promise<{ provider: AuthProvider } | null>;
+
   /** 로그아웃: 시큐어 토큰 삭제 + (설정 시) 백엔드 세션 종료 + 새로고침 */
   logout(opts?: { endpoint?: string; reload?: boolean }): Promise<{ ok: boolean }>;
 

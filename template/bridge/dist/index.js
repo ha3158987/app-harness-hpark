@@ -583,12 +583,36 @@ class AppBridgeImpl {
     if (provider === 'email') return { ok: false, reason: 'email-handled-by-web' }; // 웹이 직접 처리
     if (!this.isNative) return { ok: false, reason: 'web-should-redirect' };          // 브라우저는 일반 리다이렉트로
 
-    // Apple on iOS: 네이티브 Sign in with Apple 우선(실패/미설치 시 범용 OAuth 폴백)
+    // 1) 자격증명 획득. Apple/iOS 는 네이티브 우선(미설치/실패 시 범용 OAuth 폴백)
+    let credential;
     if (provider === 'apple' && this.platform === 'ios') {
-      const native = await this._appleNative(opts);
-      if (native) return this._finishLogin(native, opts);
+      credential = await this._appleNative(opts);
+      if (!credential) credential = await this._oauth2(provider, opts);
+    } else {
+      credential = await this._oauth2(provider, opts);
     }
-    return this._oauth2(provider, opts);
+    if (!credential || !credential.ok) return credential || { ok: false, reason: 'login-failed' };
+
+    // 2) 백엔드 세션 발급(sessionEndpoint 설정 시) — OAuth/Apple 경로 공통
+    const result = await this._finishLogin(credential, opts);
+
+    // 3) 다음에 "마지막 로그인 수단"으로 보여줄 수 있게 기기에 기록(재가입 방지 UX)
+    if (result && result.ok !== false) { try { await this.setPref('last_login_provider', provider); } catch { /* noop */ } }
+    return result;
+  }
+
+  /** 이 기기에서 마지막으로 성공한 로그인 수단. 로그인 화면에 "마지막 로그인: 카카오" 배지용. */
+  async getLastLogin() {
+    const provider = await this.getPref('last_login_provider');
+    return provider ? { provider } : null;
+  }
+
+  // 기기 식별자 캐시 (백엔드 세션/기기 관리에 함께 보냄)
+  async _deviceId() {
+    if (this._devId !== undefined) return this._devId;
+    try { const info = await this.getDeviceInfo(); this._devId = info.id || null; }
+    catch { this._devId = null; }
+    return this._devId;
   }
 
   /** 로그아웃: 시큐어 토큰 삭제 + (설정 시) 백엔드 세션 종료 + 새로고침 */
@@ -687,7 +711,7 @@ class AppBridgeImpl {
       const res = await fetch(endpoint, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credential),
+        body: JSON.stringify({ ...credential, deviceId: await this._deviceId(), platform: this.platform }),
       });
       const data = (await res.json().catch(() => ({}))) || {};
       const incomplete = data.complete === false || !!data.isNew || !!data.needsProfile || !!data.needsConsent;
@@ -719,7 +743,7 @@ class AppBridgeImpl {
       const res = await fetch(endpoint, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profile || {}),
+        body: JSON.stringify({ ...(profile || {}), deviceId: await this._deviceId(), platform: this.platform }),
       });
       const data = (await res.json().catch(() => ({}))) || {};
       if (res.ok && data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }
