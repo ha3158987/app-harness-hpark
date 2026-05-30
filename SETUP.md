@@ -1,5 +1,8 @@
 # SETUP — 내 서비스를 하네스에 연결할 때 필요한 환경/설정
 
+> 환경·키를 **단계별로** 정리한 문서. 전체 그림·필수 입력 체크리스트는 `GUIDE.md` §5,
+> CI 시크릿 전체는 `DEPLOY.md`, 프론트 연동은 `INTEGRATION.md` 참조.
+
 "무엇을, 어느 단계에서" 준비하면 되는지 단계별로 정리. **단계가 올라갈수록 추가될 뿐**,
 처음 디버그 빌드만 할 거면 1단계만 있으면 된다. **키/시크릿은 전부 환경변수·파일로 주입하고
 레포(app.config.json 포함)엔 넣지 않는다.**
@@ -9,7 +12,9 @@
 ## 0. 서비스 쪽 사전 준비 (웹앱에서 1회)
 하네스가 아니라 당신 웹 서비스 코드에 들어가는 것:
 1. 공유 브릿지 SDK 사용: `import { AppBridge } from '@harness/bridge'` 후 `await AppBridge.ready()`.
-   - 앱이면 네이티브, 브라우저면 폴백. 분기 코드 불필요.
+   - 공유/네트워크 등 단순 기능은 앱=네이티브, 브라우저=폴백 자동.
+   - **단 로그인·결제 등은 `if (AppBridge.isNative) …` 분기 필요**(앱=네이티브 IAP/IdP, 웹=기존 PG/OAuth).
+     어댑터(`template/integration/harness-adapter.js`)로 한 곳에서 분기 권장. 상세 `INTEGRATION.md`.
 2. (선택) 마케팅 이벤트: `AppBridge.track('이벤트명', {...})` — 자세한 건 `MARKETING.md`.
 3. 세이프에어리어/뷰포트 등 웹뷰 지뢰 회피: `DEVICE-SUPPORT.md` 의 "공통(웹뷰)" 체크.
 

@@ -99,7 +99,7 @@ flowchart LR
 | 추적동의 | `requestTracking` (iOS ATT) | `marketing` | DATA-COLLECTION |
 | 공유/링크 | `share` `openExternal` | `features.share` | INTEGRATION |
 | 푸시/알림 | `registerPush` `scheduleNotification` `cancelNotification` | `features.push`/`localNotification` | APP-FEATURES |
-| 강제업데이트 | `checkForceUpdate` (자동) | `features.forceUpdate` | README §4 |
+| 강제업데이트 | `checkForceUpdate` (자동) | `features.forceUpdate` | §6 |
 | 카메라/위치/햅틱/클립보드 | `takePhoto` `getLocation` `haptic` `copyToClipboard` `readClipboard` | `features.*` | APP-FEATURES |
 | 저장 | `secureSet/Get/Remove`(민감) `setPref/getPref/removePref` | `features.secureStorage` | APP-FEATURES |
 | 기기/네트워크/키보드/복귀 | `getDeviceInfo` `getNetworkStatus` `onNetworkChange` `onKeyboard` `onResume` | — | INTEGRATION |
@@ -192,9 +192,9 @@ flowchart TB
 
 ---
 
-## 6. config 스키마 (단일 진실 공급원)
+## 6. config 스키마 (단일 진실 공급원) — 정본
 
-`apps/<slug>/app.config.json`. 전체 블록 요약 (상세 스키마 = README §4, 블록별 = 각 문서).
+`apps/<slug>/app.config.json` **= 앱 1개의 모든 것**. 이 절이 스키마의 정본(블록별 상세는 각 문서).
 
 ```jsonc
 {
@@ -222,7 +222,24 @@ flowchart TB
 }
 ```
 
+**필드 메모**
+- `features`: 전부 자동 배선 — 켜면 동작. 브릿지가 `ready()` 시 capability↔메서드 불일치를 콘솔 경고.
+- `features.deferredDeepLink` 는 하위호환으로 `marketing.attribution` 으로 자동 매핑.
+- `auth.idp` 있으면 중앙 IdP 모드(없으면 `auth.oauth.<provider>` 직접 모드). 둘 중 하나.
+- `theme.statusBarStyle`: `light`(밝은 배경/어두운 텍스트) | `dark`. `version.code` 는 단조 증가 정수.
+
+**`features.forceUpdate.minVersionUrl` 이 가리키는 JSON** (게이트가 읽음, 플랫폼별 우선·최상위 폴백):
+```jsonc
+{
+  "ios":     { "minVersionCode": 5, "storeUrl": "https://apps.apple.com/app/idXXXX", "message": "업데이트 안내", "force": true },
+  "android": { "minVersionCode": 7, "storeUrl": "https://play.google.com/store/apps/details?id=…" },
+  "storeUrl": "…", "message": "…"
+}
+```
+현재 `version.code` < `minVersionCode` 면 전체화면 게이트(`force:false` 면 "나중에"로 닫힘).
+
 > ⚠️ **시크릿 금지**: client secret, 서명키, 스토어키, AppsFlyer devKey 는 config 에 두지 않는다(환경변수/Secrets).
+> 공개값(clientId, Sentry dsn, 엔드포인트 URL)만 config. 빌드 시 AppsFlyer 키는 환경변수→네이티브 베이크(웹 폴백엔 미포함).
 
 ---
 
@@ -268,6 +285,7 @@ mindmap
 |---|---|
 | 새 서비스 앱화 | `ONBOARDING.md` |
 | 웹에 기능 연결 | `INTEGRATION.md` (+ `template/integration/harness-adapter.js`) |
+| 환경/키 단계별 준비 | `SETUP.md` |
 | 로그인/SSO/회원가입/게스트/탈퇴 | `AUTH.md` |
 | 인앱결제/지갑/웹앱 가격차 | `IAP.md` |
 | 권한 고지/개인정보/성인인증 | `COMPLIANCE.md` |
@@ -275,7 +293,7 @@ mindmap
 | CI 자동배포/서명/시크릿 | `DEPLOY.md` |
 | 기기/해상도/노치/폴더블 | `DEVICE-SUPPORT.md` |
 | 중앙 IdP 띄우기 | `idp/README.md` |
-| config 스키마 상세 | `README.md` §4 |
+| config 스키마 상세 | `GUIDE.md` §6 (이 문서) |
 | 백엔드 구현 참고 | `backend/auth-reference/` |
 
 ---

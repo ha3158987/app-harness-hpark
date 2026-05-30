@@ -20,7 +20,7 @@
 > 점검: `node scripts/doctor.mjs` (환경/모든 앱 config 검사)
 
 ## 2. 새 앱 추가 (단계)
-1. **정의 만들기** — `apps/<slug>/app.config.json` 작성. 스키마는 `README.md` §4.
+1. **정의 만들기** — `apps/<slug>/app.config.json` 작성. 스키마는 `GUIDE.md` §6.
    최소: `slug, appName, appId(역도메인), startUrl(https)`. 기능/인증/결제는 필요한 것만 켠다.
    (스킬: `new-app` 가 대화로 만들어 줌)
 2. **아이콘/스플래시** — `apps/<slug>/icon.png`(1024²), `splash.png`(2732²) 넣기.
@@ -37,8 +37,8 @@
 ## 3. config 에서 켤 수 있는 것 (요약)
 | 블록 | 무엇 | 문서 |
 |---|---|---|
-| `features` | push/deepLink/biometric/camera/share/forceUpdate/secureStorage/localNotification/haptics/clipboard/geolocation | README §4 |
-| `navigation` | 셸 내부탐색 허용 도메인 | README §4 |
+| `features` | push/deepLink/biometric/camera/share/forceUpdate/secureStorage/localNotification/haptics/clipboard/geolocation | GUIDE §6 |
+| `navigation` | 셸 내부탐색 허용 도메인 | GUIDE §6 |
 | `marketing` | AppsFlyer(어트리뷰션) 등 | MARKETING.md |
 | `auth` | 소셜 로그인 + 중앙 IdP(SSO) | AUTH.md |
 | `iap` | 인앱결제(디지털 재화) | IAP.md |

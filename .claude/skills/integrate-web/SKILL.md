@@ -21,7 +21,7 @@ description: 기존 웹 서비스 레포를 하네스에 "연결"한다. 웹 코
 
 ## 절차
 1. **정의 확인/생성** — `apps/<slug>/app.config.json` 있는지. 없으면 `new-app` 으로 만들고
-   필요한 블록(auth/iap/marketing/monitoring) 채운다. (스키마: README §4, AUTH.md, IAP.md)
+   필요한 블록(auth/iap/marketing/monitoring) 채운다. (스키마: GUIDE.md §6, AUTH.md, IAP.md)
 2. **의존성 추가** — 웹 레포에 `@harness/bridge` 추가.
    - 모노레포면 `file:` 경로, 아니면 배포된 패키지/깃 의존성.
 3. **어댑터 배치** — `template/integration/harness-adapter.js` 를 웹 레포의 적절한 위치

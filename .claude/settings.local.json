@@ -54,7 +54,10 @@
       "Bash(node -e \"const c=JSON.parse\\(require\\('fs'\\).readFileSync\\('build/aipia/capacitor.config.json','utf8'\\)\\);console.log\\('appendUserAgent =', c.appendUserAgent\\)\")",
       "Bash(rm -rf build/aipia)",
       "Bash(node -e \"const c=JSON.parse\\(require\\('fs'\\).readFileSync\\('build/aipia/www/app-config.json','utf8'\\)\\);console.log\\('legal=',JSON.stringify\\(c.legal\\)\\);console.log\\('permissions=',JSON.stringify\\(c.permissions\\)\\)\")",
-      "Bash(grep -c '```mermaid' GUIDE.md)"
+      "Bash(grep -c '```mermaid' GUIDE.md)",
+      "Bash(grep -rn \"README §4\\\\|README\\\\.md.*§4\\\\|README\\\\.md.*스키마\" *.md .claude/skills/)",
+      "Bash(grep -rn \"분기 코드 불필요\" *.md)",
+      "Bash([ -f \"$f.md\" ])"
     ]
   }
 }

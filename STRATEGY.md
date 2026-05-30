@@ -85,5 +85,5 @@
 - **프로덕션 스토어 공개는 사람이 승인.** 자동화는 베타/내부 업로드까지.
 - 자격증명·결제정보는 자동 입력하지 않는다.
 
-관련 문서: `README.md`(레이아웃·config 스키마), `REFERENCES.md`(참조 깃/문서),
+관련 문서: `GUIDE.md`(마스터·config 스키마 정본), `README.md`(레이아웃), `REFERENCES.md`(참조 깃/문서),
 `APP-FEATURES.md`(기능·버전), `DEVICE-SUPPORT.md`(기기·OS·버전별 체크).
