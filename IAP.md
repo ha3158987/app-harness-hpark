@@ -52,12 +52,16 @@ if (!AppBridge.isNative) showWebPromo();   // 웹에서만 노출
 ```jsonc
 "iap": {
   "verifyEndpoint": "https://aipia.co.kr/iap/verify",   // 영수증 검증 백엔드(보안상 필수)
+  "googleTokenCompression": false,                       // Google purchase token gzip+base64 (선택)
   "products": [
     { "id": "coin_100", "storeId": "kr.co.aipia.app.coin100", "type": "consumable" },
     { "id": "coin_500", "storeId": "kr.co.aipia.app.coin500", "type": "consumable" }
   ]
 }
 ```
+- `googleTokenCompression: true` 면 브릿지가 Google purchase token 을 gzip→base64 로 압축해
+  `verifyEndpoint` 로 보낸다. 백엔드가 같은 포맷을 받아 디코드해야 함. 토큰 길이로 페이로드 한계에
+  걸리는 환경(Poptale 0.28.21+102 노하우)에서만 활성. 기본 false.
 - `id` = 웹/내부 SKU, `storeId` = 스토어 콘솔에 등록한 상품 ID. **가격은 config 가 아니라 스토어 콘솔**에서
   설정(앱 120원 티어). generate-app 이 상품 있으면 `cordova-plugin-purchase` 자동 설치.
 

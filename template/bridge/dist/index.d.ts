@@ -261,6 +261,21 @@ export interface AppBridgeSDK {
   purchase(productId: string): Promise<PurchaseResult>;
   /** 구매 복원(재설치/기기변경). 소비형 코인은 서버 지갑이 진실. */
   restorePurchases(): Promise<{ ok: boolean; reason?: string }>;
+
+  // ─── 콘텐츠 보호 / 뷰어 UX ──────────────────────────────────────────────────
+  // 네이티브 구현은 dev 가 채운다(template/plugins/viewer/SPEC.md 참조).
+  // 미구현 환경에선 호출이 no-op 가 되도록 모든 메서드는 optional.
+  /**
+   * 화면 캡쳐/스크린샷 방지 on/off. SPA 경로에 따라 토글하려면
+   * harness-adapter 의 `autoBlockCaptureOnPaths()` 헬퍼 사용.
+   */
+  blockCapture?(enabled: boolean): Promise<void> | void;
+  /**
+   * 뷰어 밝기 (시스템 밝기와 독립). 0.0~1.0, 음수=시스템값 복귀.
+   */
+  setBrightness?(value: number): Promise<void> | void;
+  /** 현재 적용된 뷰어 밝기. setBrightness 호출 후 갱신. */
+  getBrightness?(): Promise<number | null>;
 }
 
 export const AppBridge: AppBridgeSDK;

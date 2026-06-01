@@ -2,6 +2,9 @@
 
 > 이 문서 하나로 **무엇이 지원되는지 · 무엇을 읽어야 하는지 · 무엇을 직접 해야 하는지(필수 입력)** 를 파악한다.
 > 서식: Markdown + Mermaid(다이어그램) + 최소한의 HTML(표/접기). AI가 읽고 사람이 시각화하기 위한 공통 서식만 사용.
+>
+> 📌 이 하네스는 AIPIA 전사 앱 하네스 — 식별자/도메인/스택/SDK 표준은 [`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md).
+> 이 GUIDE 는 *하네스 동작 방식*, AIPIA-CONVENTIONS 는 *전사 합의값*. 둘은 보완관계.
 
 ---
 
@@ -206,7 +209,11 @@ flowchart TB
   "features": { "push": true, "deepLink": true, "biometric": true, "share": true,
     "camera": true, "forceUpdate": { "enabled": true, "minVersionUrl": "..." },
     "secureStorage": true, "localNotification": true, "haptics": true,
-    "clipboard": true, "geolocation": true },
+    "clipboard": true, "geolocation": true,
+    "darkMode": true, "appChannelCompat": false,
+    "pushPolicy": { "allowedPaths": null },
+    "viewer": { "captureBlock": { "enabled": false, "paths": [] },
+                "brightness": { "enabled": false } } },
   "navigation": { "allowedDomains": ["aipia.co.kr", "*.aipia.co.kr"], "externalInBrowser": true },
   "marketing": { "attribution": { "provider": "appsflyer", "deferredDeepLink": true } },
   "auth": { "providers": ["email","apple","google","naver","kakao","facebook","x","threads"],
@@ -214,9 +221,12 @@ flowchart TB
       "hintParam": "kc_idp_hint", "hints": { "x": "twitter" } },
     "sessionEndpoint": "...", "signupEndpoint": "...", "logoutEndpoint": "...",
     "deleteEndpoint": "...", "guestEndpoint": "...", "deviceEndpoint": "..." },
-  "iap": { "verifyEndpoint": "...", "products": [
+  "iap": { "verifyEndpoint": "...", "googleTokenCompression": false, "products": [
     { "id": "coin_100", "storeId": "kr.co.aipia.app.coin100", "type": "consumable" } ] },
-  "monitoring": { "crash": { "provider": "sentry", "dsn": "", "environment": "production" } },
+  "monitoring": { "crash": { "provider": "sentry", "dsn": "", "environment": "production" },
+                  "apm": { "provider": null } },
+  "firebase": { "enabled": false, "fcm": false, "analytics": false, "crashlytics": false,
+                "remoteConfig": false, "project": { "dev": null, "stage": null, "prod": null } },
   "legal": { "privacyUrl": "...", "termsUrl": "...", "ageVerifyUrl": "..." },
   "permissions": { "notifications": { "required": false, "purpose": "..." } }
 }
@@ -225,7 +235,18 @@ flowchart TB
 **필드 메모**
 - `features`: 전부 자동 배선 — 켜면 동작. 브릿지가 `ready()` 시 capability↔메서드 불일치를 콘솔 경고.
 - `features.deferredDeepLink` 는 하위호환으로 `marketing.attribution` 으로 자동 매핑.
+- `features.appChannelCompat`: 기존 웹에 `window.AppChannel.postMessage("scheme://...")` 패턴이
+  박혀 있을 때 활성. `harness-adapter` 의 `installAppChannelShim({scheme})` 으로 폴리필.
+- `features.pushPolicy.allowedPaths`: FCM data.link 의 경로 화이트리스트. null = 전허용,
+  배열이면 prefix 매칭(예: `['/recommend','/detail/','/viewer']`).
+- `features.viewer.captureBlock`: 지정 경로 prefix 에서만 화면 캡쳐 차단. SPA 라우팅 자동 감지는
+  `harness-adapter.autoBlockCaptureOnPaths()` 로.
 - `auth.idp` 있으면 중앙 IdP 모드(없으면 `auth.oauth.<provider>` 직접 모드). 둘 중 하나.
+- `iap.googleTokenCompression`: Google purchase token 이 길어 페이로드 한계에 걸릴 때 gzip+base64.
+  활성 시 `verifyEndpoint` 백엔드도 같은 포맷을 수용해야 함.
+- `monitoring.apm`: APM/RUM 벤더 (`whatap` | `datadog` | null). 크래시와 별개.
+- `firebase.enabled`: FCM/Analytics/Crashlytics/RemoteConfig 토글 + flavor 별 프로젝트 ID 표시.
+  실제 google-services.json / GoogleService-Info.plist 는 secrets 에서 빌드 시 배치.
 - `theme.statusBarStyle`: `light`(밝은 배경/어두운 텍스트) | `dark`. `version.code` 는 단조 증가 정수.
 
 **`features.forceUpdate.minVersionUrl` 이 가리키는 JSON** (게이트가 읽음, 플랫폼별 우선·최상위 폴백):

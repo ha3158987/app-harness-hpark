@@ -20,9 +20,13 @@
 | 카테고리 | 벤더 | 상태 |
 |---|---|---|
 | 어트리뷰션 | **AppsFlyer** | ✅ 자동 배선 (플러그인 설치 + 브릿지 초기화 + 디퍼드 딥링크 라우팅) |
-| 어트리뷰션 | Branch / Adjust / Airbridge | 🟡 슬롯만 — 벤더 SDK 수동 설치 + 핸들러 연결 필요 |
+| 어트리뷰션 | Branch / Adjust / Airbridge / **Adbrix(DFINERY)** | 🟡 슬롯만 — 벤더 SDK 수동 설치 + 핸들러 연결 필요 |
 | 분석 | Amplitude / GA4 / Firebase / Mixpanel | 🟡 슬롯만 |
 | CRM/푸시 | Braze / OneSignal / MoEngage | 🟡 슬롯만 |
+
+> **Adbrix(DFINERY) 메모**: Poptale 에서 사용 중인 한국 어트리뷰션. config 슬롯은 추가됨
+> (`marketing.attribution.provider: "adbrix"`). 실제 네이티브 배선은
+> `template/plugins/adbrix/SPEC.md` 의 작업 사양을 따라 dev 가 채운다.
 
 "슬롯만" = generate-app 이 config 검증·런타임 주입까지는 하지만 npm 설치/초기화는 아직 사람이.
 벤더가 확정되면 아래 "새 벤더 배선" 절차로 자동화 대상에 추가하면 된다.

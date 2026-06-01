@@ -162,4 +162,179 @@ export async function fetchWallet(url = '/wallet') {
   return data.balance;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AppChannel 호환 shim — 기존 웹에 `window.AppChannel.postMessage("scheme://...")`
+// 패턴이 박혀 있을 때 사용. 웹 코드 한 줄도 안 고치고 하네스로 옮기기 위함.
+//
+// 동작:
+//   1) `installAppChannelShim({ scheme: 'poptale' })` 호출 시 window.AppChannel 폴리필.
+//   2) 웹이 `postMessage("poptale://login/google")` 부르면 shim 이 파싱해서
+//      `AppBridge.login('google')` 같은 표준 API 로 라우팅.
+//   3) 앱→웹 방향은 `dispatchAppEvent(detail, 'poptaleApp')` 로 CustomEvent 발사.
+//
+// 기본 라우트는 Poptale 의 누적 규약 추정값(login/logout/purchase/share/external/haptic/track).
+// 정확한 규약은 각 서비스의 docs/app-web-connection.md 정본을 따라 routes 로 override.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DEFAULT_APP_CHANNEL_SCHEME = 'poptale';
+
+/**
+ * @param {object} opts
+ * @param {string} [opts.scheme='poptale']           URL 스킴 (poptale://...)
+ * @param {string} [opts.channelName='AppChannel']   window 에 노출할 채널 이름
+ * @param {Record<string, (path:string[], query:Record<string,string>, parsed:object)=>any>} [opts.routes]
+ *   override/추가 라우트. 키는 URL 의 host(첫 토큰). 기본 라우트와 머지된다.
+ * @param {(message:string, parsed?:object)=>any} [opts.onUnknown]
+ *   라우트 미매칭 시 폴백. 없으면 silently 무시(+debug log).
+ * @param {(msg:string)=>void} [opts.logger]
+ * @returns {()=>void} uninstall
+ */
+export function installAppChannelShim(opts = {}) {
+  if (typeof window === 'undefined') return () => {};
+  const {
+    scheme = DEFAULT_APP_CHANNEL_SCHEME,
+    channelName = 'AppChannel',
+    routes = {},
+    onUnknown = null,
+    logger = () => {},
+  } = opts;
+
+  // 진짜 네이티브 AppChannel 이 이미 주입되어 있으면(예: 기존 Flutter 셸) shim 은 양보.
+  if (window[channelName] && typeof window[channelName].postMessage === 'function') {
+    logger(`existing window.${channelName} detected — shim skipped`);
+    return () => {};
+  }
+
+  const builtinRoutes = {
+    'login': (path, query) => {
+      const provider = path[0] || query.provider;
+      if (!provider) throw new Error('app-channel login: provider required');
+      return AppBridge.login(provider);
+    },
+    'logout': () => AppBridge.logout(),
+    'delete-account': () => AppBridge.deleteAccount(),
+    'purchase': (path, query) => {
+      const id = path[0] || query.id || query.productId;
+      if (!id) throw new Error('app-channel purchase: productId required');
+      return AppBridge.purchase(id);
+    },
+    'restore-purchases': () => AppBridge.restorePurchases(),
+    'share': (_path, query) => AppBridge.share({ title: query.title, text: query.text, url: query.url }),
+    'external': (_path, query) => {
+      if (!query.url) throw new Error('app-channel external: url required');
+      return AppBridge.openExternal(query.url, { system: query.system === '1' || query.system === 'true' });
+    },
+    'haptic': (path, query) => AppBridge.haptic(path[0] || query.style || 'light'),
+    'register-push': () => AppBridge.registerPush(),
+    'track': (_path, query) => {
+      const { event, ...params } = query;
+      if (!event) throw new Error('app-channel track: event required');
+      return AppBridge.track(event, params);
+    },
+    'set-user': (path, query) => {
+      const userId = path[0] || query.userId;
+      if (!userId) throw new Error('app-channel set-user: userId required');
+      const { userId: _u, ...traits } = query;
+      return AppBridge.setUser(userId, traits);
+    },
+    // 'navigate' 는 라우터 책임 — 기본은 no-op. 웹이 routes 로 override 한다.
+    'navigate': () => undefined,
+  };
+  const allRoutes = { ...builtinRoutes, ...routes };
+
+  function parseMessage(message) {
+    if (typeof message !== 'string') return null;
+    try {
+      const url = new URL(message);
+      if (url.protocol !== `${scheme}:`) return null;
+      const host = (url.hostname || url.host || '').toLowerCase();
+      const path = url.pathname.split('/').filter(Boolean);
+      const query = Object.fromEntries(url.searchParams);
+      return { host, path, query, raw: message };
+    } catch {
+      return null;
+    }
+  }
+
+  const channel = {
+    postMessage: async (message) => {
+      const parsed = parseMessage(message);
+      if (!parsed) {
+        if (typeof onUnknown === 'function') return onUnknown(message);
+        logger(`unparseable: ${message}`);
+        return;
+      }
+      const handler = allRoutes[parsed.host];
+      if (!handler) {
+        if (typeof onUnknown === 'function') return onUnknown(message, parsed);
+        logger(`no route for "${parsed.host}" (msg=${message})`);
+        return;
+      }
+      try {
+        return await handler(parsed.path, parsed.query, parsed);
+      } catch (e) {
+        if (typeof AppBridge.reportError === 'function') {
+          AppBridge.reportError(e, { source: 'app-channel-shim', message });
+        }
+        logger(`handler error: ${e?.message}`);
+      }
+    },
+  };
+
+  window[channelName] = channel;
+  logger(`installed window.${channelName} (scheme=${scheme}://)`);
+  return () => {
+    if (window[channelName] === channel) delete window[channelName];
+  };
+}
+
+/**
+ * 앱→웹 방향 이벤트 디스패치. 기존 Poptale 규약: `CustomEvent('poptaleApp', { detail })`.
+ * 네이티브 셸이 evaluateJavascript 로 호출하거나, 웹 테스트에서 직접 호출.
+ */
+export function dispatchAppEvent(detail, eventName = 'poptaleApp') {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(eventName, { detail }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 화면 캡쳐 방지 / 밝기 — config.features.viewer 기반 자동 토글 헬퍼.
+// (실제 native 구현이 있어야 동작. AppBridge.blockCapture / setBrightness 는 dev 가 구현.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * config.features.viewer.captureBlock.paths 에 매칭되는 경로에서만 화면캡쳐 차단.
+ * SPA 라우팅(pushState/popstate)을 감지해 자동 on/off. 반환=해제 함수.
+ */
+export function autoBlockCaptureOnPaths() {
+  if (typeof window === 'undefined' || !AppBridge.isNative) return () => {};
+  const paths = AppBridge.config?.features?.viewer?.captureBlock?.paths;
+  if (!Array.isArray(paths) || paths.length === 0) return () => {};
+  const matches = (loc) => paths.some(p => loc.startsWith(p));
+  const apply = (loc) => {
+    if (typeof AppBridge.blockCapture === 'function') AppBridge.blockCapture(matches(loc));
+  };
+  apply(window.location.pathname);
+  const origPush = history.pushState;
+  const origReplace = history.replaceState;
+  history.pushState = function (...args) {
+    const r = origPush.apply(this, args);
+    apply(window.location.pathname);
+    return r;
+  };
+  history.replaceState = function (...args) {
+    const r = origReplace.apply(this, args);
+    apply(window.location.pathname);
+    return r;
+  };
+  const onPop = () => apply(window.location.pathname);
+  window.addEventListener('popstate', onPop);
+  return () => {
+    history.pushState = origPush;
+    history.replaceState = origReplace;
+    window.removeEventListener('popstate', onPop);
+    if (typeof AppBridge.blockCapture === 'function') AppBridge.blockCapture(false);
+  };
+}
+
 export { AppBridge };
