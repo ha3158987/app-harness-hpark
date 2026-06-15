@@ -243,8 +243,8 @@ function buildCapacitorConfig(cfg) {
     },
     plugins: {
       SplashScreen: {
-        launchShowDuration: 1500,
-        backgroundColor: cfg.theme.background,
+        launchShowDuration: cfg.theme.splashDuration ?? 1500,
+        backgroundColor: cfg.theme.splashBackground || cfg.theme.background,
         showSpinner: false,
         androidScaleType: 'CENTER_CROP',
       },
@@ -507,6 +507,58 @@ function patchAndroidSigning(buildDir) {
   log.ok('android/app/build.gradle: 릴리즈 서명 설정(keystore.properties 조건부)');
 }
 
+// 안드로이드 12+ 스플래시 배선. 안드12+ 는 OS 가 시작화면을 "단색 배경 + 가운데 아이콘"으로 강제한다
+// (풀스크린 이미지 불가 — poptale 도 동일). Capacitor 기본 styles.xml 은 windowSplashScreen* 미설정이라
+// 시스템 기본(밝은) 배경이 나오는 버그가 있어, 여기서 배경색 + 전용 아이콘을 주입한다.
+//   배경색  = theme.splashBackground || theme.background
+//   아이콘  = apps/<slug>/splash_icon.png(투명 권장) 있으면 사용, 없으면 런처 foreground
+function patchAndroidSplash(buildDir, cfg) {
+  const resDir = join(buildDir, 'android', 'app', 'src', 'main', 'res');
+  const stylesFile = join(resDir, 'values', 'styles.xml');
+  if (!existsSync(stylesFile)) return;
+  const splashBg = cfg.theme.splashBackground || cfg.theme.background;
+
+  // 1) colors.xml 에 splashBackground 등록(없으면 생성, 있으면 갱신)
+  const colorsFile = join(resDir, 'values', 'colors.xml');
+  let colors = existsSync(colorsFile)
+    ? readFileSync(colorsFile, 'utf8')
+    : '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n';
+  if (colors.includes('name="splashBackground"')) {
+    colors = colors.replace(/<color name="splashBackground">[^<]*<\/color>/,
+      `<color name="splashBackground">${splashBg}</color>`);
+  } else {
+    colors = colors.replace('</resources>',
+      `    <color name="splashBackground">${splashBg}</color>\n</resources>`);
+  }
+  mkdirSync(dirname(colorsFile), { recursive: true });
+  writeFileSync(colorsFile, colors);
+
+  // 2) 전용 스플래시 아이콘(투명 배경 권장) 복사. 없으면 런처 foreground 로 폴백.
+  let animatedIcon = '@mipmap/ic_launcher_foreground';
+  const srcIcon = join(ROOT, 'apps', cfg.slug, 'splash_icon.png');
+  if (existsSync(srcIcon)) {
+    const dstIcon = join(resDir, 'drawable', 'splash_icon.png');
+    mkdirSync(dirname(dstIcon), { recursive: true });
+    copyFileSync(srcIcon, dstIcon);
+    animatedIcon = '@drawable/splash_icon';
+  }
+
+  // 3) AppTheme.NoActionBarLaunch 에 windowSplashScreen* 주입 (idempotent)
+  let styles = readFileSync(stylesFile, 'utf8');
+  if (styles.includes('windowSplashScreenBackground')) {
+    log.ok('android 스플래시 테마: 이미 적용됨(스킵)');
+    return;
+  }
+  styles = styles.replace(
+    /(<style name="AppTheme\.NoActionBarLaunch"[^>]*>)/,
+    '$1\n        <item name="windowSplashScreenBackground">@color/splashBackground</item>' +
+    `\n        <item name="windowSplashScreenAnimatedIcon">${animatedIcon}</item>` +
+    '\n        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>',
+  );
+  writeFileSync(stylesFile, styles);
+  log.ok(`android 스플래시 테마: 배경 ${splashBg} + ${animatedIcon} (안드12+ 시스템 스플래시)`);
+}
+
 // iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(CODE_SIGN_ENTITLEMENTS). App.entitlements 가 있을 때만.
 // App 타깃 빌드설정(= PRODUCT_BUNDLE_IDENTIFIER 보유 블록)에 경로를 주입한다. (수동 Xcode 단계 제거)
 // ⚠️ iOS 빌드는 현재 미검증 환경 — 첫 macOS 빌드에서 확인 권장.
@@ -647,6 +699,7 @@ function main() {
       }
     }
     patchAndroidSigning(buildDir); // 릴리즈 서명(keystore.properties 조건부) — CI 배포용
+    patchAndroidSplash(buildDir, cfg); // 안드12+ 스플래시(배경색+가운데 아이콘)
   }
   if (existsSync(join(buildDir, 'ios'))) {
     const dst = join(buildDir, 'ios', 'App', 'App', 'public', 'app-config.json');
