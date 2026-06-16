@@ -290,7 +290,7 @@ function scaffoldPackageJson(buildDir, cfg, plugins) {
   deps['@capacitor/android'] = '^8.0.0';
   if (IS_MAC) deps['@capacitor/ios'] = '^8.0.0';
   // 공유 브릿지 (커스텀 Capacitor 플러그인 + JS SDK) — 로컬 file: 의존성
-  deps['@harness/bridge'] = `file:${join(ROOT, 'template', 'bridge')}`;
+  deps['@aipia-team/harness-bridge'] = `file:${join(ROOT, 'template', 'bridge')}`;
 
   const pkg = {
     name: `app-${cfg.slug}`,
@@ -299,7 +299,7 @@ function scaffoldPackageJson(buildDir, cfg, plugins) {
     dependencies: deps,
   };
   writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
-  log.ok(`package.json (${plugins.length} base/feature 플러그인 + @harness/bridge)`);
+  log.ok(`package.json (${plugins.length} base/feature 플러그인 + @aipia-team/harness-bridge)`);
 }
 
 // ── 네이티브 딥링크 / 권한 배선 ────────────────────────────────────────────
