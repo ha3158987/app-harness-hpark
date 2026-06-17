@@ -559,6 +559,26 @@ function patchAndroidSplash(buildDir, cfg) {
   log.ok(`android 스플래시 테마: 배경 ${splashBg} + ${animatedIcon} (안드12+ 시스템 스플래시)`);
 }
 
+// iOS Podfile 정적 링크. Capacitor 8 + CocoaPods 에서 동적 프레임워크(use_frameworks!)면 플러그인
+// 클래스가 NSClassFromString 으로 안 잡혀 등록 실패(isPluginAvailable=false) → 네이티브 미동작.
+// 정적 링크(:linkage => :static)로 앱 본체에 합쳐야 플러그인이 등록된다. (실기기 검증됨)
+function patchIosPodfileStaticLinkage(buildDir) {
+  const podfile = join(buildDir, 'ios', 'App', 'Podfile');
+  if (!existsSync(podfile)) return;
+  let txt = readFileSync(podfile, 'utf8');
+  if (txt.includes(':linkage => :static')) {
+    log.ok('iOS Podfile: 정적 링크 이미 적용됨');
+    return;
+  }
+  if (!/^use_frameworks!\s*$/m.test(txt)) return; // 예상 형태 아니면 손대지 않음
+  txt = txt.replace(/^use_frameworks!\s*$/m, 'use_frameworks! :linkage => :static');
+  writeFileSync(podfile, txt);
+  // CocoaPods 는 UTF-8 로케일을 요구(경고/실패 방지)
+  if (!/UTF-8/i.test(process.env.LANG || '')) process.env.LANG = 'en_US.UTF-8';
+  log.ok('iOS Podfile: use_frameworks! :linkage => :static (플러그인 등록 위해) → pod install');
+  run('pod', ['install'], join(buildDir, 'ios', 'App'));
+}
+
 // iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(CODE_SIGN_ENTITLEMENTS). App.entitlements 가 있을 때만.
 // App 타깃 빌드설정(= PRODUCT_BUNDLE_IDENTIFIER 보유 블록)에 경로를 주입한다. (수동 Xcode 단계 제거)
 // ⚠️ iOS 빌드는 현재 미검증 환경 — 첫 macOS 빌드에서 확인 권장.
@@ -674,7 +694,13 @@ function main() {
   }
   if (wantIos && IS_MAC && !existsSync(join(buildDir, 'ios'))) {
     log.step('cap add ios');
-    run('npx', ['cap', 'add', 'ios'], buildDir);
+    // CocoaPods 명시: 커스텀 브릿지(HarnessBridge)는 podspec 기반 → SPM 비호환. CocoaPods 로 추가.
+    run('npx', ['cap', 'add', 'ios', '--packagemanager', 'CocoaPods'], buildDir);
+  }
+  // iOS Podfile 정적 링크 — Capacitor 플러그인 등록에 필수(동적 프레임워크면 NSClassFromString 실패로
+  // isPluginAvailable=false → 네이티브 미동작). regenerate 시에도 보장하려고 ios 존재 시 항상 적용.
+  if (wantIos && IS_MAC && existsSync(join(buildDir, 'ios'))) {
+    patchIosPodfileStaticLinkage(buildDir);
   }
 
   // 7) 네이티브 에셋에 런타임 config 복사 (AppBridge.getConfig() 가 읽음)
