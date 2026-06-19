@@ -34,6 +34,13 @@ fastlane/.env.*
 **/api-key*.json
 **/service-account*.json
 
+# 로컬 자격증명 보관소 — README 만 추적, 실제 키 파일은 전부 차단
+/secrets/*
+!/secrets/README.md
+
+# 아이콘 교체 시 임시 백업 (로컬 보관용, 커밋 제외)
+apps/*/_icon_backup/
+
 # fastlane 산출물
 fastlane/report.xml
 fastlane/Preview.html
