@@ -482,7 +482,7 @@ if (harnessKsFile.exists()) {
     android {
         signingConfigs {
             release {
-                storeFile file(harnessKs['storeFile'])
+                storeFile rootProject.file(harnessKs['storeFile'])
                 storePassword harnessKs['storePassword']
                 keyAlias harnessKs['keyAlias']
                 keyPassword harnessKs['keyPassword']
