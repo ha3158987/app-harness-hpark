@@ -234,7 +234,7 @@ function buildCapacitorConfig(cfg) {
     webDir: 'www',
     // 앱 WebView UA 에 표식 추가 → 서버가 "앱에서 온 요청"을 판별(SSR 가격/결제 분기, anti-steering).
     //   감지: User-Agent 에 "HarnessApp/<slug>" 포함. 클라이언트는 AppBridge.isNative 사용.
-    appendUserAgent: `HarnessApp/${cfg.slug}/${cfg.version.name}`,
+    appendUserAgent: `HarnessApp/${cfg.slug}/${cfg.version.name}+${cfg.version.code}`,
     // 원격 서비스를 직접 로드. allowNavigation 으로 화이트리스트 도메인만 셸 내부 탐색 허용.
     server: {
       url: cfg.startUrl,
@@ -243,8 +243,8 @@ function buildCapacitorConfig(cfg) {
     },
     plugins: {
       SplashScreen: {
-        launchShowDuration: 1500,
-        backgroundColor: cfg.theme.background,
+        launchShowDuration: cfg.theme.splashDuration ?? 1500,
+        backgroundColor: cfg.theme.splashBackground || cfg.theme.background,
         showSpinner: false,
         androidScaleType: 'CENTER_CROP',
       },
@@ -290,7 +290,7 @@ function scaffoldPackageJson(buildDir, cfg, plugins) {
   deps['@capacitor/android'] = '^8.0.0';
   if (IS_MAC) deps['@capacitor/ios'] = '^8.0.0';
   // 공유 브릿지 (커스텀 Capacitor 플러그인 + JS SDK) — 로컬 file: 의존성
-  deps['@harness/bridge'] = `file:${join(ROOT, 'template', 'bridge')}`;
+  deps['@aipia-team/harness-bridge'] = `file:${join(ROOT, 'template', 'bridge')}`;
 
   const pkg = {
     name: `app-${cfg.slug}`,
@@ -299,7 +299,7 @@ function scaffoldPackageJson(buildDir, cfg, plugins) {
     dependencies: deps,
   };
   writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
-  log.ok(`package.json (${plugins.length} base/feature 플러그인 + @harness/bridge)`);
+  log.ok(`package.json (${plugins.length} base/feature 플러그인 + @aipia-team/harness-bridge)`);
 }
 
 // ── 네이티브 딥링크 / 권한 배선 ────────────────────────────────────────────
@@ -482,7 +482,7 @@ if (harnessKsFile.exists()) {
     android {
         signingConfigs {
             release {
-                storeFile file(harnessKs['storeFile'])
+                storeFile rootProject.file(harnessKs['storeFile'])
                 storePassword harnessKs['storePassword']
                 keyAlias harnessKs['keyAlias']
                 keyPassword harnessKs['keyPassword']
@@ -505,6 +505,107 @@ function patchAndroidSigning(buildDir) {
   txt += `\n${ANDROID_SIGNING_SNIPPET}\n`;
   writeFileSync(gradleFile, txt);
   log.ok('android/app/build.gradle: 릴리즈 서명 설정(keystore.properties 조건부)');
+}
+
+// 네이티브 버전 주입: app.config.json 의 version 을 네이티브 프로젝트에 직접 박는다.
+// CI 경로(빌드 스킬 미사용, generate-app 직접 호출)에서도 버전이 반영되도록 한다.
+// (안 하면 빌드번호가 Capacitor 기본 1 고정 → 재업로드 시 스토어가 중복 거부)
+function patchNativeVersion(buildDir, cfg) {
+  const code = cfg.version?.code;
+  const name = cfg.version?.name;
+  if (!code && !name) return;
+
+  // Android: app/build.gradle defaultConfig (versionCode 정수, versionName 문자열)
+  const gradleFile = join(buildDir, 'android', 'app', 'build.gradle');
+  if (existsSync(gradleFile)) {
+    let txt = readFileSync(gradleFile, 'utf8');
+    if (code) txt = txt.replace(/versionCode\s+\d+/, `versionCode ${code}`);
+    if (name) txt = txt.replace(/versionName\s+"[^"]*"/, `versionName "${name}"`);
+    writeFileSync(gradleFile, txt);
+    log.ok(`android versionCode=${code} / versionName="${name}"`);
+  }
+
+  // iOS: project.pbxproj (Debug/Release 빌드설정 모두). CURRENT_PROJECT_VERSION=빌드번호, MARKETING_VERSION=표시버전
+  const pbxproj = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+  if (existsSync(pbxproj)) {
+    let txt = readFileSync(pbxproj, 'utf8');
+    if (code) txt = txt.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${code};`);
+    if (name) txt = txt.replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${name};`);
+    writeFileSync(pbxproj, txt);
+    log.ok(`iOS CURRENT_PROJECT_VERSION=${code} / MARKETING_VERSION=${name}`);
+  }
+}
+
+// 안드로이드 12+ 스플래시 배선. 안드12+ 는 OS 가 시작화면을 "단색 배경 + 가운데 아이콘"으로 강제한다
+// (풀스크린 이미지 불가 — poptale 도 동일). Capacitor 기본 styles.xml 은 windowSplashScreen* 미설정이라
+// 시스템 기본(밝은) 배경이 나오는 버그가 있어, 여기서 배경색 + 전용 아이콘을 주입한다.
+//   배경색  = theme.splashBackground || theme.background
+//   아이콘  = apps/<slug>/splash_icon.png(투명 권장) 있으면 사용, 없으면 런처 foreground
+function patchAndroidSplash(buildDir, cfg) {
+  const resDir = join(buildDir, 'android', 'app', 'src', 'main', 'res');
+  const stylesFile = join(resDir, 'values', 'styles.xml');
+  if (!existsSync(stylesFile)) return;
+  const splashBg = cfg.theme.splashBackground || cfg.theme.background;
+
+  // 1) colors.xml 에 splashBackground 등록(없으면 생성, 있으면 갱신)
+  const colorsFile = join(resDir, 'values', 'colors.xml');
+  let colors = existsSync(colorsFile)
+    ? readFileSync(colorsFile, 'utf8')
+    : '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n';
+  if (colors.includes('name="splashBackground"')) {
+    colors = colors.replace(/<color name="splashBackground">[^<]*<\/color>/,
+      `<color name="splashBackground">${splashBg}</color>`);
+  } else {
+    colors = colors.replace('</resources>',
+      `    <color name="splashBackground">${splashBg}</color>\n</resources>`);
+  }
+  mkdirSync(dirname(colorsFile), { recursive: true });
+  writeFileSync(colorsFile, colors);
+
+  // 2) 전용 스플래시 아이콘(투명 배경 권장) 복사. 없으면 런처 foreground 로 폴백.
+  let animatedIcon = '@mipmap/ic_launcher_foreground';
+  const srcIcon = join(ROOT, 'apps', cfg.slug, 'splash_icon.png');
+  if (existsSync(srcIcon)) {
+    const dstIcon = join(resDir, 'drawable', 'splash_icon.png');
+    mkdirSync(dirname(dstIcon), { recursive: true });
+    copyFileSync(srcIcon, dstIcon);
+    animatedIcon = '@drawable/splash_icon';
+  }
+
+  // 3) AppTheme.NoActionBarLaunch 에 windowSplashScreen* 주입 (idempotent)
+  let styles = readFileSync(stylesFile, 'utf8');
+  if (styles.includes('windowSplashScreenBackground')) {
+    log.ok('android 스플래시 테마: 이미 적용됨(스킵)');
+    return;
+  }
+  styles = styles.replace(
+    /(<style name="AppTheme\.NoActionBarLaunch"[^>]*>)/,
+    '$1\n        <item name="windowSplashScreenBackground">@color/splashBackground</item>' +
+    `\n        <item name="windowSplashScreenAnimatedIcon">${animatedIcon}</item>` +
+    '\n        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>',
+  );
+  writeFileSync(stylesFile, styles);
+  log.ok(`android 스플래시 테마: 배경 ${splashBg} + ${animatedIcon} (안드12+ 시스템 스플래시)`);
+}
+
+// iOS Podfile 정적 링크. Capacitor 8 + CocoaPods 에서 동적 프레임워크(use_frameworks!)면 플러그인
+// 클래스가 NSClassFromString 으로 안 잡혀 등록 실패(isPluginAvailable=false) → 네이티브 미동작.
+// 정적 링크(:linkage => :static)로 앱 본체에 합쳐야 플러그인이 등록된다. (실기기 검증됨)
+function patchIosPodfileStaticLinkage(buildDir) {
+  const podfile = join(buildDir, 'ios', 'App', 'Podfile');
+  if (!existsSync(podfile)) return;
+  let txt = readFileSync(podfile, 'utf8');
+  if (txt.includes(':linkage => :static')) {
+    log.ok('iOS Podfile: 정적 링크 이미 적용됨');
+    return;
+  }
+  if (!/^use_frameworks!\s*$/m.test(txt)) return; // 예상 형태 아니면 손대지 않음
+  txt = txt.replace(/^use_frameworks!\s*$/m, 'use_frameworks! :linkage => :static');
+  writeFileSync(podfile, txt);
+  // CocoaPods 는 UTF-8 로케일을 요구(경고/실패 방지)
+  if (!/UTF-8/i.test(process.env.LANG || '')) process.env.LANG = 'en_US.UTF-8';
+  log.ok('iOS Podfile: use_frameworks! :linkage => :static (플러그인 등록 위해) → pod install');
+  run('pod', ['install'], join(buildDir, 'ios', 'App'));
 }
 
 // iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(CODE_SIGN_ENTITLEMENTS). App.entitlements 가 있을 때만.
@@ -622,7 +723,13 @@ function main() {
   }
   if (wantIos && IS_MAC && !existsSync(join(buildDir, 'ios'))) {
     log.step('cap add ios');
-    run('npx', ['cap', 'add', 'ios'], buildDir);
+    // CocoaPods 명시: 커스텀 브릿지(HarnessBridge)는 podspec 기반 → SPM 비호환. CocoaPods 로 추가.
+    run('npx', ['cap', 'add', 'ios', '--packagemanager', 'CocoaPods'], buildDir);
+  }
+  // iOS Podfile 정적 링크 — Capacitor 플러그인 등록에 필수(동적 프레임워크면 NSClassFromString 실패로
+  // isPluginAvailable=false → 네이티브 미동작). regenerate 시에도 보장하려고 ios 존재 시 항상 적용.
+  if (wantIos && IS_MAC && existsSync(join(buildDir, 'ios'))) {
+    patchIosPodfileStaticLinkage(buildDir);
   }
 
   // 7) 네이티브 에셋에 런타임 config 복사 (AppBridge.getConfig() 가 읽음)
@@ -647,6 +754,7 @@ function main() {
       }
     }
     patchAndroidSigning(buildDir); // 릴리즈 서명(keystore.properties 조건부) — CI 배포용
+    patchAndroidSplash(buildDir, cfg); // 안드12+ 스플래시(배경색+가운데 아이콘)
   }
   if (existsSync(join(buildDir, 'ios'))) {
     const dst = join(buildDir, 'ios', 'App', 'App', 'public', 'app-config.json');
@@ -654,6 +762,9 @@ function main() {
     writeFileSync(dst, bakedJson);
     log.ok('ios App/public/app-config.json');
   }
+
+  // 7a-2) 네이티브 버전 주입 (CI 경로에서도 version.code/name 반영 — 재배포 중복거부 방지)
+  patchNativeVersion(buildDir, cfg);
 
   // 7b) 딥링크 네이티브 배선 (features.deepLink) + iOS 권한 사용 설명
   if (cfg.features.deepLink) {
@@ -685,7 +796,7 @@ function main() {
   log.step('완료');
   log.info(`프로젝트: build/${cfg.slug}`);
   log.info('다음: generate-assets(아이콘/스플래시) → gradlew(Android) / xcodebuild(iOS)');
-  if (cfg.version.code) log.dim(`버전코드 ${cfg.version.code} — 네이티브 versionCode/build number 는 빌드 스킬이 반영`);
+  if (cfg.version.code) log.dim(`버전 v${cfg.version.name}+${cfg.version.code} — 네이티브(versionCode/CFBundleVersion)에 주입됨`);
 }
 
 main();

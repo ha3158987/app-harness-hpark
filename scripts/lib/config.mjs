@@ -42,6 +42,9 @@ const DEFAULT_THEME = {
   primary: '#1A73E8',
   statusBarStyle: 'dark', // light | dark  (텍스트/아이콘 색상 기준)
   background: '#FFFFFF',
+  // 스플래시 화면. 안드12+ 는 OS 제약상 "단색 배경 + 가운데 아이콘"만 가능(풀이미지 불가).
+  splashBackground: null,  // null 이면 background 사용. 안드12+ 시스템 스플래시 배경색.
+  splashDuration: 1500,    // Capacitor 스플래시 표시 시간(ms).
 };
 
 // 마케팅 SDK 슬롯. 키/시크릿은 절대 여기 넣지 않는다(환경변수로 주입).
