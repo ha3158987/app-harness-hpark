@@ -163,11 +163,21 @@ jobs:
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
           echo "✅ 배포 인증서(개인키) 키체인 주입 완료 — build_app 서명용"
 
+      - name: 인증서 저장소 SSH 키 (deploy key 읽기전용, 개인토큰 미사용)
+        env:
+          MATCH_DEPLOY_KEY: ${{ secrets.MATCH_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$MATCH_DEPLOY_KEY" > ~/.ssh/match_deploy_key
+          chmod 600 ~/.ssh/match_deploy_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          printf 'Host github.com\n  IdentityFile ~/.ssh/match_deploy_key\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          echo "인증서 저장소 SSH 키 설정 완료"
+
       - name: TestFlight 업로드 (fastlane match + pilot)
         env:
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
           APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.ASC_KEY_P8 }}

@@ -36,7 +36,7 @@
 | ASC Issuer ID | `.env` `APP_STORE_CONNECT_API_KEY_ISSUER_ID` | `ASC_ISSUER_ID` | 위와 함께 (UUID) |
 | match repo URL | `.env` `MATCH_GIT_URL` | `MATCH_GIT_URL` | 빈 private git repo 생성 |
 | match 복호화 비번 | `.env` `MATCH_PASSWORD` | `MATCH_PASSWORD` | `fastlane match init` 시 설정 |
-| match repo 접근 토큰 | (로컬은 git 권한) | `MATCH_GIT_BASIC_AUTHORIZATION` | base64("user:PAT") |
+| match repo 접근 (CI) | (로컬은 git https 권한) | `MATCH_DEPLOY_KEY` | `ios-certificates` 저장소의 **읽기전용 deploy key**(ed25519). 저장소 귀속 — 개인 토큰 아님(퇴사 무관). `MATCH_GIT_URL`은 CI에서 SSH 형식(`git@github.com:...`) |
 
 ### 🤖 Android (조직 공유)
 
