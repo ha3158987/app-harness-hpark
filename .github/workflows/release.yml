@@ -118,6 +118,15 @@ jobs:
       SLUG: ${{ needs.resolve.outputs.slug }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: 최신 Xcode 선택 (Apple: iOS 26 SDK 필수)
+        run: |
+          echo "설치된 Xcode 목록:"; ls -d /Applications/Xcode_*.app 2>/dev/null || true
+          LATEST="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$LATEST" ]; then echo "Xcode_*.app 없음 — 기본 사용"; else
+            echo "선택: $LATEST"; sudo xcode-select -s "$LATEST/Contents/Developer"; fi
+          xcodebuild -version
+
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - uses: ruby/setup-ruby@v1
