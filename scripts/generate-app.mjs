@@ -507,6 +507,35 @@ function patchAndroidSigning(buildDir) {
   log.ok('android/app/build.gradle: 릴리즈 서명 설정(keystore.properties 조건부)');
 }
 
+// 네이티브 버전 주입: app.config.json 의 version 을 네이티브 프로젝트에 직접 박는다.
+// CI 경로(빌드 스킬 미사용, generate-app 직접 호출)에서도 버전이 반영되도록 한다.
+// (안 하면 빌드번호가 Capacitor 기본 1 고정 → 재업로드 시 스토어가 중복 거부)
+function patchNativeVersion(buildDir, cfg) {
+  const code = cfg.version?.code;
+  const name = cfg.version?.name;
+  if (!code && !name) return;
+
+  // Android: app/build.gradle defaultConfig (versionCode 정수, versionName 문자열)
+  const gradleFile = join(buildDir, 'android', 'app', 'build.gradle');
+  if (existsSync(gradleFile)) {
+    let txt = readFileSync(gradleFile, 'utf8');
+    if (code) txt = txt.replace(/versionCode\s+\d+/, `versionCode ${code}`);
+    if (name) txt = txt.replace(/versionName\s+"[^"]*"/, `versionName "${name}"`);
+    writeFileSync(gradleFile, txt);
+    log.ok(`android versionCode=${code} / versionName="${name}"`);
+  }
+
+  // iOS: project.pbxproj (Debug/Release 빌드설정 모두). CURRENT_PROJECT_VERSION=빌드번호, MARKETING_VERSION=표시버전
+  const pbxproj = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+  if (existsSync(pbxproj)) {
+    let txt = readFileSync(pbxproj, 'utf8');
+    if (code) txt = txt.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${code};`);
+    if (name) txt = txt.replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${name};`);
+    writeFileSync(pbxproj, txt);
+    log.ok(`iOS CURRENT_PROJECT_VERSION=${code} / MARKETING_VERSION=${name}`);
+  }
+}
+
 // 안드로이드 12+ 스플래시 배선. 안드12+ 는 OS 가 시작화면을 "단색 배경 + 가운데 아이콘"으로 강제한다
 // (풀스크린 이미지 불가 — poptale 도 동일). Capacitor 기본 styles.xml 은 windowSplashScreen* 미설정이라
 // 시스템 기본(밝은) 배경이 나오는 버그가 있어, 여기서 배경색 + 전용 아이콘을 주입한다.
@@ -734,6 +763,9 @@ function main() {
     log.ok('ios App/public/app-config.json');
   }
 
+  // 7a-2) 네이티브 버전 주입 (CI 경로에서도 version.code/name 반영 — 재배포 중복거부 방지)
+  patchNativeVersion(buildDir, cfg);
+
   // 7b) 딥링크 네이티브 배선 (features.deepLink) + iOS 권한 사용 설명
   if (cfg.features.deepLink) {
     log.step('딥링크 네이티브 배선 (App Links / Universal Links)');
@@ -764,7 +796,7 @@ function main() {
   log.step('완료');
   log.info(`프로젝트: build/${cfg.slug}`);
   log.info('다음: generate-assets(아이콘/스플래시) → gradlew(Android) / xcodebuild(iOS)');
-  if (cfg.version.code) log.dim(`버전코드 ${cfg.version.code} — 네이티브 versionCode/build number 는 빌드 스킬이 반영`);
+  if (cfg.version.code) log.dim(`버전 v${cfg.version.name}+${cfg.version.code} — 네이티브(versionCode/CFBundleVersion)에 주입됨`);
 }
 
 main();
