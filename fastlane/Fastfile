@@ -48,18 +48,39 @@ platform :ios do
   lane :build do |options|
     slug = require_slug(options)
     cfg = app_config(slug)
-    workspace = File.join(build_dir(slug), 'ios', 'App', 'App.xcworkspace')
+    app_id = cfg['appId']
+    build_path = build_dir(slug)
+    workspace = File.join(build_path, 'ios', 'App', 'App.xcworkspace')
+    project = File.join(build_path, 'ios', 'App', 'App.xcodeproj')
 
     # 인증서/프로비저닝: 암호화 git repo(match)에서 가져온다. 읽기전용으로.
-    match(type: 'appstore', app_identifier: cfg['appId'], readonly: true)
+    match(type: 'appstore', app_identifier: app_id, readonly: true)
+
+    # Capacitor 기본 프로젝트는 자동서명(팀 미지정) → CI archive 실패.
+    # match 로 받은 프로파일로 수동서명 전환. team/profile 은 match 가 ENV 로 노출한 값 사용.
+    profile_name = ENV["sigh_#{app_id}_appstore_profile-name"] || "match AppStore #{app_id}"
+    team_id = ENV["sigh_#{app_id}_appstore_team-id"] || ENV['FASTLANE_DEV_TEAM_ID']
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: project,
+      team_id: team_id,
+      code_sign_identity: 'Apple Distribution',
+      bundle_identifier: app_id,
+      profile_name: profile_name,
+      targets: ['App']
+    )
 
     build_app(
       workspace: workspace,
       scheme: 'App',
       export_method: 'app-store',
-      output_directory: File.join(build_dir(slug), 'ios', 'output'),
+      output_directory: File.join(build_path, 'ios', 'output'),
       output_name: "#{slug}.ipa",
-      clean: true
+      clean: true,
+      export_options: {
+        signingStyle: 'manual',
+        provisioningProfiles: { app_id => profile_name }
+      }
     )
   end
 
