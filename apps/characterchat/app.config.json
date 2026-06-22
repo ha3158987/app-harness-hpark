@@ -1,0 +1,42 @@
+{
+  "slug": "characterchat",
+  "appName": "캐릭터챗",
+  "appId": "com.aipia.characterchat",
+  "startUrl": "https://chat.poptale.ai",
+  "version": { "name": "1.0.0", "code": 1 },
+  "theme": {
+    "primary": "#000000",
+    "statusBarStyle": "light",
+    "background": "#000000",
+    "splashBackground": "#2A307A",
+    "splashDuration": 2500
+  },
+  "features": {
+    "push": false,
+    "deepLink": false,
+    "biometric": false,
+    "share": true,
+    "camera": false,
+    "forceUpdate": false,
+    "secureStorage": false,
+    "localNotification": false,
+    "haptics": true,
+    "clipboard": false,
+    "geolocation": false,
+    "darkMode": true
+  },
+  "navigation": {
+    "allowedDomains": ["chat.poptale.ai", "*.poptale.ai"],
+    "externalInBrowser": true
+  },
+  "marketing": {
+    "attribution": { "provider": null },
+    "analytics": { "provider": null },
+    "autoCapture": false
+  },
+  "legal": {
+    "privacyUrl": "https://poptale.ai/info/privacy",
+    "termsUrl": "https://poptale.ai/info/terms"
+  },
+  "permissions": {}
+}
