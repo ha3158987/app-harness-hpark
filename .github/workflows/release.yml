@@ -119,7 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 최신 Xcode 선택 (Apple: iOS 26 SDK 필수)
+      - name: 최신 Xcode 선택 (Apple iOS 26 SDK 요구)
         run: |
           echo "설치된 Xcode 목록:"; ls -d /Applications/Xcode_*.app 2>/dev/null || true
           LATEST="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
