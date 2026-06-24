@@ -14,15 +14,15 @@
   "features": {
     "push": false,
     "deepLink": false,
-    "biometric": false,
+    "biometric": true,
     "share": true,
-    "camera": false,
+    "camera": true,
     "forceUpdate": false,
-    "secureStorage": false,
-    "localNotification": false,
+    "secureStorage": true,
+    "localNotification": true,
     "haptics": true,
-    "clipboard": false,
-    "geolocation": false,
+    "clipboard": true,
+    "geolocation": true,
     "darkMode": true
   },
   "navigation": {
