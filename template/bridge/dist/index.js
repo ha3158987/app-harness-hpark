@@ -507,6 +507,38 @@ class AppBridgeImpl {
     try { return await navigator.clipboard.readText(); } catch { return ''; }
   }
 
+  // ── 갤러리 저장 ─────────────────────────────────────────────────────────
+  /**
+   * 이미지를 기기 갤러리(사진 앨범)에 저장.
+   * @param input dataUrl("data:image/png;base64,...") 또는 base64 문자열,
+   *              또는 { dataUrl?, base64?, fileName? } 객체.
+   * 반환: { saved: boolean, uri?: string, reason?: string }.
+   * 앱: 커스텀 네이티브 플러그인(AppBridge.saveImageToGallery). 웹: 브라우저 다운로드 폴백.
+   */
+  async saveImageToGallery(input) {
+    const opts = typeof input === 'string' ? { dataUrl: input } : (input || {});
+    let base64 = opts.base64;
+    if (!base64 && opts.dataUrl) base64 = String(opts.dataUrl).replace(/^data:[^;]+;base64,/, '');
+    const fileName = opts.fileName || `capture_${Date.now()}.png`;
+    if (!base64) return { saved: false, reason: 'no image data' };
+    if (this.isNative) {
+      try {
+        const res = await Native.saveImageToGallery({ base64, fileName });
+        return { saved: !(res && res.saved === false), uri: res && res.uri };
+      } catch (e) { return { saved: false, reason: String((e && e.message) || e) }; }
+    }
+    // 웹 폴백: <a download> 로 파일 저장(브라우저).
+    try {
+      const a = document.createElement('a');
+      a.href = opts.dataUrl || `data:image/png;base64,${base64}`;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return { saved: true };
+    } catch (e) { return { saved: false, reason: String((e && e.message) || e) }; }
+  }
+
   // ── 위치 ───────────────────────────────────────────────────────────────
   async getLocation(opts = {}) {
     if (this.isNative && this.capabilities.geolocation) {

@@ -383,6 +383,11 @@ function patchIosUsageStrings(buildDir, cfg) {
   for (const feat of Object.keys(IOS_USAGE)) {
     if (cfg.features[feat] === true || cfg.features[feat]?.enabled) Object.assign(add, IOS_USAGE[feat]);
   }
+  // 갤러리 저장(AppBridge.saveImageToGallery)은 기능 플래그와 무관하게 항상 제공되므로,
+  // 추가 전용(addOnly) 사진 권한 설명을 기본 주입(camera 로 이미 채워졌으면 생략).
+  if (!add.NSPhotoLibraryAddUsageDescription) {
+    add.NSPhotoLibraryAddUsageDescription = '캡쳐 이미지 저장을 위해 사진 보관함 접근이 필요합니다.';
+  }
   // ATT: 어트리뷰션(AppsFlyer 등) 있으면 추적 사용 설명 필수(없으면 ATT 호출 시 크래시)
   if (cfg.marketing?.attribution?.provider) {
     add.NSUserTrackingUsageDescription = '맞춤형 콘텐츠와 광고 제공을 위해 활동을 추적합니다.';
