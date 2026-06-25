@@ -199,8 +199,10 @@ function parseArgs(argv) {
     else if (v === '--platform') a.platform = argv[++i];
     else if (v === '--skip-install') a.skipInstall = true;
     else if (v === '--skip-sync') a.skipSync = true;
+    else if (v === '--local') a.local = argv[++i]; // 로컬 dev 서버 URL(예: http://192.168.1.37:3001). cleartext+ATS 자동 허용.
   }
   if (!a.slug) fail('--slug <slug> 필요');
+  if (a.local && !/^https?:\/\//.test(a.local)) fail('--local 은 http(s):// 로 시작하는 전체 URL 이어야 함');
   if (!['android', 'ios', 'both'].includes(a.platform)) fail(`--platform 은 android|ios|both`);
   return a;
 }
@@ -226,8 +228,11 @@ function run(cmd, args, cwd) {
 
 // capacitor.config.json 을 config 로부터 생성.
 // 핵심 결정: server.url = startUrl (원격 웹을 그대로 로드). 오프라인/에러 셸은 webDir(www)에 둔다.
-function buildCapacitorConfig(cfg) {
+function buildCapacitorConfig(cfg, opts = {}) {
   const isDark = cfg.theme.statusBarStyle === 'dark';
+  // 로컬 dev 모드: 평문 http 로컬 서버를 로드하려면 cleartext + mixedContent 허용이 필요하다.
+  // 프로덕션(원격 https) 빌드는 그대로 cleartext:false 를 유지한다(dev 전용 완화).
+  const local = !!opts.local;
   return {
     appId: cfg.appId,
     appName: cfg.appName,
@@ -238,7 +243,7 @@ function buildCapacitorConfig(cfg) {
     // 원격 서비스를 직접 로드. allowNavigation 으로 화이트리스트 도메인만 셸 내부 탐색 허용.
     server: {
       url: cfg.startUrl,
-      cleartext: false,
+      cleartext: local,
       allowNavigation: cfg.navigation.allowedDomains,
     },
     plugins: {
@@ -260,7 +265,7 @@ function buildCapacitorConfig(cfg) {
       ...(cfg.features.push ? { PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] } } : {}),
     },
     ios: { contentInset: 'always' },
-    android: { allowMixedContent: false },
+    android: { allowMixedContent: local },
   };
 }
 
@@ -390,6 +395,26 @@ function patchIosUsageStrings(buildDir, cfg) {
   xml = xml.slice(0, close) + block + '\n' + xml.slice(close);
   writeFileSync(plistFile, xml);
   log.ok(`iOS Info.plist: 권한 사용 설명 ${entries.length}개 주입`);
+}
+
+// 로컬 dev 모드(--local) 전용: 평문 http 로컬 서버 로드를 위해 ATS 예외를 주입한다.
+// NSAllowsArbitraryLoads=true 는 dev 한정 완화 — 프로덕션(원격 https) 빌드엔 절대 주입하지 않는다.
+function patchIosLocalAts(buildDir) {
+  const plistFile = join(buildDir, 'ios', 'App', 'App', 'Info.plist');
+  if (!existsSync(plistFile)) return;
+  let xml = readFileSync(plistFile, 'utf8');
+  if (xml.includes('<key>NSAppTransportSecurity</key>')) return; // 이미 있으면 손대지 않음
+  const block =
+    '\t<key>NSAppTransportSecurity</key>\n' +
+    '\t<dict>\n' +
+    '\t\t<key>NSAllowsArbitraryLoads</key>\n' +
+    '\t\t<true/>\n' +
+    '\t</dict>';
+  const close = xml.lastIndexOf('</dict>');
+  if (close === -1) return;
+  xml = xml.slice(0, close) + block + '\n' + xml.slice(close);
+  writeFileSync(plistFile, xml);
+  log.ok('iOS Info.plist: ATS 예외 주입(NSAllowsArbitraryLoads, dev 로컬 전용)');
 }
 
 // ── 인증 네이티브 배선 ──────────────────────────────────────────────────────
@@ -638,6 +663,13 @@ function main() {
     fail(e.message);
   }
   log.ok(`${cfg.appName} (${cfg.appId}) v${cfg.version.name}+${cfg.version.code}`);
+  // 로컬 dev 모드: startUrl 을 로컬 서버로 바꾸고, 해당 호스트를 셸 내부 탐색 화이트리스트에 추가한다.
+  if (args.local) {
+    cfg.startUrl = args.local;
+    const host = new URL(args.local).hostname;
+    if (!cfg.navigation.allowedDomains.includes(host)) cfg.navigation.allowedDomains.push(host);
+    log.warn(`로컬 dev 모드: server.url=${args.local} (cleartext+ATS 허용 — dev 전용 빌드, 스토어 제출 금지)`);
+  }
   log.info(`startUrl: ${cfg.startUrl}`);
   log.info(`기능: ${Object.entries(cfg.features)
     .filter(([, v]) => v === true || v?.enabled)
@@ -688,7 +720,7 @@ function main() {
   log.step('capacitor.config.json 생성');
   writeFileSync(
     join(buildDir, 'capacitor.config.json'),
-    JSON.stringify(buildCapacitorConfig(cfg), null, 2) + '\n',
+    JSON.stringify(buildCapacitorConfig(cfg, { local: !!args.local }), null, 2) + '\n',
   );
   log.ok(`server.url = ${cfg.startUrl} / allowNavigation: ${cfg.navigation.allowedDomains.join(', ')}`);
 
@@ -774,6 +806,7 @@ function main() {
   }
   log.step('iOS 권한 사용 설명(Info.plist) 점검');
   patchIosUsageStrings(buildDir, cfg);
+  if (args.local) patchIosLocalAts(buildDir); // 로컬 dev 평문 http 허용(ATS 예외)
 
   // 7c) 인증 네이티브 배선 (OAuth 복귀 URL scheme + Apple Sign In)
   if (authConf.hasOAuth || (cfg.auth?.providers || []).includes('apple')) {
@@ -787,10 +820,11 @@ function main() {
   // 7d) iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(App.entitlements 있을 때만)
   patchIosPbxEntitlements(buildDir);
 
-  // 8) 동기화
+  // 8) 동기화 — 요청한 플랫폼만 sync 한다. (android 만 빌드할 때 iOS pod install 로 깨지는 것 방지)
   if (!args.skipSync) {
     log.step('cap sync');
-    run('npx', ['cap', 'sync'], buildDir);
+    const syncArgs = args.platform === 'both' ? ['cap', 'sync'] : ['cap', 'sync', args.platform];
+    run('npx', syncArgs, buildDir);
   }
 
   log.step('완료');
