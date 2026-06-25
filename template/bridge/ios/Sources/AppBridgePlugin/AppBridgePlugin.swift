@@ -1,5 +1,7 @@
 import Foundation
 import Capacitor
+import Photos
+import UIKit
 
 /**
  * AppBridge — 커스텀 Capacitor 플러그인 (iOS).
@@ -13,7 +15,8 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "AppBridgePlugin"
     public let jsName = "AppBridge"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "getConfig", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getConfig", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "saveImageToGallery", returnType: CAPPluginReturnPromise)
     ]
 
     @objc func getConfig(_ call: CAPPluginCall) {
@@ -31,6 +34,62 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
             call.resolve(obj)
         } catch {
             call.reject("app-config.json 을 읽을 수 없습니다: \(error.localizedDescription)")
+        }
+    }
+
+    /**
+     * base64 이미지를 사진 앨범(갤러리)에 저장.
+     * 입력: { base64: String, fileName?: String }. base64 는 data:URL prefix 가 있어도 처리.
+     * Info.plist 에 NSPhotoLibraryAddUsageDescription 필요(추가 전용 권한).
+     */
+    @objc func saveImageToGallery(_ call: CAPPluginCall) {
+        guard let raw = call.getString("base64"), !raw.isEmpty else {
+            call.reject("base64 가 필요합니다")
+            return
+        }
+        // data:URL prefix(data:image/png;base64,) 가 섞여 와도 안전하게 제거.
+        let b64 = raw.contains(",") ? String(raw.split(separator: ",").last ?? "") : raw
+        guard let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters),
+              let image = UIImage(data: data) else {
+            call.reject("이미지 디코딩 실패")
+            return
+        }
+
+        let persist = {
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }) { success, error in
+                DispatchQueue.main.async {
+                    if success {
+                        call.resolve(["saved": true])
+                    } else {
+                        call.reject(error?.localizedDescription ?? "갤러리 저장 실패")
+                    }
+                }
+            }
+        }
+
+        // 추가 전용(addOnly) 권한만 요청 — 전체 라이브러리 접근은 불필요.
+        if #available(iOS 14, *) {
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+                DispatchQueue.main.async {
+                    if status == .authorized || status == .limited {
+                        persist()
+                    } else {
+                        call.reject("사진 추가 권한이 거부되었습니다")
+                    }
+                }
+            }
+        } else {
+            PHPhotoLibrary.requestAuthorization { status in
+                DispatchQueue.main.async {
+                    if status == .authorized {
+                        persist()
+                    } else {
+                        call.reject("사진 추가 권한이 거부되었습니다")
+                    }
+                }
+            }
         }
     }
 }

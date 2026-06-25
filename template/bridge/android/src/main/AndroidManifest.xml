@@ -1,2 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 갤러리 저장(saveImageToGallery): API 29+ 는 MediaStore RELATIVE_PATH 로 권한 불필요.
+         API 28 이하에서만 외부 저장소 쓰기 권한 필요(maxSdkVersion 으로 한정). -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+</manifest>

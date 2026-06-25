@@ -151,6 +151,11 @@ export interface AppBridgeSDK {
   copyToClipboard(text: string): Promise<boolean>;
   readClipboard(): Promise<string>;
 
+  /** 이미지를 기기 갤러리(사진 앨범)에 저장. 앱=네이티브, 웹=다운로드 폴백 */
+  saveImageToGallery(
+    input: string | { dataUrl?: string; base64?: string; fileName?: string },
+  ): Promise<{ saved: boolean; uri?: string; reason?: string }>;
+
   /** 현재 위치(권한 요청 포함). 거부/미지원 시 null */
   getLocation(opts?: { highAccuracy?: boolean }): Promise<GeoResult | null>;
 
