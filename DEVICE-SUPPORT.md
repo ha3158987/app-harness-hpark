@@ -127,8 +127,12 @@
 
 ## 4b. 디스플레이 다양성 대응 레시피 (해상도/종횡비/컷아웃/폴더블)
 
-거의 다 **웹 CSS**로 푼다. 하네스는 안전영역 정보를 보장한다(`@capacitor-community/safe-area` 가
-`--safe-area-inset-*` CSS 변수 주입 + edge-to-edge; shell 은 `viewport-fit=cover`).
+거의 다 **웹 CSS**로 푼다. 앱은 edge-to-edge(iOS `contentInset:never`)로 노치/홈인디케이터까지 콘텐츠가
+확장되므로, 상/하단 고정요소(헤더·탭바·버튼·컴포저)는 **반드시 세이프에어리어 인셋을 적용**해야 한다.
+하네스는 이를 **이중으로 보장**한다:
+① `@capacitor-community/safe-area` 가 `--safe-area-inset-*` CSS 변수 주입(뷰포트와 무관하게 항상 동작),
+② 브릿지 `ready()` 가 원격 페이지 viewport meta 에 `viewport-fit=cover` 를 **자동 주입**(웹이 빠뜨려도 `env()` 동작).
+→ 그래서 아래 `var(..., env(...))` 패턴이 어떤 앱에서든 동작한다. **bare `env()` 단독 사용은 피하고 이 패턴을 써라.**
 
 ```css
 /* 노치/펀치홀/제스처바: 플러그인이 주입한 변수 사용(Android env() 불안정 보완) */
@@ -144,6 +148,9 @@
   탭 타깃 두지 말 것.
 - **폴더블(갤럭시 Z)**: `window.addEventListener('resize')` / `matchMedia` 로 펼침·접힘 레이아웃 전환. 고정 종횡비 가정 금지.
 - **JS 로 인셋이 필요하면**: `AppBridge.getSafeAreaInsets()` (또는 어댑터 `safeAreaInsets()`).
+- **키보드(iOS)**: 앱은 edge-to-edge(`contentInset:never`)라 콘텐츠가 화면 하단까지 닿는다. 입력창을 키보드
+  위로 올릴 때 **iOS도 Android/웹과 동일하게 키보드 높이만큼만** 리프트하라. 과거 `contentInset:'always'`
+  시절의 `- env(safe-area-inset-bottom)` 보정을 넣으면 그만큼(≈34px) 입력줄이 키보드에 가려진다.
 - 실기기 확인: 노치 아이폰 + 펀치홀 갤럭시 + 폴더블 1대(§3 매트릭스).
 
 ## 5. 한 줄 운영 가이드

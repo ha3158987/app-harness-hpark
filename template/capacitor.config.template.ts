@@ -33,7 +33,7 @@ const config: CapacitorConfig = {
     // features.push 가 true 일 때만 포함됨
     PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] },
   },
-  ios: { contentInset: 'always' },
+  ios: { contentInset: 'never' }, // edge-to-edge: 콘텐츠를 세이프에어리어 밖(노치/홈인디케이터)까지 확장
   android: { allowMixedContent: false },
 };
 

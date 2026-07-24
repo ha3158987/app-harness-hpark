@@ -119,11 +119,33 @@ class AppBridgeImpl {
   // "config 토글만 켜면 동작한다"를 보장하는 핵심(거짓 capability 해소).
   _autoInit() {
     if (!this.isNative) return;
+    this._ensureViewportFit();
     if (this.capabilities.deepLink) this._startDeepLinks();
     if (this.capabilities.forceUpdate) {
       // 비차단: 게이트는 자체 오버레이로 표시. 앱이 타이밍을 제어하려면 autoForceUpdate:false 후 직접 호출.
       this.checkForceUpdate().catch(() => {});
     }
+  }
+
+  // edge-to-edge(iOS contentInset:never / Android edge-to-edge)에서 env(safe-area-inset-*)가
+  // 동작하려면 viewport meta에 viewport-fit=cover가 있어야 한다. 원격 웹이 이를 빠뜨려도 하네스가
+  // 보장해, 앱마다 개별로 챙기지 않아도 env() 가 항상 동작하게 한다.
+  // (var(--safe-area-inset-*)는 @capacitor-community/safe-area 가 별도 주입 — env/var 둘 다 되게.)
+  _ensureViewportFit() {
+    try {
+      if (typeof document === 'undefined' || !document.head) return;
+      const vp = document.querySelector('meta[name="viewport"]');
+      if (vp) {
+        if (!/viewport-fit\s*=/i.test(vp.content)) {
+          vp.setAttribute('content', vp.content.trim().replace(/,\s*$/, '') + ', viewport-fit=cover');
+        }
+      } else {
+        const m = document.createElement('meta');
+        m.name = 'viewport';
+        m.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+        document.head.appendChild(m);
+      }
+    } catch { /* noop — 뷰포트 보장 실패해도 앱 동작엔 지장 없음 */ }
   }
 
   // ── 공유 ───────────────────────────────────────────────────────────────

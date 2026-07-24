@@ -2,6 +2,7 @@ import Foundation
 import Capacitor
 import Photos
 import UIKit
+import WebKit
 
 /**
  * AppBridge — 커스텀 Capacitor 플러그인 (iOS).
@@ -18,6 +19,17 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getConfig", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "saveImageToGallery", returnType: CAPPluginReturnPromise)
     ]
+
+    /**
+     * iOS 스와이프 뒤로가기 활성화 (왼쪽 엣지 스와이프 → WKWebView 히스토리 back).
+     * iOS 는 안드로이드와 달리 하드웨어 백버튼이 없어, "DEMO" 진입 등 앱 전용 페이지에서
+     * 되돌아갈 수단이 없다. Capacitor 기본값은 off 라 여기서 켠다. (Android 는 브릿지 onBackButton 이 처리)
+     */
+    override public func load() {
+        DispatchQueue.main.async { [weak self] in
+            self?.bridge?.webView?.allowsBackForwardNavigationGestures = true
+        }
+    }
 
     @objc func getConfig(_ call: CAPPluginCall) {
         guard let url = Bundle.main.url(forResource: "app-config", withExtension: "json", subdirectory: "public")

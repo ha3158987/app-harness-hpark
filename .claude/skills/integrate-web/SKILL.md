@@ -18,6 +18,9 @@ description: 기존 웹 서비스 레포를 하네스에 "연결"한다. 웹 코
 - **어댑터 한 곳으로 모은다.** call site 를 흩뿌리지 말고 `harness-adapter` 를 통해 호출.
 - **변경은 최소 + diff 보고.** 무엇을 어디에 넣었는지 사람이 리뷰하게 요약.
 - 자격증명/시크릿을 웹 코드·config 에 넣지 않는다(공개 clientId/dsn 만).
+- **세이프에어리어(edge-to-edge)**: 앱은 노치/홈인디케이터까지 콘텐츠가 확장된다. 웹의 상/하단 고정요소
+  (헤더·탭바·버튼·컴포저)는 `var(--safe-area-inset-*, env(safe-area-inset-*, 0px))` 로 인셋을 줘야 겹치지 않는다
+  (DEVICE-SUPPORT §4b). bare `env()` 단독 사용 금지. iOS 키보드 리프트는 safe-area 보정 없이 키보드 높이만큼만.
 
 ## 절차
 1. **정의 확인/생성** — `apps/<slug>/app.config.json` 있는지. 없으면 `new-app` 으로 만들고
@@ -41,6 +44,9 @@ description: 기존 웹 서비스 레포를 하네스에 "연결"한다. 웹 코
 7. **가격/지갑 정합** — 앱 IAP 와 웹 PG 가 **같은 서버 지갑(계정)** 에 적립되도록 백엔드 확인(IAP.md).
 8. **검증** — `node scripts/doctor.mjs` (config 점검) → `node scripts/generate-app.mjs --slug <slug>`
    → 디버그 빌드(build-android)로 동작 확인.
+   - **세이프에어리어 전수 점검(노치 기기/시뮬레이터)**: 모든 화면의 상/하단 고정요소가 상태바·홈인디케이터에
+     안 겹치는지 확인. 겹치면 `var(--safe-area-inset-*, env(...))` 인셋 보강. 상단 헤더/뒤로가기, 하단 탭바/버튼/
+     입력창, 로딩 스켈레톤(실화면과 인셋 값 일치)까지. iOS 키보드 올릴 때 입력줄 안 가리는지도 확인.
 9. **보고** — 추가/변경한 파일·call site 목록과, 사람이 직접 해야 할 일(백엔드 엔드포인트, 스토어 상품,
    소셜 키, 시크릿)을 명확히 요약.
 

@@ -264,7 +264,10 @@ function buildCapacitorConfig(cfg, opts = {}) {
       SafeArea: { enabled: true },
       ...(cfg.features.push ? { PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] } } : {}),
     },
-    ios: { contentInset: 'always' },
+    // iOS edge-to-edge: 'never' 로 WKWebView 콘텐츠를 세이프에어리어 밖(노치/상태바·홈인디케이터 밑)까지 확장.
+    //   'always'(구값) = 콘텐츠를 세이프에어리어 안쪽으로 인셋 → 상/하단에 네이티브 배경(다크=검정)이 노출됨(검은 띠).
+    //   웹은 viewport-fit=cover + env(safe-area-inset-*)/--safe-area-inset-* 로 콘텐츠 패딩을 직접 처리해야 가림이 없다.
+    ios: { contentInset: 'never' },
     android: { allowMixedContent: local },
   };
 }
