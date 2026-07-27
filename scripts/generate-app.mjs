@@ -258,17 +258,24 @@ function buildCapacitorConfig(cfg, opts = {}) {
         style: isDark ? 'DARK' : 'LIGHT',
         backgroundColor: cfg.theme.background,
       },
-      // 입력 시 웹뷰를 키보드 높이만큼 리사이즈(레이아웃 가림 방지). onKeyboard 이벤트도 함께 동작.
-      Keyboard: { resize: 'native' },
+      // resize:'none' — 키보드 리사이즈는 safe-area 플러그인이 담당한다(IME 표시 시 WebView 하단을 키보드 높이만큼 패딩).
+      //   Capacitor Keyboard 가 여기에 또 resize(native/body)하면 이중 축소 → 입력바가 화면 위로 튄다. onKeyboard 이벤트는 유지.
+      Keyboard: { resize: 'none' },
       // 노치/펀치홀/제스처바 안전영역을 --safe-area-inset-* CSS 변수로 주입(Android env() 불안정 보완).
       SafeArea: { enabled: true },
+      // Capacitor v8 내장 SystemBars 의 인셋 처리를 끈다(safe-area 플러그인 요구사항).
+      //   안 끄면 Capacitor 와 safe-area 플러그인이 IME(키보드) 인셋을 이중 적용 → 키보드 열 때
+      //   WebView 뷰포트가 붕괴(innerHeight 급감, visualViewport=0)해 입력창이 화면 위로 튄다(Android 실기기).
+      SystemBars: { insetsHandling: 'disable' },
       ...(cfg.features.push ? { PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] } } : {}),
     },
     // iOS edge-to-edge: 'never' 로 WKWebView 콘텐츠를 세이프에어리어 밖(노치/상태바·홈인디케이터 밑)까지 확장.
     //   'always'(구값) = 콘텐츠를 세이프에어리어 안쪽으로 인셋 → 상/하단에 네이티브 배경(다크=검정)이 노출됨(검은 띠).
     //   웹은 viewport-fit=cover + env(safe-area-inset-*)/--safe-area-inset-* 로 콘텐츠 패딩을 직접 처리해야 가림이 없다.
     ios: { contentInset: 'never' },
-    android: { allowMixedContent: local },
+    // adjustMarginsForEdgeToEdge:'disable' — Capacitor 의 edge-to-edge 마진 자동 보정을 끄고 safe-area 플러그인에 위임한다.
+    //   (미지정 시 Capacitor 가 시스템바 마진을 추가로 넣어 safe-area 플러그인의 인셋 처리와 충돌.)
+    android: { allowMixedContent: local, adjustMarginsForEdgeToEdge: 'disable' },
   };
 }
 
