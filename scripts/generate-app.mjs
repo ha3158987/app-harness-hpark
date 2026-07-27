@@ -262,7 +262,14 @@ function buildCapacitorConfig(cfg, opts = {}) {
       //   Capacitor Keyboard 가 여기에 또 resize(native/body)하면 이중 축소 → 입력바가 화면 위로 튄다. onKeyboard 이벤트는 유지.
       Keyboard: { resize: 'none' },
       // 노치/펀치홀/제스처바 안전영역을 --safe-area-inset-* CSS 변수로 주입(Android env() 불안정 보완).
-      SafeArea: { enabled: true },
+      // statusBarStyle/navigationBarStyle: edge-to-edge 에선 시스템바가 투명이라 아이콘 색을 theme 에 맞춰야 한다.
+      //   plugin enum: LIGHT=밝은배경용 '어두운' 아이콘 / DARK=어두운배경용 '밝은' 아이콘 (theme.statusBarStyle 와 직결).
+      //   단, 이 설정은 "구성 변경(다크모드 토글 등) 시 재적용"용이고, 앱 최초 시작 시 적용은
+      //   네이티브 브릿지(AppBridgePlugin.load)가 담당한다(플러그인이 시작 시엔 적용 안 함).
+      SafeArea: {
+        statusBarStyle: isDark ? 'DARK' : 'LIGHT',
+        navigationBarStyle: isDark ? 'DARK' : 'LIGHT',
+      },
       // Capacitor v8 내장 SystemBars 의 인셋 처리를 끈다(safe-area 플러그인 요구사항).
       //   안 끄면 Capacitor 와 safe-area 플러그인이 IME(키보드) 인셋을 이중 적용 → 키보드 열 때
       //   WebView 뷰포트가 붕괴(innerHeight 급감, visualViewport=0)해 입력창이 화면 위로 튄다(Android 실기기).
