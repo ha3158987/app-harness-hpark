@@ -3,7 +3,7 @@
   "appName": "캐릭터챗 DEV",
   "appId": "com.aipia.characterchat.dev",
   "startUrl": "https://chat.dev.poptale.ai",
-  "version": { "name": "1.0.0", "code": 5 },
+  "version": { "name": "1.0.0", "code": 6 },
   "theme": {
     "primary": "#000000",
     "statusBarStyle": "light",

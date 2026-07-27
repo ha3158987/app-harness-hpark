@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
+import androidx.core.view.WindowCompat
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -23,6 +24,39 @@ import java.io.OutputStream
  */
 @CapacitorPlugin(name = "AppBridge")
 class AppBridgePlugin : Plugin() {
+
+    /**
+     * 앱 시작 시 상태바/네비바 아이콘 색을 theme.statusBarStyle 에 맞춰 강제 적용한다.
+     *
+     * 배경: @capacitor-community/safe-area 는 config 의 statusBarStyle 을 "시작 시"엔 적용하지 않는다
+     * (런타임 setSystemBarsStyle 호출/구성변경 시에만 적용). 그래서 기기가 다크모드면 시작 시 시스템 기본값
+     * (밝은 배경 위 '흰 아이콘')이 되어 라이트 배경 앱에서 시간·배터리·통신 아이콘이 안 보였다.
+     * 네이티브가 시작 시 1회 강제 적용해 env()/edge-to-edge·기기 다크모드와 무관하게 아이콘 대비를 보장한다.
+     */
+    override fun load() {
+        super.load()
+        val act = activity ?: return
+        // theme.statusBarStyle: "light" = 밝은 배경용 '어두운 아이콘'(appearanceLight=true), "dark" = '흰 아이콘'.
+        val lightBars = readStatusBarStyle() != "dark"
+        // decorView.post: 다른 플러그인(safe-area 의 edge-to-edge 설정) load() 이후에 실행되도록 보장.
+        act.window.decorView.post {
+            val controller = WindowCompat.getInsetsController(act.window, act.window.decorView)
+            controller.isAppearanceLightStatusBars = lightBars
+            controller.isAppearanceLightNavigationBars = lightBars
+        }
+    }
+
+    private fun readStatusBarStyle(): String {
+        return try {
+            val json = context.assets
+                .open("public/app-config.json")
+                .bufferedReader()
+                .use { it.readText() }
+            JSObject(json).getJSObject("theme")?.getString("statusBarStyle") ?: "light"
+        } catch (e: Exception) {
+            "light"
+        }
+    }
 
     @PluginMethod
     fun getConfig(call: PluginCall) {
