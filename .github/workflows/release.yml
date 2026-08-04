@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       slug: ${{ steps.r.outputs.slug }}
+      slug_env: ${{ steps.r.outputs.slug_env }}   # 시크릿 이름용 (대문자, - → _)
       platform: ${{ steps.r.outputs.platform }}
       track: ${{ steps.r.outputs.track }}
     steps:
@@ -51,6 +52,9 @@ jobs:
             echo "platform=both"    >> "$GITHUB_OUTPUT"
             echo "track=internal"   >> "$GITHUB_OUTPUT"
           fi
+          # slug 별 시크릿 조회용 정규화 이름 (예: characterchat-dev → CHARACTERCHAT_DEV)
+          SLUG_LINE=$(grep '^slug=' "$GITHUB_OUTPUT" | tail -1)
+          echo "slug_env=$(echo "${SLUG_LINE#slug=}" | tr '[:lower:]-' '[:upper:]_')" >> "$GITHUB_OUTPUT"
       - run: echo "slug=${{ steps.r.outputs.slug }} platform=${{ steps.r.outputs.platform }} track=${{ steps.r.outputs.track }}"
 
   android:
@@ -81,6 +85,19 @@ jobs:
             npx cap sync android
           else
             echo "apps/$SLUG/icon.png 없음 — 기본 아이콘으로 진행"
+          fi
+
+      - name: google-services.json 주입 (FCM — 시크릿 → 파일)
+        # firebase.enabled 앱의 푸시용. 시크릿 미설정이면 스킵(비 FCM 앱).
+        # 시크릿 이름: GOOGLE_SERVICES_B64_<SLUG 대문자, -는 _> (base64 원문)
+        env:
+          GS_B64: ${{ secrets[format('GOOGLE_SERVICES_B64_{0}', needs.resolve.outputs.slug_env)] }}
+        run: |
+          if [ -n "$GS_B64" ]; then
+            echo "$GS_B64" | base64 -d > "build/$SLUG/android/app/google-services.json"
+            echo "google-services.json 배치됨 (FCM 활성)"
+          else
+            echo "::notice::GOOGLE_SERVICES_B64_* 시크릿 없음 — FCM 미사용 앱으로 진행"
           fi
 
       - name: 릴리즈 keystore 주입 (시크릿 → 파일)
