@@ -327,6 +327,26 @@ function scaffoldPackageJson(buildDir, cfg, plugins) {
 // ── 네이티브 딥링크 / 권한 배선 ────────────────────────────────────────────
 // allowedDomains 를 유니버설/앱 링크로 연결한다. features.deepLink 일 때만 호출.
 
+// features.push: Android 13+ 알림 런타임 권한을 명시 선언한다.
+// firebase-messaging(23.0.6+) AAR 매니페스트 머지에 암묵 의존하면 라이브러리
+// 버전에 따라 조용히 빠질 수 있다 — 권한이 없으면 requestPermissions 가
+// 프롬프트 없이 거부되어 "알림이 안 오는데 에러도 없는" 상태가 된다.
+function patchAndroidPushPermission(buildDir) {
+  const manifest = join(buildDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+  if (!existsSync(manifest)) return;
+  let xml = readFileSync(manifest, 'utf8');
+  if (xml.includes('android.permission.POST_NOTIFICATIONS')) return; // idempotent
+  const perm =
+`    <!-- harness-push: Android 13+ 알림 권한 (generate-app 자동 주입) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+`;
+  const appTag = xml.indexOf('<application');
+  if (appTag === -1) return;
+  xml = xml.slice(0, appTag) + perm.trimEnd() + '\n\n    ' + xml.slice(appTag);
+  writeFileSync(manifest, xml);
+  log.ok('AndroidManifest: POST_NOTIFICATIONS (push)');
+}
+
 function patchAndroidDeepLinks(buildDir, cfg) {
   const manifest = join(buildDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
   if (!existsSync(manifest)) return;
@@ -825,6 +845,10 @@ function main() {
     log.step('딥링크 네이티브 배선 (App Links / Universal Links)');
     patchAndroidDeepLinks(buildDir, cfg);
     patchIosDeepLinks(buildDir, cfg);
+  }
+  // 7b-2) 푸시 권한 배선 (features.push)
+  if (cfg.features.push) {
+    patchAndroidPushPermission(buildDir);
   }
   log.step('iOS 권한 사용 설명(Info.plist) 점검');
   patchIosUsageStrings(buildDir, cfg);
