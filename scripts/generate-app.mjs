@@ -41,7 +41,9 @@ const BASE_PLUGINS = [
 ];
 // 기능 토글 → 추가 플러그인 (브릿지 SDK 의 capability/메서드와 1:1)
 const FEATURE_PLUGINS = {
-  push: ['@capacitor/push-notifications'],
+  // iOS 에서 @capacitor/push-notifications 는 APNs 토큰만 준다. FCM 백엔드용 FCM 토큰은
+  // @capacitor-community/fcm 로 취득한다(Android 는 push-notifications 가 이미 FCM 토큰 반환).
+  push: ['@capacitor/push-notifications', '@capacitor-community/fcm'],
   share: ['@capacitor/share'],
   camera: ['@capacitor/camera'],
   biometric: ['@aparajita/capacitor-biometric-auth'],
@@ -538,6 +540,118 @@ ${block}</dict>
   log.ok('iOS App.entitlements: Sign in with Apple');
 }
 
+// ── iOS 원격 푸시(FCM) 네이티브 배선 ────────────────────────────────────────
+// features.push + iOS 에 필요한 4가지: (1) aps-environment 엔타이틀먼트 (2) UIBackgroundModes
+// remote-notification (3) GoogleService-Info.plist 번들 등록 (4) AppDelegate FirebaseApp.configure().
+// ⚠️ (1) 을 넣는 순간 프로비저닝 프로파일에 Push Notifications capability 가 있어야 빌드가 통과한다
+//    (associated-domains 와 동일 실패모드). App ID capability + match 프로파일 재생성 선행 필수 → DEPLOY.md §9.
+// ⚠️ (3)(4) 는 pbxproj/AppDelegate 정규식 편집 — 첫 macOS 빌드에서 검증 필요.
+
+// (1) aps-environment. app-store/TestFlight 배포 = production APNs.
+function patchIosPushEntitlement(buildDir) {
+  const iosAppDir = join(buildDir, 'ios', 'App', 'App');
+  if (!existsSync(iosAppDir)) return;
+  const entFile = join(iosAppDir, 'App.entitlements');
+  const KEY = 'aps-environment';
+  const block = `\t<key>${KEY}</key>\n\t<string>production</string>\n`;
+  if (existsSync(entFile)) {
+    let xml = readFileSync(entFile, 'utf8');
+    if (xml.includes(KEY)) return;
+    const close = xml.lastIndexOf('</dict>');
+    if (close === -1) return;
+    xml = xml.slice(0, close) + block + xml.slice(close);
+    writeFileSync(entFile, xml);
+  } else {
+    const plist =
+`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+${block}</dict>
+</plist>
+`;
+    writeFileSync(entFile, plist);
+  }
+  log.ok('iOS App.entitlements: aps-environment = production (push)');
+}
+
+// (2) UIBackgroundModes remote-notification (백그라운드/사일런트 푸시 수신).
+function patchIosPushBackgroundMode(buildDir) {
+  const plistFile = join(buildDir, 'ios', 'App', 'App', 'Info.plist');
+  if (!existsSync(plistFile)) return;
+  let xml = readFileSync(plistFile, 'utf8');
+  if (xml.includes('remote-notification')) return; // idempotent
+  const block =
+    '\t<key>UIBackgroundModes</key>\n' +
+    '\t<array>\n' +
+    '\t\t<string>remote-notification</string>\n' +
+    '\t</array>';
+  const close = xml.lastIndexOf('</dict>');
+  if (close === -1) return;
+  xml = xml.slice(0, close) + block + '\n' + xml.slice(close);
+  writeFileSync(plistFile, xml);
+  log.ok('iOS Info.plist: UIBackgroundModes remote-notification (push)');
+}
+
+// (3) GoogleService-Info.plist 를 App 타깃 번들 리소스로 등록(pbxproj). 실제 파일은
+//     CI(release.yml) 또는 로컬 secrets 가 build/<slug>/ios/App/App/GoogleService-Info.plist 로 넣는다.
+//     ⚠️ 이 참조를 넣으면 빌드 시 그 경로에 파일이 반드시 있어야 한다(없으면 xcodebuild 실패) → 시크릿 필수(DEPLOY.md §9).
+function patchIosGoogleServicePlistRef(buildDir) {
+  const pbx = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+  if (!existsSync(pbx)) return;
+  let txt = readFileSync(pbx, 'utf8');
+  if (txt.includes('GoogleService-Info.plist')) return; // idempotent
+  const NAME = 'GoogleService-Info.plist';
+  const FILE_REF = 'FC00000000000000000A0001';  // 고정 24-hex ID (idempotent)
+  const BUILD_FILE = 'FC00000000000000000B0001';
+  let ok = true;
+  const set = (cond) => { if (!cond) ok = false; };
+  // PBXBuildFile
+  set(txt.includes('/* Begin PBXBuildFile section */'));
+  txt = txt.replace('/* Begin PBXBuildFile section */\n',
+    `/* Begin PBXBuildFile section */\n\t\t${BUILD_FILE} /* ${NAME} in Resources */ = {isa = PBXBuildFile; fileRef = ${FILE_REF} /* ${NAME} */; };\n`);
+  // PBXFileReference
+  set(txt.includes('/* Begin PBXFileReference section */'));
+  txt = txt.replace('/* Begin PBXFileReference section */\n',
+    `/* Begin PBXFileReference section */\n\t\t${FILE_REF} /* ${NAME} */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "${NAME}"; sourceTree = "<group>"; };\n`);
+  // 첫 PBXResourcesBuildPhase 의 files 목록에 추가
+  const resIdx = txt.indexOf('isa = PBXResourcesBuildPhase;');
+  set(resIdx !== -1);
+  if (resIdx !== -1) {
+    const filesIdx = txt.indexOf('files = (', resIdx);
+    set(filesIdx !== -1);
+    if (filesIdx !== -1) {
+      const at = filesIdx + 'files = ('.length;
+      txt = txt.slice(0, at) + `\n\t\t\t\t${BUILD_FILE} /* ${NAME} in Resources */,` + txt.slice(at);
+    }
+  }
+  if (!ok) {
+    log.warn('GoogleService-Info.plist pbxproj 등록 실패(앵커 못 찾음) — Xcode 에서 수동 추가 필요.');
+    return;
+  }
+  writeFileSync(pbx, txt);
+  log.ok('iOS project.pbxproj: GoogleService-Info.plist 번들 리소스 등록');
+}
+
+// (4) AppDelegate 에 Firebase 초기화 주입 — @capacitor-community/fcm 가 FCM 토큰을 내려면 필요.
+function patchIosFirebaseInit(buildDir) {
+  const appDelegate = join(buildDir, 'ios', 'App', 'App', 'AppDelegate.swift');
+  if (!existsSync(appDelegate)) return;
+  let txt = readFileSync(appDelegate, 'utf8');
+  if (txt.includes('FirebaseApp.configure()')) return; // idempotent
+  if (!/^import Firebase(Core)?\b/m.test(txt)) {
+    txt = txt.replace(/^(import Capacitor\s*)$/m, '$1\nimport FirebaseCore');
+  }
+  const m = txt.match(/(func application\([^)]*didFinishLaunchingWithOptions[^)]*\)[^{]*\{[ \t]*\n)/);
+  if (!m) {
+    log.warn('AppDelegate didFinishLaunching 앵커 못 찾음 — FirebaseApp.configure() 수동 추가 필요.');
+    return;
+  }
+  txt = txt.replace(m[1], `${m[1]}        FirebaseApp.configure()\n`);
+  writeFileSync(appDelegate, txt);
+  log.ok('iOS AppDelegate.swift: FirebaseApp.configure() 주입');
+}
+
 // 릴리즈 서명 배선: keystore.properties(=build/<slug>/android/keystore.properties)가 있으면
 // 릴리즈 서명을 적용하고, 없으면 건드리지 않는다(디버그 빌드/CI 외 로컬에 안전). CI 가 시크릿으로 주입.
 const ANDROID_SIGNING_SNIPPET = `
@@ -846,9 +960,16 @@ function main() {
     patchAndroidDeepLinks(buildDir, cfg);
     patchIosDeepLinks(buildDir, cfg);
   }
-  // 7b-2) 푸시 권한 배선 (features.push)
+  // 7b-2) 푸시 배선 (features.push)
   if (cfg.features.push) {
     patchAndroidPushPermission(buildDir);
+    // iOS 원격 푸시(FCM): 엔타이틀먼트 + 백그라운드 모드는 항상, plist 등록/Firebase 초기화는 firebase.fcm 일 때만.
+    patchIosPushEntitlement(buildDir);
+    patchIosPushBackgroundMode(buildDir);
+    if (cfg.firebase?.enabled && cfg.firebase?.fcm) {
+      patchIosGoogleServicePlistRef(buildDir);
+      patchIosFirebaseInit(buildDir);
+    }
   }
   log.step('iOS 권한 사용 설명(Info.plist) 점검');
   patchIosUsageStrings(buildDir, cfg);

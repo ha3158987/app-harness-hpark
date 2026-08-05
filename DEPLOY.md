@@ -61,6 +61,7 @@ base64 -i release.keystore | tr -d '\n'   # macOS
 | `MATCH_PASSWORD` | match 복호화 비번 |
 | `MATCH_GIT_BASIC_AUTHORIZATION` | match repo 접근용 토큰(base64 `user:token`) |
 | `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_P8` | App Store Connect API 키(2FA 회피). `ASC_KEY_P8` 는 .p8 내용 |
+| `GOOGLE_SERVICE_INFO_PLIST_B64_<SLUG>` | (푸시) iOS Firebase 설정 `GoogleService-Info.plist` 의 base64. `firebase.fcm` 앱 필수 — §9 |
 
 ### 공통(선택)
 | Secret | 설명 |
@@ -137,3 +138,36 @@ error: Provisioning profile "match AppStore <appId>" doesn't include the Associa
 | Android `beta`: keystore/서명 실패 | keystore 시크릿 4종 미설정 | §4 Android 시크릿(`ANDROID_KEYSTORE_*`, `ANDROID_KEY_*`) 등록 |
 
 > **원칙**: `app.config.json` 에서 **네이티브 기능/capability 를 바꾸면** iOS 는 (포털 capability + 프로파일 재생성)이 따라와야 한다. Android 는 대부분 자동(권한은 매니페스트 자동 병합). **프론트/웹 변경만이면 앱 재배포 자체가 불필요**(§1).
+
+---
+
+## 9. iOS 푸시(FCM) 활성화 런북
+
+`features.push: true` + `firebase.enabled/fcm: true` 인 앱을 **iOS 에서 실제로 푸시 수신**하려면, 하네스 자동 배선 외에 **Apple·Firebase·백엔드 선행 작업**이 필요하다. **순서 중요** — 안 지키면 iOS 빌드가 깨진다(§6 associated-domains 와 동일 실패모드).
+
+### 하네스가 자동으로 하는 것 (generate-app / CI / 브릿지)
+- App.entitlements `aps-environment=production` + Info.plist `UIBackgroundModes: remote-notification`
+- `firebase.fcm` 이면 pbxproj 에 `GoogleService-Info.plist` 번들 리소스 등록 + AppDelegate `FirebaseApp.configure()`
+- 브릿지가 iOS 에선 `@capacitor-community/fcm` 로 **FCM 토큰**을 받아 `auth.deviceEndpoint` 로 등록 (Android 는 push-notifications 토큰이 이미 FCM)
+- CI 가 `GOOGLE_SERVICE_INFO_PLIST_B64_<SLUG>` 시크릿을 `ios/App/App/GoogleService-Info.plist` 로 주입
+
+### 사람이 해야 하는 것 (반드시 이 순서)
+1. **Firebase 콘솔** — 프로젝트에 iOS 앱(번들ID = appId) 추가 → `GoogleService-Info.plist` 다운로드. 그리고 **Cloud Messaging → APNs 인증키(.p8) 업로드**(Key ID/Team ID). ← 없으면 FCM→APNs 전달 자체가 안 됨.
+2. **Apple 포털** — App ID 에 **Push Notifications** capability 켜기(Save→Confirm) → **match 프로파일 재생성**:
+   ```bash
+   /opt/homebrew/bin/fastlane ios regen_profile slug:<slug>
+   ```
+   ⚠️ 이 단계 없이 빌드하면 `aps-environment` 때문에 §6 처럼 서명 실패.
+3. **GitHub 시크릿** — plist 를 base64 로 등록:
+   ```bash
+   gh secret set GOOGLE_SERVICE_INFO_PLIST_B64_<SLUG_대문자_언더스코어> --body "$(base64 -i GoogleService-Info.plist | tr -d '\n')"
+   ```
+   (로컬 빌드는 `build/<slug>/ios/App/App/GoogleService-Info.plist` 에 직접 배치.)
+   ⚠️ `firebase.fcm` 앱은 이 시크릿이 **필수** — 없으면 pbxproj 가 참조하는 리소스 누락으로 iOS 빌드 실패.
+4. **백엔드** — `deviceEndpoint(/api/push/register)` 로 등록된 `platform:'ios'` FCM 토큰에, 답변 완성 등 이벤트 시 **FCM 발송**.
+5. iOS 재빌드/재배포 → 실기기에서 알림 권한 허용 → 수신 확인.
+
+### 검증 (계층 분리 — §8 표 참고)
+Android 먼저 → Firebase 콘솔 "테스트 메시지"로 앱 계층 격리 → deviceEndpoint 토큰 등록 로그 → 백엔드 발송.
+
+> ⚠️ **미검증 포인트**(실기기 빌드로 확인 필요): `@capacitor-community/fcm` 의 Capacitor 8 호환, pbxproj `GoogleService-Info.plist` 리소스 등록, AppDelegate `FirebaseApp.configure()` 주입, FCM 토큰 취득 경로.

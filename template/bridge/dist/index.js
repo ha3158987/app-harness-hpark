@@ -201,7 +201,19 @@ class AppBridgeImpl {
     }
     return new Promise((resolve) => {
       const done = (token) => { if (token) this._registerDeviceToken(token); resolve({ granted: true, token }); };
-      PushNotifications.addListener('registration', (t) => done(t.value));
+      // iOS: registration 이벤트의 값은 APNs 토큰이므로, FCM 백엔드용으로는 @capacitor-community/fcm
+      //   으로 FCM 토큰을 별도 취득한다. Android: registration 토큰이 이미 FCM 토큰.
+      PushNotifications.addListener('registration', async (t) => {
+        if (this.platform === 'ios') {
+          try {
+            const { FCM } = await import('@capacitor-community/fcm');
+            const { token } = await FCM.getToken();
+            done(token);
+            return;
+          } catch { /* FCM 플러그인/설정 없으면 APNs 토큰으로 폴백 */ }
+        }
+        done(t.value);
+      });
       PushNotifications.addListener('registrationError', () => resolve({ granted: true }));
       PushNotifications.register();
     });
