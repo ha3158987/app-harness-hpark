@@ -55,7 +55,7 @@
   "firebase": {
     "enabled": true,
     "project": {
-      "dev": "pop-chat-61daf"
+      "dev": "poptale-chat"
     },
     "fcm": true
   }
