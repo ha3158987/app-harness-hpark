@@ -594,7 +594,8 @@ function patchIosPushBackgroundMode(buildDir) {
 }
 
 // (3) GoogleService-Info.plist 를 App 타깃 번들 리소스로 등록(pbxproj). 실제 파일은
-//     CI(release.yml) 또는 로컬 secrets 가 build/<slug>/ios/App/App/GoogleService-Info.plist 로 넣는다.
+//     CI(release.yml) 또는 로컬 secrets 가 build/<slug>/ios/App/GoogleService-Info.plist 로 넣는다.
+//     (pbxproj 참조가 sourceTree "<group>"=SOURCE_ROOT 로 잡혀 ios/App/ 기준으로 찾으므로 그 위치에 둔다.)
 //     ⚠️ 이 참조를 넣으면 빌드 시 그 경로에 파일이 반드시 있어야 한다(없으면 xcodebuild 실패) → 시크릿 필수(DEPLOY.md §9).
 function patchIosGoogleServicePlistRef(buildDir) {
   const pbx = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');

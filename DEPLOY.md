@@ -149,7 +149,7 @@ error: Provisioning profile "match AppStore <appId>" doesn't include the Associa
 - App.entitlements `aps-environment=production` + Info.plist `UIBackgroundModes: remote-notification`
 - `firebase.fcm` 이면 pbxproj 에 `GoogleService-Info.plist` 번들 리소스 등록 + AppDelegate `FirebaseApp.configure()`
 - 브릿지가 iOS 에선 `@capacitor-community/fcm` 로 **FCM 토큰**을 받아 `auth.deviceEndpoint` 로 등록 (Android 는 push-notifications 토큰이 이미 FCM)
-- CI 가 `GOOGLE_SERVICE_INFO_PLIST_B64_<SLUG>` 시크릿을 `ios/App/App/GoogleService-Info.plist` 로 주입
+- CI 가 `GOOGLE_SERVICE_INFO_PLIST_B64_<SLUG>` 시크릿을 `ios/App/GoogleService-Info.plist` 로 주입
 
 ### 사람이 해야 하는 것 (반드시 이 순서)
 1. **Firebase 콘솔** — 프로젝트에 iOS 앱(번들ID = appId) 추가 → `GoogleService-Info.plist` 다운로드. 그리고 **Cloud Messaging → APNs 인증키(.p8) 업로드**(Key ID/Team ID). ← 없으면 FCM→APNs 전달 자체가 안 됨.
@@ -162,7 +162,7 @@ error: Provisioning profile "match AppStore <appId>" doesn't include the Associa
    ```bash
    gh secret set GOOGLE_SERVICE_INFO_PLIST_B64_<SLUG_대문자_언더스코어> --body "$(base64 -i GoogleService-Info.plist | tr -d '\n')"
    ```
-   (로컬 빌드는 `build/<slug>/ios/App/App/GoogleService-Info.plist` 에 직접 배치.)
+   (로컬 빌드는 `build/<slug>/ios/App/GoogleService-Info.plist` 에 직접 배치.)
    ⚠️ `firebase.fcm` 앱은 이 시크릿이 **필수** — 없으면 pbxproj 가 참조하는 리소스 누락으로 iOS 빌드 실패.
 4. **백엔드** — `deviceEndpoint(/api/push/register)` 로 등록된 `platform:'ios'` FCM 토큰에, 답변 완성 등 이벤트 시 **FCM 발송**.
 5. iOS 재빌드/재배포 → 실기기에서 알림 권한 허용 → 수신 확인.

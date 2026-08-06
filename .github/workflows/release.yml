@@ -172,7 +172,7 @@ jobs:
           GSI_B64: ${{ secrets[format('GOOGLE_SERVICE_INFO_PLIST_B64_{0}', needs.resolve.outputs.slug_env)] }}
         run: |
           if [ -n "$GSI_B64" ]; then
-            echo "$GSI_B64" | base64 -d > "build/$SLUG/ios/App/App/GoogleService-Info.plist"
+            echo "$GSI_B64" | base64 -d > "build/$SLUG/ios/App/GoogleService-Info.plist"
             echo "GoogleService-Info.plist 배치됨 (iOS FCM 활성)"
           else
             echo "::notice::GOOGLE_SERVICE_INFO_PLIST_B64_* 시크릿 없음 — iOS FCM 미사용으로 진행"
