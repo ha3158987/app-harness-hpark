@@ -201,19 +201,32 @@ class AppBridgeImpl {
     }
     return new Promise((resolve) => {
       const done = (token) => { if (token) this._registerDeviceToken(token); resolve({ granted: true, token }); };
-      // iOS: registration 이벤트의 값은 APNs 토큰이므로, FCM 백엔드용으로는 @capacitor-community/fcm
-      //   으로 FCM 토큰을 별도 취득한다. Android: registration 토큰이 이미 FCM 토큰.
-      PushNotifications.addListener('registration', async (t) => {
-        if (this.platform === 'ios') {
-          try {
-            const { FCM } = await import('@capacitor-community/fcm');
-            const { token } = await FCM.getToken();
-            done(token);
-            return;
-          } catch { /* FCM 플러그인/설정 없으면 APNs 토큰으로 폴백 */ }
-        }
-        done(t.value);
-      });
+
+      if (this.platform === 'ios') {
+        // iOS: Firebase 스위즐링이 APNs 등록 콜백을 가로채 @capacitor/push-notifications 의
+        //   'registration' 이벤트가 안 뜨는 경우가 있다(실기기 확인). 그 이벤트를 기다리면 hang.
+        //   → register() 로 APNs 등록만 트리거하고, FCM 토큰은 @capacitor-community/fcm 으로
+        //   직접 취득한다(APNs 토큰이 Firebase Messaging 에 셋될 때까지 재시도). FCM 토큰이 BE 규약.
+        PushNotifications.addListener('registrationError', () => resolve({ granted: true }));
+        PushNotifications.register();
+        (async () => {
+          let FCM;
+          try { ({ FCM } = await import('@capacitor-community/fcm')); }
+          catch { return resolve({ granted: true }); } // 플러그인 미설치 → 토큰 없이 종료(hang 방지)
+          for (let i = 0; i < 20; i++) {                // 최대 ~10초: APNs→Firebase 연결 대기
+            try {
+              const { token } = await FCM.getToken();
+              if (token) return done(token);
+            } catch { /* 아직 준비 전 — 재시도 */ }
+            await new Promise((r) => setTimeout(r, 500));
+          }
+          resolve({ granted: true });                   // 타임아웃 — 토큰 못 받아도 hang 은 방지
+        })();
+        return;
+      }
+
+      // Android: registration 토큰이 곧 FCM 토큰.
+      PushNotifications.addListener('registration', (t) => done(t.value));
       PushNotifications.addListener('registrationError', () => resolve({ granted: true }));
       PushNotifications.register();
     });
