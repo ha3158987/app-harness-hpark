@@ -213,12 +213,17 @@ class AppBridgeImpl {
           let FCM;
           try { ({ FCM } = await import('@capacitor-community/fcm')); }
           catch { return resolve({ granted: true }); } // 플러그인 미설치 → 토큰 없이 종료(hang 방지)
-          for (let i = 0; i < 20; i++) {                // 최대 ~10초: APNs→Firebase 연결 대기
+          // APNs 토큰이 Firebase Messaging 에 붙고 Firebase Installations 등록이 끝날 때까지 대기한다.
+          //   ⚠️ 짧은 간격으로 두드리면 FIS 가 'Too many server requests'(Code=2) 로 rate-limit 걸어
+          //   영영 실패한다(실기기 확인). 그래서 백오프하며, 신규 설치 직후 APNs 준비에 수 초~수십 초가
+          //   걸릴 수 있으므로 총 ~40초까지 기다린다.
+          const delays = [1500, 2500, 4000, 6000, 8000, 8000, 8000]; // 총 ~38s
+          for (let i = 0; i < delays.length; i++) {
+            await new Promise((r) => setTimeout(r, delays[i]));
             try {
               const { token } = await FCM.getToken();
               if (token) return done(token);
-            } catch { /* 아직 준비 전 — 재시도 */ }
-            await new Promise((r) => setTimeout(r, 500));
+            } catch { /* 아직 준비 전(APNs 미셋 / FIS 등록중) — 백오프 후 재시도 */ }
           }
           resolve({ granted: true });                   // 타임아웃 — 토큰 못 받아도 hang 은 방지
         })();
