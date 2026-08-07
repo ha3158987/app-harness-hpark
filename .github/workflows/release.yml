@@ -163,6 +163,21 @@ jobs:
             echo "apps/$SLUG/icon.png 없음 — 기본 아이콘으로 진행"
           fi
 
+      - name: GoogleService-Info.plist 주입 (iOS FCM — 시크릿 → 파일)
+        # firebase.enabled+fcm 앱의 iOS 푸시용. 시크릿 미설정이면 스킵(비 FCM iOS 앱).
+        # 시크릿 이름: GOOGLE_SERVICE_INFO_PLIST_B64_<SLUG 대문자, -는 _> (base64 원문)
+        # ⚠️ generate-app 이 firebase.fcm 일 때 pbxproj 에 이 plist 를 리소스로 등록하므로,
+        #    firebase.fcm 앱은 이 시크릿이 반드시 있어야 빌드가 통과한다(없으면 리소스 누락으로 실패).
+        env:
+          GSI_B64: ${{ secrets[format('GOOGLE_SERVICE_INFO_PLIST_B64_{0}', needs.resolve.outputs.slug_env)] }}
+        run: |
+          if [ -n "$GSI_B64" ]; then
+            echo "$GSI_B64" | base64 -d > "build/$SLUG/ios/App/GoogleService-Info.plist"
+            echo "GoogleService-Info.plist 배치됨 (iOS FCM 활성)"
+          else
+            echo "::notice::GOOGLE_SERVICE_INFO_PLIST_B64_* 시크릿 없음 — iOS FCM 미사용으로 진행"
+          fi
+
       - name: 배포 인증서 키체인 주입 (match 빈암호 p12 macOS 이슈 우회)
         env:
           IOS_DIST_P12_BASE64: ${{ secrets.IOS_DIST_P12_BASE64 }}

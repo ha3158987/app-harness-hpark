@@ -32,13 +32,20 @@ end
 
 # ──────────────────────────── iOS ────────────────────────────
 platform :ios do
-  # CI: App Store Connect API 키가 env 로 있으면 사용(Apple ID 2FA 회피). 없으면 기존 방식.
+  # App Store Connect API 키(Apple ID 2FA 회피). CI 는 env(APP_STORE_CONNECT_API_KEY_KEY)로 주입.
+  # 로컬은 .env 의 키 본문이 비어 있으면 secrets/asc_api_key.p8 "내용"으로 폴백한다.
+  # ⚠️ key_filepath 로 넘기면 이 fastlane/OpenSSL 조합에서 'invalid curve name' 으로 깨진다 —
+  #    반드시 파일을 읽어 key_content 로 넘긴다(검증된 경로). CI 는 env 경로라 무관.
   before_all do
-    if ENV['APP_STORE_CONNECT_API_KEY_KEY_ID'] && ENV['APP_STORE_CONNECT_API_KEY_KEY']
+    key_id      = ENV['APP_STORE_CONNECT_API_KEY_KEY_ID']
+    key_content = ENV['APP_STORE_CONNECT_API_KEY_KEY']
+    local_p8    = File.join(REPO_ROOT, 'secrets', 'asc_api_key.p8')
+    key_content = File.read(local_p8) if (key_content.nil? || key_content.strip.empty?) && File.exist?(local_p8)
+    if key_id && !key_id.to_s.strip.empty? && key_content && !key_content.strip.empty?
       app_store_connect_api_key(
-        key_id: ENV['APP_STORE_CONNECT_API_KEY_KEY_ID'],
+        key_id: key_id,
         issuer_id: ENV['APP_STORE_CONNECT_API_KEY_ISSUER_ID'],
-        key_content: ENV['APP_STORE_CONNECT_API_KEY_KEY'],
+        key_content: key_content,
         in_house: false
       )
     end
@@ -94,6 +101,20 @@ platform :ios do
       distribute_external: false # 내부 테스터까지만. 외부 배포/심사 제출은 사람이.
     )
     UI.success("TestFlight 업로드 완료 (#{slug}). 외부 배포/심사 제출은 App Store Connect 에서 직접.")
+  end
+
+  # App ID 에서 capability(딥링크=Associated Domains / 푸시 / Apple 로그인 등)를 켠 뒤,
+  # 그 변경을 반영해 appstore 프로비저닝 프로파일을 재생성한다. CI 의 match 는 readonly 라
+  # 스스로 못 고치므로, 이 lane 을 로컬에서 1회 돌린 뒤 CI(release)를 iOS 로 재실행한다.
+  #   /opt/homebrew/bin/fastlane ios regen_profile slug:<slug>
+  # (기본 rbenv fastlane 은 시스템 Ruby+LibreSSL → .p8 파싱이 'invalid curve name' 으로 깨짐.
+  #  반드시 Homebrew fastlane 절대경로로 실행. ASC 키는 before_all 이 secrets/asc_api_key.p8 로 폴백.)
+  desc 'App ID capability 변경 후 appstore 프로파일 재생성(readonly off + force). 로컬 전용.'
+  lane :regen_profile do |options|
+    slug = require_slug(options)
+    app_id = app_config(slug)['appId']
+    match(type: 'appstore', app_identifier: app_id, readonly: false, force: true)
+    UI.success("프로파일 재생성 완료: #{app_id} — 이제 CI(release)를 iOS 로 재실행하세요.")
   end
 end
 
