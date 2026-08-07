@@ -217,13 +217,27 @@ class AppBridgeImpl {
           //   ⚠️ 짧은 간격으로 두드리면 FIS 가 'Too many server requests'(Code=2) 로 rate-limit 걸어
           //   영영 실패한다(실기기 확인). 그래서 백오프하며, 신규 설치 직후 APNs 준비에 수 초~수십 초가
           //   걸릴 수 있으므로 총 ~40초까지 기다린다.
-          const delays = [1500, 2500, 4000, 6000, 8000, 8000, 8000]; // 총 ~38s
+          //   ⚠️⚠️ 한 번 FIS rate-limit 에 걸린 FID 는 앱을 지우고 재설치해도 안 풀린다(iOS 키체인에
+          //   FID 가 잔존해 같은 ID 를 재사용 → 같은 throttle). 이때는 FCM.deleteInstance()
+          //   = Installations.delete() 로 키체인의 FID 를 삭제하면 새 FID 가 발급돼 throttle 과
+          //   무관해진다. 초기 몇 번의 실패는 'APNs 미준비'일 수도 있으므로 충분히 기다린 뒤
+          //   (연속 3회 실패 ≈ 8s+) 1회만 초기화하고, 새 FID 로 남은 시도를 이어간다.
+          const delays = [1500, 2500, 4000, 6000, 8000, 8000, 8000, 8000]; // 총 ~46s
+          let didReset = false, fails = 0;
           for (let i = 0; i < delays.length; i++) {
             await new Promise((r) => setTimeout(r, delays[i]));
             try {
               const { token } = await FCM.getToken();
               if (token) return done(token);
-            } catch { /* 아직 준비 전(APNs 미셋 / FIS 등록중) — 백오프 후 재시도 */ }
+            } catch {
+              // 아직 준비 전(APNs 미셋 / FIS 등록중)이거나 stuck FID(throttle). 후자는 초기화로 복구.
+              fails++;
+              if (!didReset && fails >= 3) {
+                didReset = true;
+                try { await FCM.deleteInstance(); } catch { /* delete 도 throttle 일 수 있음 — 무시 */ }
+                await new Promise((r) => setTimeout(r, 2000)); // 새 FID 생성 여유
+              }
+            }
           }
           resolve({ granted: true });                   // 타임아웃 — 토큰 못 받아도 hang 은 방지
         })();
