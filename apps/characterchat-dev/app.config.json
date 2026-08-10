@@ -5,7 +5,7 @@
   "startUrl": "https://chat.dev.poptale.ai",
   "version": {
     "name": "1.0.0",
-    "code": 8
+    "code": 10
   },
   "theme": {
     "primary": "#000000",
