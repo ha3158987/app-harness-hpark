@@ -30,6 +30,34 @@ def require_slug(options)
   slug
 end
 
+# 알림에 캐릭터 프로필 사진을 붙이는 Notification Service Extension 의 타깃명.
+# generate-app.mjs 의 NSE_NAME 과 **같은 값이어야 한다** — 다르면 서명 대상이 안 잡혀
+# archive 가 실패한다.
+IOS_NSE_TARGET = 'NotificationService'
+
+# 확장은 **별개 번들 id** 를 갖고, 따라서 **별개 프로비저닝 프로파일**이 필요하다.
+# 이걸 빼면 릴리즈가 두 군데서 깨진다:
+#   1. archive — 확장 타깃이 자동서명에 남아 수동서명 앱과 섞인다
+#   2. export  — provisioningProfiles 맵에 확장 항목이 없다
+def ios_ext_app_id(app_id)
+  "#{app_id}.#{IOS_NSE_TARGET}"
+end
+
+# 이 빌드에 확장이 실제로 들어있는지 — 프로젝트에 **app-extension 타깃**이 있는지로
+# 판단한다. push/firebase 를 끈 앱은 확장이 없고, 그때 확장 프로파일을 요구하면
+# match 가 없는 프로파일을 찾다 CI 를 멈춘다.
+#
+# `.appex` 문자열 포함만으로 보면 안 된다 — 주석·다른 타깃의 참조에도 그 문자열이
+# 나올 수 있어 확장이 없는데 있다고 오판할 수 있다. 네이티브 타깃 선언에 이름과
+# app-extension productType 이 함께 있는지를 본다.
+def ios_has_nse?(build_path)
+  pbx = File.join(build_path, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj')
+  return false unless File.exist?(pbx)
+  txt = File.read(pbx)
+  txt.match?(/name = #{Regexp.escape(IOS_NSE_TARGET)};[^}]*productType = "com\.apple\.product-type\.app-extension"/m) ||
+    txt.match?(/productType = "com\.apple\.product-type\.app-extension";[^}]*name = #{Regexp.escape(IOS_NSE_TARGET)};/m)
+end
+
 # ──────────────────────────── iOS ────────────────────────────
 platform :ios do
   # App Store Connect API 키(Apple ID 2FA 회피). CI 는 env(APP_STORE_CONNECT_API_KEY_KEY)로 주입.
@@ -60,8 +88,16 @@ platform :ios do
     workspace = File.join(build_path, 'ios', 'App', 'App.xcworkspace')
     project = File.join(build_path, 'ios', 'App', 'App.xcodeproj')
 
+    # 알림 확장(Notification Service Extension)은 별개 번들 id → 별개 프로파일.
+    has_nse = ios_has_nse?(build_path)
+    ext_id = ios_ext_app_id(app_id)
+    identifiers = has_nse ? [app_id, ext_id] : app_id
+
     # 인증서/프로비저닝: 암호화 git repo(match)에서 가져온다. 읽기전용으로.
-    match(type: 'appstore', app_identifier: app_id, readonly: true)
+    # ⚠️ 확장 프로파일이 match repo 에 아직 없으면 여기서 실패한다 — 그때는 로컬에서
+    #    `fastlane ios regen_profile slug:<slug>` 를 1회 돌려 만들어야 한다(그 lane 도
+    #    확장 id 를 같이 생성한다).
+    match(type: 'appstore', app_identifier: identifiers, readonly: true)
 
     # Capacitor 기본 프로젝트는 자동서명(팀 미지정) → CI archive 실패.
     # match 로 받은 프로파일로 수동서명 전환. team/profile 은 match 가 ENV 로 노출한 값 사용.
@@ -77,6 +113,36 @@ platform :ios do
       targets: ['App']
     )
 
+    profiles = { app_id => profile_name }
+    if has_nse
+      # match 가 확장 프로파일을 실제로 가져왔는지 **여기서 확인한다.** 안 하면
+      # 프로파일 이름을 추측한 채로 진행해, 한참 뒤 export 단계에서 맥락 없는
+      # "No profile for team … matching … found" 로 실패한다. 원인(확장 프로파일이
+      # match repo 에 없음)과 조치(regen_profile 1회 실행)가 로그에 안 남는다.
+      unless ENV["sigh_#{ext_id}_appstore"]
+        UI.user_error!(
+          "알림 확장(#{ext_id})의 appstore 프로비저닝 프로파일이 match 에 없습니다.\n" \
+          "CI 의 match 는 readonly 라 스스로 만들 수 없습니다. 로컬에서 1회 실행하세요:\n" \
+          "  /opt/homebrew/bin/fastlane ios regen_profile slug:#{slug}\n" \
+          "그 뒤 CI(release)를 iOS 로 재실행하면 됩니다."
+        )
+      end
+      # 확장도 같은 방식으로 수동서명 전환. 타깃별로 따로 호출하는 이유: 번들 id 와
+      # 프로파일이 앱과 다르므로 한 번의 호출로는 둘 다 설정할 수 없다.
+      ext_profile = ENV["sigh_#{ext_id}_appstore_profile-name"] || "match AppStore #{ext_id}"
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path: project,
+        team_id: team_id,
+        code_sign_identity: 'Apple Distribution',
+        bundle_identifier: ext_id,
+        profile_name: ext_profile,
+        targets: [IOS_NSE_TARGET]
+      )
+      profiles[ext_id] = ext_profile
+      UI.message("알림 확장 서명 배선: #{ext_id} ← #{ext_profile}")
+    end
+
     build_app(
       workspace: workspace,
       scheme: 'App',
@@ -86,7 +152,7 @@ platform :ios do
       clean: true,
       export_options: {
         signingStyle: 'manual',
-        provisioningProfiles: { app_id => profile_name }
+        provisioningProfiles: profiles
       }
     )
   end
@@ -113,8 +179,21 @@ platform :ios do
   lane :regen_profile do |options|
     slug = require_slug(options)
     app_id = app_config(slug)['appId']
-    match(type: 'appstore', app_identifier: app_id, readonly: false, force: true)
-    UI.success("프로파일 재생성 완료: #{app_id} — 이제 CI(release)를 iOS 로 재실행하세요.")
+    # 알림 확장의 프로파일도 같이 만든다. 확장은 별개 번들 id 라 프로파일도 별개이고,
+    # CI 의 match 는 readonly 라 스스로 만들 수 없다 — 여기서 안 만들면 CI 가
+    # "프로파일 없음"으로 실패한다.
+    #
+    # 프로젝트가 이미 생성돼 있고 그 안에 확장이 **없으면** 확장 id 는 건너뛴다.
+    # 안 쓰는 App ID 를 만들려다 팀 정책에 막히면 이 lane 전체가 실패하는데, 그건
+    # 앱 프로파일 재발급만 필요한 경우까지 못 하게 만든다.
+    #
+    # 프로젝트가 아직 없으면(generate-app 전) 확장 여부를 알 수 없어 같이 만든다 —
+    # 안 쓰는 프로파일 하나가 남는 편이, CI 에서 없어서 멈추는 것보다 낫다.
+    build_path = File.join(REPO_ROOT, 'build', slug)
+    include_ext = !Dir.exist?(build_path) || ios_has_nse?(build_path)
+    ids = include_ext ? [app_id, ios_ext_app_id(app_id)] : app_id
+    match(type: 'appstore', app_identifier: ids, readonly: false, force: true)
+    UI.success("프로파일 재생성 완료: #{Array(ids).join(', ')} — 이제 CI(release)를 iOS 로 재실행하세요.")
   end
 end
 

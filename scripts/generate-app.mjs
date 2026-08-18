@@ -689,6 +689,365 @@ function patchAndroidSigning(buildDir) {
   log.ok('android/app/build.gradle: 릴리즈 서명 설정(keystore.properties 조건부)');
 }
 
+// (5) iOS Notification Service Extension — 푸시 알림에 캐릭터 프로필 사진을 붙인다.
+//
+// 왜 확장이 필요한가: **APNs 는 페이로드로 이미지를 못 붙인다.** Android 는 FCM SDK 가
+// `notification.image` 를 받아 펼친 큰 사진과 접힌 `largeIcon`(프로필 자리)에 알아서
+// 쓰지만, iOS 는 `mutable-content: 1` 로 확장을 깨워 확장이 직접 내려받아 첨부하는
+// 경로밖에 없다. 확장이 없으면 서버가 이미지를 보내도 앱 아이콘만 뜬다.
+//
+// 다운로드 코드는 직접 쓰지 않는다. FCM iOS SDK 의
+// `Messaging.serviceExtension().populateNotificationContent` 가 `apns.fcm_options.image`
+// 를 보고 내려받아 첨부까지 해 준다 — 서버가 그 키를 보내고 있다(BE `fcm.py`).
+//
+// pbxproj 는 문자열 앵커로 직접 편집한다(이 파일의 다른 patch 들과 같은 방식). 새 타깃
+// 하나는 14개 섹션에 걸쳐 있어 양이 많지만, 고정 24-hex ID 를 쓰므로 재실행해도
+// 같은 결과가 되고(idempotent) 의존성이 늘지 않는다. 앵커를 못 찾으면 경고만 남기고
+// 아무것도 쓰지 않는다 — 반쯤 편집된 프로젝트 파일은 Xcode 가 아예 못 여는 게 최악이라
+// 실패는 눈에 보이는 쪽으로 둔다.
+const NSE_NAME = 'NotificationService';
+// 이 블록의 고정 ID들 — `FC…0C…` 대역. 다른 patch(0A/0B 대역)와 겹치지 않는다.
+const NSE_IDS = {
+  group: 'FC00000000000000000C0001',
+  appexRef: 'FC00000000000000000C0002',
+  swiftRef: 'FC00000000000000000C0003',
+  plistRef: 'FC00000000000000000C0004',
+  swiftBuild: 'FC00000000000000000C0005',
+  appexBuild: 'FC00000000000000000C0006',
+  sources: 'FC00000000000000000C0007',
+  frameworks: 'FC00000000000000000C0008',
+  resources: 'FC00000000000000000C0009',
+  target: 'FC00000000000000000C000A',
+  cfgDebug: 'FC00000000000000000C000B',
+  cfgRelease: 'FC00000000000000000C000C',
+  cfgList: 'FC00000000000000000C000D',
+  proxy: 'FC00000000000000000C000E',
+  dependency: 'FC00000000000000000C000F',
+  embed: 'FC00000000000000000C0010',
+};
+
+const NSE_SWIFT = `// 하네스 자동 생성 (scripts/generate-app.mjs) — 직접 수정하면 재생성 시 덮어씁니다.
+//
+// 푸시 알림에 캐릭터 프로필 사진을 붙이는 확장. APNs 는 페이로드만으로 이미지를
+// 붙일 수 없어서, 서버가 \`mutable-content: 1\` 로 이 확장을 깨우고 여기서 이미지를
+// 내려받아 첨부한다.
+//
+// 다운로드/첨부는 FCM SDK 헬퍼가 한다 — \`apns.fcm_options.image\` 를 읽는다.
+// 직접 URLSession 을 굴리지 않는 이유: 캐싱·타임아웃·파일 확장자 판별을 SDK 가
+// 이미 처리하고, 서버가 보내는 키와 계약이 한곳에 모인다.
+
+import UserNotifications
+import FirebaseMessaging
+
+final class NotificationService: UNNotificationServiceExtension {
+  private var contentHandler: ((UNNotificationContent) -> Void)?
+  private var bestAttempt: UNMutableNotificationContent?
+
+  override func didReceive(
+    _ request: UNNotificationRequest,
+    withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
+  ) {
+    self.contentHandler = contentHandler
+    guard let mutable = request.content.mutableCopy() as? UNMutableNotificationContent else {
+      // 복제 실패는 이론상 없지만, 그때도 알림 자체는 떠야 한다(이미지만 포기).
+      contentHandler(request.content)
+      return
+    }
+    self.bestAttempt = mutable
+    Messaging.serviceExtension().populateNotificationContent(mutable, withContentHandler: contentHandler)
+  }
+
+  override func serviceExtensionTimeWillExpire() {
+    // 시간이 다 되면 지금까지 만든 내용으로 낸다. 이걸 빼면 이미지 다운로드가 느릴 때
+    // **알림이 아예 안 뜬다** — 사진보다 알림이 뜨는 게 중요하다.
+    if let handler = contentHandler, let content = bestAttempt {
+      handler(content)
+    }
+  }
+}
+`;
+
+function nseInfoPlist() {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+\t<key>CFBundleDisplayName</key>
+\t<string>${NSE_NAME}</string>
+\t<key>CFBundleExecutable</key>
+\t<string>$(EXECUTABLE_NAME)</string>
+\t<key>CFBundleIdentifier</key>
+\t<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+\t<key>CFBundleInfoDictionaryVersion</key>
+\t<string>6.0</string>
+\t<key>CFBundleName</key>
+\t<string>$(PRODUCT_NAME)</string>
+\t<key>CFBundlePackageType</key>
+\t<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+\t<key>CFBundleShortVersionString</key>
+\t<string>$(MARKETING_VERSION)</string>
+\t<key>CFBundleVersion</key>
+\t<string>$(CURRENT_PROJECT_VERSION)</string>
+\t<key>NSExtension</key>
+\t<dict>
+\t\t<key>NSExtensionPointIdentifier</key>
+\t\t<string>com.apple.usernotifications.service</string>
+\t\t<key>NSExtensionPrincipalClass</key>
+\t\t<string>$(PRODUCT_MODULE_NAME).${NSE_NAME}</string>
+\t</dict>
+</dict>
+</plist>
+`;
+}
+
+// Podfile 에 확장 타깃을 추가한다. `pod install` 은 이 뒤(cap sync)에 돌아가므로
+// 그때 Pods-NotificationService.*.xcconfig 가 생기고 baseConfigurationReference 도
+// CocoaPods 가 알아서 연결한다.
+function patchIosPodfileNotificationExtension(buildDir) {
+  const podfile = join(buildDir, 'ios', 'App', 'Podfile');
+  if (!existsSync(podfile)) return true;
+  let txt = readFileSync(podfile, 'utf8');
+  if (txt.includes(`target '${NSE_NAME}'`)) return true; // idempotent
+  // `target 'App' do` … 그 블록의 **첫** `end` 까지. 홑/쌍따옴표 둘 다 받는다.
+  // 비탐욕(`*?`)이라 중첩 블록이 있으면 안쪽 end 에서 끊기는데, 그건 삽입 위치가
+  // 조금 이를 뿐 유효한 Podfile 이다(타깃 블록 사이에 들어간다).
+  const anchor = /\ntarget ['"]App['"] do\n[\s\S]*?\nend\n/;
+  if (!anchor.test(txt)) {
+    log.warn(`Podfile 의 target 'App' 블록을 못 찾음 — ${NSE_NAME} pod 수동 추가 필요.`);
+    return false;
+  }
+  // FirebaseMessaging 만 넣는다. 확장은 앱과 별개 바이너리라 Capacitor 플러그인 전체를
+  // 링크할 이유가 없고, 넣으면 확장 크기 제한(메모리 24MB)에 불리하다.
+  txt = txt.replace(anchor, (m) => `${m}\ntarget '${NSE_NAME}' do\n  pod 'FirebaseMessaging'\nend\n`);
+  writeFileSync(podfile, txt);
+  log.ok(`iOS Podfile: target '${NSE_NAME}' (pod FirebaseMessaging) 추가`);
+  return true;
+}
+
+function patchIosNotificationServiceExtension(buildDir, cfg) {
+  const iosApp = join(buildDir, 'ios', 'App');
+  const pbxPath = join(iosApp, 'App.xcodeproj', 'project.pbxproj');
+  if (!existsSync(pbxPath)) return;
+  let txt = readFileSync(pbxPath, 'utf8');
+  if (txt.includes(NSE_IDS.target) || txt.includes(`${NSE_NAME}.appex`)) {
+    // 이미 등록됨 — Podfile 만 확인(먼저 실패한 실행의 잔여 상태 보정).
+    patchIosPodfileNotificationExtension(buildDir);
+    return;
+  }
+  // 확장 타깃 이름이 Podfile 표기와 어긋나면 안 되므로 `target '…'`(홑따옴표) 형태를
+  // 전제로 한다. Capacitor 가 생성하는 Podfile 이 그 형태다.
+
+  // 앵커 탐색 — 하드코딩 대신 프로젝트에서 읽는다(Capacitor 템플릿이 바뀌어도 견딘다).
+  const appTarget = txt.match(/([0-9A-F]{24}) \/\* App \*\/ = \{\s*\n\s*isa = PBXNativeTarget;/);
+  const mainGroup = txt.match(/mainGroup = ([0-9A-F]{24});/);
+  const productsGroup = txt.match(/([0-9A-F]{24}) \/\* Products \*\/ = \{/);
+
+  // 빌드 설정은 **App 타깃의 설정 블록 안에서만** 읽는다. 파일 전체에서 첫 매칭을
+  // 쓰면 다른 타깃(테스트·위젯, 그리고 이 확장 자체)의 값이 잡혀 확장 번들 id 가
+  // `엉뚱한앱id.NotificationService` 가 되거나 배포 설정이 앱과 어긋난다.
+  const appCfgListId = txt.match(
+    new RegExp(`${appTarget?.[1] ?? '\\x00'} \\/\\* App \\*\\/ = \\{[\\s\\S]*?buildConfigurationList = ([0-9A-F]{24})`),
+  )?.[1];
+  let appSettingsText = '';
+  if (appCfgListId) {
+    const cfgListBlock = txt.match(
+      new RegExp(`${appCfgListId}[^=]*= \\{\\s*\\n\\s*isa = XCConfigurationList;[\\s\\S]*?buildConfigurations = \\(([\\s\\S]*?)\\);`),
+    )?.[1];
+    for (const id of cfgListBlock?.match(/[0-9A-F]{24}/g) ?? []) {
+      const block = txt.match(new RegExp(`${id}[^=]*= \\{\\s*\\n\\s*isa = XCBuildConfiguration;[\\s\\S]*?\\n\\t\\t\\};`));
+      if (block) appSettingsText += block[0];
+    }
+  }
+  const pick = (key) => appSettingsText.match(new RegExp(`${key} = ([^;\\n]+);`));
+
+  const bundleId = pick('PRODUCT_BUNDLE_IDENTIFIER');
+  const deployTarget = pick('IPHONEOS_DEPLOYMENT_TARGET');
+  const swiftVersion = pick('SWIFT_VERSION');
+  const team = pick('DEVELOPMENT_TEAM');
+  // 버전은 App 타깃과 반드시 같아야 한다 — 다르면 App Store 업로드가 거부된다.
+  const marketing = pick('MARKETING_VERSION');
+  const projectVersion = pick('CURRENT_PROJECT_VERSION');
+
+  const missing = [];
+  if (!appSettingsText) missing.push('App 타깃 빌드 설정');
+  if (!appTarget) missing.push('App 네이티브 타깃');
+  if (!mainGroup) missing.push('mainGroup');
+  if (!productsGroup) missing.push('Products 그룹');
+  if (!bundleId) missing.push('PRODUCT_BUNDLE_IDENTIFIER');
+  if (missing.length) {
+    log.warn(`iOS ${NSE_NAME} 확장 등록 실패(앵커 없음: ${missing.join(', ')}) — Xcode 에서 수동 추가 필요.`);
+    return;
+  }
+
+  const APP_TARGET = appTarget[1];
+  const MAIN_GROUP = mainGroup[1];
+  const PRODUCTS_GROUP = productsGroup[1];
+  const EXT_BUNDLE_ID = `${bundleId[1].trim()}.${NSE_NAME}`;
+  const DEPLOY = (deployTarget?.[1] ?? '15.0').trim();
+  const SWIFT = (swiftVersion?.[1] ?? '5.0').trim();
+
+  // Podfile 을 **먼저** 고친다. 확장 Swift 는 `import FirebaseMessaging` 을 하므로
+  // pod 없이 타깃만 생기면 빌드가 깨진다 — "타깃 없음"보다 "빌드 안 되는 타깃"이
+  // 나쁘다. 실패하면 pbxproj 는 손대지 않고 여기서 끝낸다.
+  if (!patchIosPodfileNotificationExtension(buildDir)) {
+    log.warn(`iOS ${NSE_NAME} 확장 등록을 건너뛴다 — Podfile 을 고칠 수 없어 빌드가 깨진다.`);
+    return;
+  }
+
+  // 소스 파일 먼저 — pbxproj 만 고쳐 놓고 파일이 없으면 빌드가 깨진다.
+  const extDir = join(iosApp, NSE_NAME);
+  mkdirSync(extDir, { recursive: true });
+  writeFileSync(join(extDir, `${NSE_NAME}.swift`), NSE_SWIFT);
+  writeFileSync(join(extDir, 'Info.plist'), nseInfoPlist());
+
+  const I = NSE_IDS;
+  let ok = true;
+  const anchor = (marker, insert) => {
+    if (!txt.includes(marker)) { ok = false; return; }
+    txt = txt.replace(marker, `${marker}${insert}`);
+  };
+
+  anchor('/* Begin PBXBuildFile section */\n',
+    `\t\t${I.swiftBuild} /* ${NSE_NAME}.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${I.swiftRef} /* ${NSE_NAME}.swift */; };\n` +
+    // `CodeSignOnCopy` 를 넣는다 — 임베드된 사본을 앱의 서명 아이덴티티로 다시
+    // 서명하게 한다. 없으면 배포 아카이브에서 확장 서명이 앱과 어긋나 거부될 수
+    // 있다(시뮬레이터 빌드는 서명을 안 해서 이 차이가 안 드러난다).
+    `\t\t${I.appexBuild} /* ${NSE_NAME}.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = ${I.appexRef} /* ${NSE_NAME}.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, CodeSignOnCopy, ); }; };\n`);
+
+  anchor('/* Begin PBXFileReference section */\n',
+    `\t\t${I.appexRef} /* ${NSE_NAME}.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "${NSE_NAME}.appex"; sourceTree = BUILT_PRODUCTS_DIR; };\n` +
+    `\t\t${I.swiftRef} /* ${NSE_NAME}.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "${NSE_NAME}.swift"; sourceTree = "<group>"; };\n` +
+    `\t\t${I.plistRef} /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };\n`);
+
+  anchor('/* Begin PBXGroup section */\n',
+    `\t\t${I.group} /* ${NSE_NAME} */ = {\n\t\t\tisa = PBXGroup;\n\t\t\tchildren = (\n\t\t\t\t${I.swiftRef} /* ${NSE_NAME}.swift */,\n\t\t\t\t${I.plistRef} /* Info.plist */,\n\t\t\t);\n\t\t\tpath = ${NSE_NAME};\n\t\t\tsourceTree = "<group>";\n\t\t};\n`);
+
+  // 확장 그룹을 프로젝트 루트 그룹에, .appex 를 Products 그룹에 넣는다.
+  const addChild = (groupId, child) => {
+    const re = new RegExp(`(${groupId}[^=]*= \\{\\s*\\n\\s*isa = PBXGroup;[\\s\\S]*?children = \\()`);
+    const next = txt.replace(re, `$1\n\t\t\t\t${child},`);
+    if (next === txt) {
+      ok = false;
+      log.warn(`PBXGroup ${groupId} 에 ${child} 추가 실패(패턴 불일치).`);
+      return;
+    }
+    txt = next;
+  };
+  addChild(MAIN_GROUP, `${I.group} /* ${NSE_NAME} */`);
+  addChild(PRODUCTS_GROUP, `${I.appexRef} /* ${NSE_NAME}.appex */`);
+
+  anchor('/* Begin PBXFrameworksBuildPhase section */\n',
+    `\t\t${I.frameworks} /* Frameworks */ = {\n\t\t\tisa = PBXFrameworksBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n`);
+
+  anchor('/* Begin PBXResourcesBuildPhase section */\n',
+    `\t\t${I.resources} /* Resources */ = {\n\t\t\tisa = PBXResourcesBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n`);
+
+  anchor('/* Begin PBXSourcesBuildPhase section */\n',
+    `\t\t${I.sources} /* Sources */ = {\n\t\t\tisa = PBXSourcesBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t\t${I.swiftBuild} /* ${NSE_NAME}.swift in Sources */,\n\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n`);
+
+  anchor('/* Begin PBXNativeTarget section */\n',
+    `\t\t${I.target} /* ${NSE_NAME} */ = {\n\t\t\tisa = PBXNativeTarget;\n\t\t\tbuildConfigurationList = ${I.cfgList} /* Build configuration list for PBXNativeTarget "${NSE_NAME}" */;\n\t\t\tbuildPhases = (\n\t\t\t\t${I.sources} /* Sources */,\n\t\t\t\t${I.frameworks} /* Frameworks */,\n\t\t\t\t${I.resources} /* Resources */,\n\t\t\t);\n\t\t\tbuildRules = (\n\t\t\t);\n\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = ${NSE_NAME};\n\t\t\tproductName = ${NSE_NAME};\n\t\t\tproductReference = ${I.appexRef} /* ${NSE_NAME}.appex */;\n\t\t\tproductType = "com.apple.product-type.app-extension";\n\t\t};\n`);
+
+  const extSettings = (isDebug) => [
+    'CLANG_ENABLE_MODULES = YES;',
+    'CODE_SIGN_STYLE = Automatic;',
+    `CURRENT_PROJECT_VERSION = ${(projectVersion?.[1] ?? '1').trim()};`,
+    ...(team ? [`DEVELOPMENT_TEAM = ${team[1].trim()};`] : []),
+    'INFOPLIST_FILE = NotificationService/Info.plist;',
+    `IPHONEOS_DEPLOYMENT_TARGET = ${DEPLOY};`,
+    'LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";',
+    `MARKETING_VERSION = ${(marketing?.[1] ?? '1.0.0').trim()};`,
+    'MTL_ENABLE_DEBUG_INFO = ' + (isDebug ? 'INCLUDE_SOURCE;' : 'NO;'),
+    `PRODUCT_BUNDLE_IDENTIFIER = ${EXT_BUNDLE_ID};`,
+    'PRODUCT_NAME = "$(TARGET_NAME)";',
+    'SKIP_INSTALL = YES;',
+    `SWIFT_ACTIVE_COMPILATION_CONDITIONS = ${isDebug ? 'DEBUG' : '""'};`,
+    `SWIFT_OPTIMIZATION_LEVEL = "${isDebug ? '-Onone' : '-O'}";`,
+    `SWIFT_VERSION = ${SWIFT};`,
+    'TARGETED_DEVICE_FAMILY = "1,2";',
+  ].map((line) => `\t\t\t\t${line}`).join('\n');
+
+  anchor('/* Begin XCBuildConfiguration section */\n',
+    `\t\t${I.cfgDebug} /* Debug */ = {\n\t\t\tisa = XCBuildConfiguration;\n\t\t\tbuildSettings = {\n${extSettings(true)}\n\t\t\t};\n\t\t\tname = Debug;\n\t\t};\n` +
+    `\t\t${I.cfgRelease} /* Release */ = {\n\t\t\tisa = XCBuildConfiguration;\n\t\t\tbuildSettings = {\n${extSettings(false)}\n\t\t\t};\n\t\t\tname = Release;\n\t\t};\n`);
+
+  anchor('/* Begin XCConfigurationList section */\n',
+    `\t\t${I.cfgList} /* Build configuration list for PBXNativeTarget "${NSE_NAME}" */ = {\n\t\t\tisa = XCConfigurationList;\n\t\t\tbuildConfigurations = (\n\t\t\t\t${I.cfgDebug} /* Debug */,\n\t\t\t\t${I.cfgRelease} /* Release */,\n\t\t\t);\n\t\t\tdefaultConfigurationIsVisible = 0;\n\t\t\tdefaultConfigurationName = Release;\n\t\t};\n`);
+
+  // 앱이 확장을 먼저 빌드하도록 의존성 — 없으면 첫 빌드에서 .appex 가 없어 임베드가 실패한다.
+  const projectId = txt.match(/([0-9A-F]{24}) \/\* Project object \*\/ = \{/);
+  if (!projectId) ok = false;
+  if (projectId) {
+    const containerSection = '/* Begin PBXContainerItemProxy section */\n';
+    const proxyBlock = `\t\t${I.proxy} /* PBXContainerItemProxy */ = {\n\t\t\tisa = PBXContainerItemProxy;\n\t\t\tcontainerPortal = ${projectId[1]} /* Project object */;\n\t\t\tproxyType = 1;\n\t\t\tremoteGlobalIDString = ${I.target};\n\t\t\tremoteInfo = ${NSE_NAME};\n\t\t};\n`;
+    if (txt.includes(containerSection)) {
+      txt = txt.replace(containerSection, `${containerSection}${proxyBlock}`);
+    } else {
+      // 이 템플릿에는 섹션이 아직 없다 — PBXFileReference 앞에 새로 만든다.
+      txt = txt.replace('/* Begin PBXFileReference section */',
+        `/* Begin PBXContainerItemProxy section */\n${proxyBlock}/* End PBXContainerItemProxy section */\n\n/* Begin PBXFileReference section */`);
+    }
+    const depSection = '/* Begin PBXTargetDependency section */\n';
+    const depBlock = `\t\t${I.dependency} /* PBXTargetDependency */ = {\n\t\t\tisa = PBXTargetDependency;\n\t\t\ttarget = ${I.target} /* ${NSE_NAME} */;\n\t\t\ttargetProxy = ${I.proxy} /* PBXContainerItemProxy */;\n\t\t};\n`;
+    if (txt.includes(depSection)) {
+      txt = txt.replace(depSection, `${depSection}${depBlock}`);
+    } else {
+      txt = txt.replace('/* Begin PBXVariantGroup section */',
+        `/* Begin PBXTargetDependency section */\n${depBlock}/* End PBXTargetDependency section */\n\n/* Begin PBXVariantGroup section */`);
+    }
+  }
+
+  // 임베드 단계 — .appex 를 앱 번들 PlugIns/ 로 복사(dstSubfolderSpec 13).
+  // 이 섹션은 Capacitor 기본 프로젝트에 **없다.** 없으면 아래에서 새로 만든다.
+  const embedBlock = `\t\t${I.embed} /* Embed App Extensions */ = {\n\t\t\tisa = PBXCopyFilesBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tdstPath = "";\n\t\t\tdstSubfolderSpec = 13;\n\t\t\tfiles = (\n\t\t\t\t${I.appexBuild} /* ${NSE_NAME}.appex in Embed App Extensions */,\n\t\t\t);\n\t\t\tname = "Embed App Extensions";\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n`;
+  if (txt.includes('/* Begin PBXCopyFilesBuildPhase section */\n')) {
+    txt = txt.replace('/* Begin PBXCopyFilesBuildPhase section */\n', `/* Begin PBXCopyFilesBuildPhase section */\n${embedBlock}`);
+  } else {
+    txt = txt.replace('/* Begin PBXFrameworksBuildPhase section */',
+      `/* Begin PBXCopyFilesBuildPhase section */\n${embedBlock}/* End PBXCopyFilesBuildPhase section */\n\n/* Begin PBXFrameworksBuildPhase section */`);
+  }
+
+  // App 타깃에: 임베드 단계를 buildPhases 끝에, 의존성을 dependencies 에.
+  const appTargetBlock = new RegExp(`(${APP_TARGET} \\/\\* App \\*\\/ = \\{[\\s\\S]*?productType = "com.apple.product-type.application";\\s*\\n\\s*\\};)`);
+  const found = txt.match(appTargetBlock);
+  if (!found) {
+    ok = false;
+    log.warn('App 네이티브 타깃 블록을 못 찾음 — 확장 임베드/의존성을 붙일 수 없다.');
+  } else {
+    let block = found[1];
+    // 치환이 실제로 일어났는지 **반드시 확인한다.** 조용히 넘어가면 확장 타깃은
+    // 있는데 임베드가 안 된 프로젝트가 되고, 그러면 **빌드는 성공하지만 확장이
+    // 앱에 안 들어가** 알림 이미지가 안 붙는다 — 원인 찾기가 가장 어려운 실패다.
+    const must = (re, repl, label) => {
+      const next = block.replace(re, repl);
+      if (next === block) {
+        ok = false;
+        log.warn(`App 타깃에 ${label} 추가 실패(패턴 불일치).`);
+        return;
+      }
+      block = next;
+    };
+    // 임베드는 Pods 복사 단계 뒤(맨 끝)에 온다 — 확장이 프레임워크를 찾을 수 있어야 한다.
+    must(/(buildPhases = \([\s\S]*?)(\n\t\t\t\);)/, `$1\n\t\t\t\t${I.embed} /* Embed App Extensions */,$2`, '임베드 단계');
+    // `dependencies` 는 비어 있을 수도, 이미 항목이 있을 수도 있다 — 둘 다 받는다.
+    // 빈 목록만 가정하면 다른 의존성이 생긴 순간 조용히 건너뛴다.
+    must(/dependencies = \(/, `dependencies = (\n\t\t\t\t${I.dependency} /* PBXTargetDependency */,`, '타깃 의존성');
+    txt = txt.replace(found[1], block);
+  }
+
+  // 프로젝트의 targets 목록에 확장 추가 — 빠지면 Xcode 가 타깃을 아예 안 보여준다.
+  const targetsRe = /(targets = \()/;
+  if (!targetsRe.test(txt)) ok = false;
+  else txt = txt.replace(targetsRe, `$1\n\t\t\t\t${I.target} /* ${NSE_NAME} */,`);
+
+  if (!ok) {
+    log.warn(`iOS ${NSE_NAME} 확장 등록 실패(앵커 불일치) — project.pbxproj 를 쓰지 않았다. Xcode 에서 수동 추가 필요.`);
+    return;
+  }
+  writeFileSync(pbxPath, txt);
+  log.ok(`iOS ${NSE_NAME} 확장 등록 (알림에 캐릭터 프로필 첨부, bundleId=${EXT_BUNDLE_ID})`);
+}
+
 // 네이티브 버전 주입: app.config.json 의 version 을 네이티브 프로젝트에 직접 박는다.
 // CI 경로(빌드 스킬 미사용, generate-app 직접 호출)에서도 버전이 반영되도록 한다.
 // (안 하면 빌드번호가 Capacitor 기본 1 고정 → 재업로드 시 스토어가 중복 거부)
@@ -970,6 +1329,10 @@ function main() {
     if (cfg.firebase?.enabled && cfg.firebase?.fcm) {
       patchIosGoogleServicePlistRef(buildDir);
       patchIosFirebaseInit(buildDir);
+      // 알림에 캐릭터 프로필 사진을 붙이는 확장. FCM SDK 헬퍼를 쓰므로 firebase.fcm
+      // 이 켜진 경우에만 의미가 있다(패치가 pod 'FirebaseMessaging' 을 추가한다).
+      // patchNativeVersion 뒤에 와야 한다 — 확장 버전을 App 타깃에서 읽어 맞춘다.
+      patchIosNotificationServiceExtension(buildDir, cfg);
     }
   }
   log.step('iOS 권한 사용 설명(Info.plist) 점검');
