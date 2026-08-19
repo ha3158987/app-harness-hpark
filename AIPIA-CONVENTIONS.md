@@ -396,7 +396,59 @@ POST /api/v2/webhooks/google    # Google RTDN
 | WhaTap 프로젝트 | 앱별 추가 |
 | Firebase 콘솔 | https://console.firebase.google.com (구글 계정) |
 
+## 16. 버전 / 릴리즈 브랜치 규칙
+
+### 16-1. 두 값은 역할이 다르다
+
+`apps/<slug>/app.config.json` 의 `version` 하나가 두 스토어에 주입된다.
+
+| 필드 | 대응 | 성격 |
+|---|---|---|
+| `version.name` | iOS `MARKETING_VERSION` / Android `versionName` | **사용자에게 보이는 버전.** 시맨틱(1.2.0) |
+| `version.code` | iOS `CURRENT_PROJECT_VERSION` / Android `versionCode` | **빌드 번호.** 정수, 단조 증가만 |
+
+`version.code` 는 **절대 내리거나 재사용하지 않는다.** 두 스토어 모두 규칙으로 거부한다.
+
+> 실제 사고: `characterchat-dev` 를 Play 내부테스트에 올릴 때
+> `Google Api Error: Invalid request - Version code 10 has already been used.`
+> 로 업로드가 거부됐다. AAB 빌드는 정상이었고 **번호만** 문제였다 → 11 로 올려 통과.
+
+### 16-2. 빌드 번호는 플랫폼별로 갈려도 된다
+
+같은 `version.name` 에서 스토어별 업로드 횟수가 다르면 `code` 가 어긋난다. 정상이다.
+
+    iOS  TestFlight  1.0.0 (10)
+    Android Play     1.0.0 (11)   ← 같은 버전. 빌드 번호만 다르다
+
+사용자에게 "같은 버전"인지는 **`version.name` 이 결정한다.** `code` 를 억지로 맞추려고
+한쪽을 건너뛰면 단조 증가만 깨진다.
+
+### 16-3. 브랜치·태그 이름을 버전에 맞춘다 (히스토리 추적용)
+
+릴리즈 트리거 태그가 이미 `<slug>-v<name>` 형식이므로(`release.yml` 의 `'*-v*'`),
+브랜치도 같은 형식을 쓴다. 그러면 브랜치 → 태그 → 스토어 빌드가 이름으로 한 줄에 꿰인다.
+
+| 상황 | 브랜치 | 예 |
+|---|---|---|
+| `version.name` 이 올라감 | `release/<slug>-v<name>` | `release/characterchat-dev-v1.0.1` |
+| `version.code` 만 올라감 | `chore/<slug>-version-<code>` | `chore/characterchat-dev-version-11` |
+| 릴리즈 태그 | `<slug>-v<name>` | `characterchat-dev-v1.0.1` |
+
+지금은 `name` 이 1.0.0 에 고정이고 `code` 만 올라가는 단계라 아래쪽 형식만 쓰인다.
+**patch 를 올리기 시작하면 위쪽 형식으로 전환한다** — 그때부터 브랜치 이름만 보고
+어느 버전 작업인지 알 수 있어야 한다.
+
+### 16-4. 순서
+
+1. `bump-version` 으로 `app.config.json` 갱신 (`.claude/skills/bump-version`)
+2. 위 규칙에 맞는 브랜치에 커밋
+3. 빌드/업로드는 `release.yml` 수동 실행(`workflow_dispatch`)로 그 브랜치를 지정해도 된다 —
+   테스트 업로드 때 main 을 건드리지 않아도 된다
+4. 정식 릴리즈는 `<slug>-v<name>` 태그를 밀어 트리거
+
 ---
 
-**Last Updated**: 2026-06-01
+---
+
+**Last Updated**: 2026-08-19
 **원천 레포**: `aipia-team/poptale-app` (Flutter), `aipia-team/poptale-frontend` (Next.js)
