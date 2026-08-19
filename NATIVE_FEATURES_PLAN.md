@@ -166,13 +166,14 @@
 
 ### Phase 4 — 백엔드/신규플러그인 (난이도 상, 별도 스프린트)
 **4-1. 푸시 알림 (G)** — 가치 최고, 백엔드 필수
-- 하네스: `features.push: true` + generate. iOS APNs Capability+인증서(`CREDENTIALS.md`/fastlane), Android FCM `google-services.json`.
+- 하네스: `features.push: true` + generate. iOS APNs Capability+인증서(`CREDENTIALS.md`/fastlane), Android FCM `google-services.json`. (브릿지에 `registerPush`·푸시탭→딥링크 emit은 이미 구현 — 새 네이티브 코드 불필요, 플래그+자격증명+재빌드만.)
 - 통신 프로토콜:
   1. 앱 시작 시 웹이 `AppBridge.registerPush()` → `{granted, token}` 수신.
-  2. 토큰을 **백엔드에 등록**(character-chatbot-web 백엔드/API에 `POST /push/register {token, platform, userId}` 신설).
-  3. 캐릭터 답장/재참여 시 백엔드가 APNs/FCM로 발송, payload에 `path:"/chat/<id>"`.
+  2. 토큰을 **백엔드에 등록**. 백엔드는 **별도 레포 `character-chatbot-api`(Python/FastAPI)** — `POST /api/push/register {token, platform}` 신설. `userId`는 바디로 받지 말고 인증(`require_auth`)의 `ctx.user_id`로 강제.
+  3. **유휴→재참여(선톡)** 시 백엔드가 APNs/FCM로 발송. 딥링크는 **절대 URL `characterchat://chat/<sessionId>`** 로 보낼 것(FE 파서가 `new URL()`이라 베어 경로 `/chat/<id>`는 throw). 포그라운드 메시지는 기존 SSE가 커버 → 푸시는 유휴 경로만.
   4. 수신 탭 → 기존 onDeepLink/노티 핸들러 → `router.push`.
-- 웹 수정: 어댑터에 이미 `registerPush` 있음. **백엔드 토큰 등록 API + 발송 로직 신설 필요**(이 부분이 진짜 작업량). [확인필요: character-chatbot-web 백엔드 위치/스택 — src에는 Next.js app router만 보임, 푸시 발송 서버 확인 필요]
+- 웹 수정: `registerPush` 래퍼는 있으나 **시작 시 자동 호출 미배선**(`HarnessInit.tsx`에 추가) + 권한/설정 UX 신규(현재 스텁). 토큰은 브릿지가 `auth.deviceEndpoint`로 자동 등록(FE 전송 코드 불필요, app.config에 `deviceEndpoint`만 설정).
+- 백엔드(`character-chatbot-api`) — **진짜 작업량, 전부 신규**: device_token 모델+alembic → `POST /api/push/register`(`app/api/sessions.py` 라우터 패턴) → APNs/FCM 발송 서비스+자격증명. **발송 훅 = `app/services/proactive/postman.py`의 `deliver_task` 커밋 직후**(스케줄러·세션 배달 공통 지점). 관찰성 `push.sent`/`push.failed`. 상세는 BE 핸드오프 스펙 참조.
 - 검증: 기기 토큰 등록 → 서버에서 테스트 푸시 → 알림 탭 → 채팅 진입.
 
 **4-2. 생체인증 + 시큐어 스토리지 (I)** — auth 연동
