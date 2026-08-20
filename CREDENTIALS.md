@@ -85,16 +85,32 @@ base64 -i secrets/android/upload.jks | tr -d '\n'   # macOS
 
 ---
 
-## 4. 새 앱 추가 체크리스트 — 인증 작업 0
+## 4. 새 앱 추가 — **시크릿 발급은 0, 콘솔 작업은 0이 아니다**
+
+인증은 §2의 **조직 공유분을 그대로 재사용**한다 → **새로 발급할 시크릿 없음**
+(keystore·ASC키·match·Play계정 전부 공유).
+
+⚠️ 다만 **"콘솔 작업 0"은 아니다.** 아래는 시크릿이 아니지만 사람이 반드시 해야 한다:
 
 ```
 새 앱을 배포하려면:
-  1. apps/<slug>/app.config.json 작성              (시크릿 아님)
-  2. Play Console / App Store Connect 에 앱 레코드 1회 등록   (수동, 시크릿 아님)
-  3. git tag <slug>-v1.0.0 && git push origin <slug>-v1.0.0   ← 끝.
+  1. apps/<slug>/app.config.json 작성                      (시크릿 아님)
+  2. Play Console / App Store Connect 에 앱 레코드 등록      (수동)
+  3. Apple 개발자 포털에 App ID 등록                         (수동)
+       · 앱 본체          com.aipia.<slug>
+       · 알림 확장        com.aipia.<slug>.NotificationService   ← 푸시 쓰면 필수
+  4. 프로비저닝 프로파일 생성 — **순서 중요**                  (수동, 1회)
+       node scripts/generate-app.mjs --slug <slug> --platform ios
+       fastlane ios regen_profile slug:<slug>
+  5. 빌드/배포
 ```
-인증은 §2의 **조직 공유분을 그대로 재사용** → 새로 발급할 시크릿 없음.
-(match 는 새 appId 의 프로비저닝을 자동 생성. keystore·ASC키·Play계정은 공유.)
+
+> 🔴 **3·4 를 빠뜨리면 CI 가 실패한다.** CI 의 match 는 `readonly` 라 프로파일을 **스스로 만들지 못한다**
+> (예전 문서에 "match 가 자동 생성"이라 적혀 있었으나 사실이 아니다 — CI 는 가져다 쓰기만 한다).
+> 특히 알림 확장은 애플 눈에 **별개의 앱**이라 App ID·프로파일이 따로 필요하고, 이 사실은
+> 확장을 도입한 뒤 **첫 iOS 빌드에서야** 드러난다.
+>
+> 콘솔·계정 작업 전체 목록은 **[NEW-APP-CHECKLIST.md](./NEW-APP-CHECKLIST.md)** 참조.
 
 ---
 

@@ -107,13 +107,17 @@ const DEFAULT_FIREBASE = {
 //   usageDescription: Info.plist NSUserTrackingUsageDescription. enabled 면 필수(기본값 없음).
 //     하네스가 기본 문구를 주면 실제 용도와 다른 문구가 그대로 출시되는 사고가 난다
 //     (Poptale: 광고 어트리뷰션인데 "앱 오류 분석"으로 표기 — 심사·법규 리스크).
-//   prePermission: 웹이 사전 설명 화면을 직접 그리는가. true 면 브릿지 폴백 게이트를 끈다.
+//   prePermission: 웹이 사전 설명 화면을 직접 그리는가.
+//     **기본값 false = 브릿지가 폴백 화면을 그린다.** 기본을 true(웹이 그림)로 두면 웹 작업을 안 한
+//     앱은 "플러그인은 깔리고 plist 에 추적 문구도 들어갔는데 아무도 동의를 안 묻는" 상태가 된다 —
+//     스토어에는 추적한다고 선언해 놓고 실제로는 묻지 않는 앞뒤 안 맞는 앱이라 심사 리스크다.
+//     켜면 최소한 동작하는 쪽이 안전한 기본값이다. 웹이 자체 화면을 만들면 true 로 명시해 끈다.
 //   copy: prePermission=false 일 때 폴백 게이트 문구 오버라이드. null 이면 브릿지 기본 문구.
 const DEFAULT_TRACKING = {
   att: {
     enabled: false,
     usageDescription: null,
-    prePermission: true,
+    prePermission: false,
     copy: { title: null, body: null, notice: null, continueLabel: null, laterLabel: null },
   },
 };
@@ -520,6 +524,16 @@ export function aipiaPreset({ slug, appName, idp = 'direct' }) {
         dev:   sub(D.firebaseProjectPattern.dev),
         stage: sub(D.firebaseProjectPattern.stage),
         prod:  sub(D.firebaseProjectPattern.prod),
+      },
+    },
+    // 추적 동의(ATT). **어트리뷰션 SDK 를 붙인 뒤에 켠다** — SDK 없이 켜면 "동의는 묻는데 쓸 데가
+    // 없는" 반쪽 상태라 심사 리스크. 켤 때 usageDescription 은 필수(비우면 빌드 실패)이고,
+    // 실제 용도를 그대로 적어야 한다(표기와 용도가 다르면 심사·법규 리스크).
+    tracking: {
+      att: {
+        enabled: false,
+        usageDescription: '관심에 더 맞는 광고를 제공하고 마케팅 성과를 측정하기 위해 활동 데이터를 사용합니다.',
+        prePermission: false,   // false = 브릿지 기본 화면. 웹이 직접 그리면 true
       },
     },
     // 딥링크 도메인 증명용 공개 식별자.

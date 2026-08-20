@@ -121,7 +121,9 @@ Appharness/
 | **[`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md)** ⭐ | **AIPIA 전사 컨벤션 정본.** 번들ID·Firebase·도메인·소셜·결제·트래킹·모니터링·이벤트명·최소OS — 새 앱 추가 전 필독 |
 | **[`GUIDE.md`](GUIDE.md)** | 하네스 사용법 마스터 — 지원 기능·흐름·필수 입력·스키마 정본·문서 색인 |
 | **[`POPTALE-MIGRATION.md`](POPTALE-MIGRATION.md)** ⭐ | **Poptale Flutter → 하네스 이전** 인계 문서(호환성 매트릭스 10개·10주 일정·책임 분담·플러그인 SPEC 색인) |
-| [`ONBOARDING.md`](ONBOARDING.md) | 새 서비스 추가 전체 흐름 |
+| **[`NEW-APP-CHECKLIST.md`](NEW-APP-CHECKLIST.md)** ⭐ | **사람이 직접 해야 하는 콘솔·계정 작업 전부.** 새 앱을 처음 만들 때 이 문서를 따라가면 헤매지 않는다 |
+| [`ONBOARDING.md`](ONBOARDING.md) | 새 서비스 추가 전체 흐름 (코드 관점) |
+| [`CREDENTIALS.md`](CREDENTIALS.md) | 인증·시크릿 단일 출처 — 조직 공유 / 앱별 고유 구분 |
 | [`INTEGRATION.md`](INTEGRATION.md) | 프론트 통합 — `@harness/bridge` + 어댑터 + API + AppChannel shim |
 | [`SETUP.md`](SETUP.md) | 환경/키 단계별 준비 |
 | [`AUTH.md`](AUTH.md) | 로그인/SSO/회원가입/게스트/탈퇴/중앙 IdP/백엔드 규약 |
@@ -131,6 +133,11 @@ Appharness/
 | [`DEPLOY.md`](DEPLOY.md) | CI/CD 자동배포/시크릿/서명 |
 | [`DEVICE-SUPPORT.md`](DEVICE-SUPPORT.md) | 기기/OS/해상도/노치/폴더블 |
 | [`MARKETING.md`](MARKETING.md) | 마케팅 SDK (AppsFlyer / Adbrix / Amplitude) |
+| [`APP-GROWTH-FEATURES.md`](APP-GROWTH-FEATURES.md) | 성장 기능 설계 정본 — ATT·강제업데이트·딥링크. 결정 기록·Adbrix 우회 분석 |
+| [`ATT-INTEGRATION.md`](ATT-INTEGRATION.md) | ATT(추적 동의) 연동 가이드 — 셋업·호출 순서·법적 제약·함정 |
+| [`PUSH-NOTIFICATIONS.md`](PUSH-NOTIFICATIONS.md) | 푸시(FCM) 셋업 — 키·확장·발송 규약 |
+| [`NATIVE_FEATURES_PLAN.md`](NATIVE_FEATURES_PLAN.md) | 네이티브 기능 가능/불가 매트릭스 + 단계별 도입 플랜 |
+| [`HOWTO-DEPLOY.md`](HOWTO-DEPLOY.md) | 배포 실행 절차 (DEPLOY.md 의 실무 요약) |
 | [`template/plugins/`](template/plugins/) | 네이티브 플러그인 작업 사양서 (Kakao/Naver/Adbrix/WhaTap) |
 | [`STRATEGY.md`](STRATEGY.md) · [`REFERENCES.md`](REFERENCES.md) · [`APP-FEATURES.md`](APP-FEATURES.md) | 전략 · 외부참조 · 기능·플러그인 |
 | [`idp/README.md`](idp/README.md) · [`backend/auth-reference/`](backend/auth-reference/) | Keycloak 구동 · 백엔드 레퍼런스 |
@@ -142,7 +149,7 @@ Appharness/
 | 항목 | 값 |
 |---|---|
 | Capacitor | 8 |
-| Node | 20 LTS+ (AIPIA 표준: 20.18.3) |
+| Node | **22 이상 필수** (`.nvmrc` = 22). Capacitor CLI 8 이 20 을 거부한다 — `nvm use 22` |
 | pnpm (웹 측) | 10.5.2 (AIPIA 웹 표준) |
 | JDK (Android) | **21 필수** |
 | Android SDK | platform 35, build-tools 35 (target 36 — AIPIA 표준 🅰️) |

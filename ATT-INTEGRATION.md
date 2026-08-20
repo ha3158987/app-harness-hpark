@@ -59,7 +59,7 @@ node scripts/generate-app.mjs --slug <slug>
 |---|---|---|
 | `tracking.att.enabled` | `false` | 플러그인 설치 + 문구 주입 |
 | `tracking.att.usageDescription` | **없음(필수)** | Info.plist 문구 |
-| `tracking.att.prePermission` | `true` | **웹이 사전 설명 화면을 직접 그린다.** `false` 면 브릿지가 기본 화면을 띄운다 |
+| `tracking.att.prePermission` | **`false`** | `false` = **브릿지가 기본 화면을 띄운다**(웹 작업 0). 웹이 자체 화면을 만들면 `true` 로 명시해 끈다 |
 | `tracking.att.copy.*` | `null` | `prePermission: false` 일 때 폴백 화면 문구 오버라이드 |
 
 ---
@@ -67,9 +67,14 @@ node scripts/generate-app.mjs --slug <slug>
 ## 2. 두 갈래 — 웹 화면을 만들 것인가
 
 ```
-prePermission: false   →  아무것도 안 만든다. 브릿지 기본 화면이 뜬다.       ← 빠른 출발
-prePermission: true    →  웹이 화면을 만든다. 브랜드 톤·다국어 자유.        ← characterchat 방식
+prePermission: false (기본)  →  아무것도 안 만든다. 브릿지 기본 화면이 뜬다.   ← 빠른 출발
+prePermission: true          →  웹이 화면을 만든다. 브랜드 톤·다국어 자유.    ← characterchat 방식
 ```
+
+> 기본값이 `false` 인 이유: `enabled: true` 만 켜고 웹을 손 안 대면, `true` 가 기본일 때는
+> **플러그인은 깔리고 plist 에 추적 문구도 들어갔는데 아무도 동의를 안 묻는** 상태가 된다.
+> 스토어에는 추적한다고 선언해 놓고 실제로는 묻지 않는 앱이라 심사 리스크다.
+> **켜면 최소한 동작하는 쪽**을 기본으로 둔다.
 
 ### 갈래 A — 브릿지 폴백만 쓴다 (웹 코드 0줄)
 
@@ -96,7 +101,7 @@ prePermission: true    →  웹이 화면을 만든다. 브랜드 톤·다국어
 
 ### 갈래 B — 웹이 직접 그린다 (characterchat 방식)
 
-`prePermission: true`(기본) 로 두고 웹에서 3단계.
+`prePermission: true` 로 **명시**하고(기본이 false 라 꺼야 한다) 웹에서 3단계.
 
 **① 어댑터에 얇은 래퍼** — 웹이 `AppBridge` 를 직접 부르지 않는 관례를 따른다
 

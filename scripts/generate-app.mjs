@@ -1352,20 +1352,25 @@ function patchIosPodfileStaticLinkage(buildDir) {
 // iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(CODE_SIGN_ENTITLEMENTS). App.entitlements 가 있을 때만.
 // App 타깃 빌드설정(= PRODUCT_BUNDLE_IDENTIFIER 보유 블록)에 경로를 주입한다. (수동 Xcode 단계 제거)
 // ⚠️ iOS 빌드는 현재 미검증 환경 — 첫 macOS 빌드에서 확인 권장.
-function patchIosPbxEntitlements(buildDir) {
+function patchIosPbxEntitlements(buildDir, cfg) {
   const pbx = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
   const ent = join(buildDir, 'ios', 'App', 'App', 'App.entitlements');
   if (!existsSync(pbx) || !existsSync(ent)) return;
   let txt = readFileSync(pbx, 'utf8');
   if (txt.includes('CODE_SIGN_ENTITLEMENTS')) return; // 이미 연결됨
   const before = txt;
-  txt = txt.replace(
-    /(\n(\s*)PRODUCT_BUNDLE_IDENTIFIER = [^\n]*;)/g,
-    '$1\n$2CODE_SIGN_ENTITLEMENTS = App/App.entitlements;',
-  );
+  // ⚠️ **App 타깃에만** 붙인다. 예전엔 PRODUCT_BUNDLE_IDENTIFIER 를 가진 블록이 App 뿐이라
+  // 전역 치환으로 충분했는데, 알림 확장이 생기면서 확장 타깃에도 앱 entitlements 가 붙었다.
+  // 그러면 확장이 aps-environment / associated-domains 를 요구하는데 확장 프로파일엔 그
+  // 권한이 없어 빌드가 거부된다("doesn't include the ... entitlements").
+  // 확장은 자체 entitlements 가 필요 없으므로 번들 id 가 정확히 앱 id 인 블록만 고른다.
+  const escaped = cfg.appId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(\\n(\\s*)PRODUCT_BUNDLE_IDENTIFIER = ${escaped};)`, 'g');
+  txt = txt.replace(re, '$1\n$2CODE_SIGN_ENTITLEMENTS = App/App.entitlements;');
   if (txt === before) return;
   writeFileSync(pbx, txt);
-  log.ok('iOS project.pbxproj: CODE_SIGN_ENTITLEMENTS = App/App.entitlements 연결');
+  const n = (txt.match(/CODE_SIGN_ENTITLEMENTS/g) || []).length;
+  log.ok(`iOS project.pbxproj: CODE_SIGN_ENTITLEMENTS 연결 (App 타깃 ${n}개 설정)`);
 }
 
 function main() {
@@ -1558,7 +1563,7 @@ function main() {
   }
 
   // 7d) iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(App.entitlements 있을 때만)
-  patchIosPbxEntitlements(buildDir);
+  patchIosPbxEntitlements(buildDir, cfg);
 
   // 8) 동기화 — 요청한 플랫폼만 sync 한다. (android 만 빌드할 때 iOS pod install 로 깨지는 것 방지)
   if (!args.skipSync) {
