@@ -31,6 +31,7 @@ function deriveCapabilities(features) {
     geolocation: flag(f.geolocation),
     auth: false, // config.auth.providers 로 ready() 에서 채움 (features 가 아니라 별도 블록)
     iap: false,  // config.iap.products 로 ready() 에서 채움
+    att: false,  // config.tracking.att.enabled 로 ready() 에서 채움 (iOS 전용)
   };
 }
 
@@ -64,6 +65,7 @@ const CAP_METHOD = {
   geolocation: 'getLocation',
   auth: 'login',
   iap: 'purchase',
+  att: 'requestTracking',
 };
 
 class AppBridgeImpl {
@@ -80,6 +82,11 @@ class AppBridgeImpl {
     this._deepLinkHandlers = []; // onDeepLink 로 등록된 라우팅 콜백들
     this._deepLinkStarted = false;
     this._lastDeepLink = null;   // 핸들러 등록 전에 도착한 딥링크 보관(콜드스타트 레이스 방지)
+    // ATT: 시스템 팝업은 유저당 평생 1회만 뜬다(응답 후엔 notDetermined 로 못 돌아옴).
+    // 호출부가 실수로 두 곳에서 요청하면 응답 타이밍이 엉켜 잘못된 값이 어트리뷰션 SDK 로 간다
+    // (Poptale 실제 사례). 그래서 API 자체를 멱등하게 만든다 — 아래 2개가 그 상태다.
+    this._attStatus = null;      // 확정된 status 캐시. 'unavailable' 은 캐시하지 않는다(재시도 가능)
+    this._attPending = null;     // 진행 중인 요청의 Promise (중복 팝업 차단)
   }
 
   ready() {
@@ -92,6 +99,9 @@ class AppBridgeImpl {
           this.capabilities.auth = authProviders.length > 0;
           const iapProducts = (cfg && cfg.iap && cfg.iap.products) || [];
           this.capabilities.iap = iapProducts.length > 0;
+          // ATT 는 iOS 전용. Android 에서 capability 를 켜두면 웹이 헛되이 사전화면을 띄운다.
+          const attOn = !!(cfg && cfg.tracking && cfg.tracking.att && cfg.tracking.att.enabled);
+          this.capabilities.att = attOn && this.platform === 'ios';
           this._validateCapabilities();
           this.initMonitoring().catch(() => {}); // 크래시 리포트 가능한 한 일찍
           this._autoInit();
@@ -125,6 +135,10 @@ class AppBridgeImpl {
       // 비차단: 게이트는 자체 오버레이로 표시. 앱이 타이밍을 제어하려면 autoForceUpdate:false 후 직접 호출.
       this.checkForceUpdate().catch(() => {});
     }
+    // ATT 폴백 사전화면 — prePermission:false 인 앱에서만. 웹이 화면을 그리는 앱(기본)은 no-op.
+    // 여기서 requestTracking() 을 직접 부르지 않는다는 점이 중요하다: 설명 없이 시스템 팝업을
+    // 띄우면 그 유저는 영영 재요청이 불가해진다(iOS 는 notDetermined 일 때만 팝업).
+    if (this.capabilities.att) this._maybeShowAttGate().catch(() => {});
   }
 
   // edge-to-edge(iOS contentInset:never / Android edge-to-edge)에서 env(safe-area-inset-*)가
@@ -870,19 +884,190 @@ class AppBridgeImpl {
     }
   }
 
+  // ── iOS ATT (앱 추적 투명성) ────────────────────────────────────────────
+  // 사전 설명 화면은 웹이 그린다(config.tracking.att.prePermission=true). 웹이 안 그리는 앱을 위해
+  // prePermission=false 면 아래 _showAttGate() 가 브릿지 기본 화면을 띄운다.
+
+  // 결과 객체 정규화 — 호출부가 status 문자열 비교를 안 해도 되게 authorized 를 함께 준다.
+  _attResult(status) {
+    return { status, authorized: status === 'authorized' };
+  }
+
   /**
-   * iOS App Tracking Transparency 동의 요청. AppsFlyer 등 어트리뷰션 정확도에 필요.
-   * initMarketing 전에 호출 권장. 반환 status: authorized|denied|restricted|notDetermined|not-applicable.
+   * 현재 ATT 상태만 조회한다. **시스템 팝업을 띄우지 않는다.**
+   * 사전 설명 화면이 "이미 응답한 유저"에게 다시 뜨지 않으려면 이걸로 먼저 걸러야 한다.
+   * @returns {{ status:'authorized'|'denied'|'restricted'|'notDetermined'|'not-applicable'|'unavailable', authorized:boolean }}
    */
-  async requestTracking() {
-    if (this.platform !== 'ios') return { status: 'not-applicable' };
+  async trackingStatus() {
+    if (this.platform !== 'ios') return this._attResult('not-applicable');
+    if (this._attStatus) return this._attResult(this._attStatus);
     try {
       const { AppTrackingTransparency } = await import('capacitor-plugin-app-tracking-transparency');
-      const r = await AppTrackingTransparency.requestPermission();
-      return { status: (r && r.status) || 'notDetermined' };
+      const r = await AppTrackingTransparency.getStatus();
+      const status = (r && r.status) || 'notDetermined';
+      // notDetermined 는 아직 확정이 아니라 캐시하지 않는다(요청 후 바뀐다).
+      if (status !== 'notDetermined') this._attStatus = status;
+      return this._attResult(status);
     } catch {
-      return { status: 'unavailable' };
+      return this._attResult('unavailable'); // 플러그인 미설치 — 캐시 안 함
     }
+  }
+
+  /**
+   * iOS ATT 동의 요청. 어트리뷰션(AppsFlyer/Adbrix 등) 정확도에 필요하며 initMarketing 전에 호출한다.
+   *
+   * **멱등하다.** 여러 번 불려도 시스템 팝업은 최대 1회만 뜬다:
+   *   iOS 아님 → 즉시 not-applicable / 확정 상태 캐시됨 → 캐시 반환(팝업 없음)
+   *   요청 진행 중 → 진행 중인 동일 Promise 반환 / notDetermined + 첫 호출 → 실제 요청
+   * 호출부 두 곳에서 동시에 불러 응답이 엉키는 사고를 API 레벨에서 막는다.
+   */
+  async requestTracking() {
+    if (this.platform !== 'ios') return this._attResult('not-applicable');
+    if (this._attStatus) return this._attResult(this._attStatus);
+    if (this._attPending) return this._attPending;
+
+    this._attPending = (async () => {
+      try {
+        const { AppTrackingTransparency } = await import('capacitor-plugin-app-tracking-transparency');
+        // 이미 응답한 유저면 requestPermission 은 팝업 없이 기존 값을 돌려주지만,
+        // 상태를 먼저 확인해 두면 캐시가 채워져 다음 호출부터 플러그인 왕복이 없다.
+        const cur = await AppTrackingTransparency.getStatus().catch(() => null);
+        if (cur && cur.status && cur.status !== 'notDetermined') {
+          this._attStatus = cur.status;
+          return this._attResult(cur.status);
+        }
+        const r = await AppTrackingTransparency.requestPermission();
+        const status = (r && r.status) || 'notDetermined';
+        if (status !== 'notDetermined') this._attStatus = status;
+        return this._attResult(status);
+      } catch {
+        return this._attResult('unavailable'); // 캐시 안 함 → 다음 호출에서 재시도 가능
+      } finally {
+        this._attPending = null;
+      }
+    })();
+
+    return this._attPending;
+  }
+
+  /**
+   * 이 앱의 OS 설정 페이지를 연다. 브라우저에서는 no-op.
+   *
+   * **권한을 한 번 거부한 유저를 되돌릴 유일한 경로다.** ATT 는 상태가 notDetermined 일 때만
+   * 시스템 팝업이 뜨므로, 거부 후에는 앱이 다시 물을 수 없다 — iOS 는 앱 설정 페이지에
+   * "추적 허용" 토글을 보여주므로 거기로 보낸다. Android 는 ATT 가 없지만 알림·카메라 권한을
+   * 두 번 거부하면 다이얼로그가 안 뜨므로 같은 경로가 필요하다.
+   *
+   * ⚠️ `설정 > 개인정보 보호 > 추적` 같은 하위 화면 직행 URL(App-Prefs:...)은 비공개 API 라
+   * 심사에서 리젝된다. 공개 API 로는 앱 자신의 설정 페이지까지만 갈 수 있다 — 그래서 UI 문구는
+   * "설정에서 추적을 켤 수 있어요" 처럼 한 단계 더 들어가야 함을 알려주는 게 정직하다.
+   */
+  async openAppSettings() {
+    if (!this.isNative) return { opened: false, reason: 'not-native' };
+    try {
+      const r = await Native.openAppSettings();
+      return { opened: !!(r && r.opened) };
+    } catch (e) {
+      // 구 버전 셸(플러그인에 메서드 없음)에서도 호출부가 죽지 않게 한다.
+      return { opened: false, reason: String((e && e.message) || e) };
+    }
+  }
+
+  /**
+   * 폴백 사전 설명 화면. config.tracking.att.prePermission=false 인 앱(=웹이 자체 화면을 안 만든 앱)
+   * 에서만 동작한다. 웹 작업 0으로도 "설명 없이 시스템 팝업부터 띄우는" 상태를 피하게 하는 장치.
+   *
+   * 문구 원칙(법무 검토 반영) — 바꿀 때 반드시 지킬 것:
+   *   · ATT 는 광고의 *관련성* 만 바꾼다. "광고가 줄어든다"는 사실이 아니므로 쓰지 않는다.
+   *   · 거부 경로를 허용과 같은 비중으로 노출한다(한쪽만 강조 금지).
+   *   · 거부해도 모든 기능을 쓸 수 있다는 고지를 본문과 같은 크기로 넣는다.
+   *   · 자체 버튼에 "허용"이라는 단어를 쓰지 않는다(시스템 다이얼로그 모방 금지 — Apple HIG).
+   *   · 정보통신망법 §50 마케팅 수신 동의와는 별개다. 그 표현을 연상시키지 않는다.
+   */
+  async _maybeShowAttGate() {
+    if (!this.isNative || this.platform !== 'ios') return;
+    const att = this.config && this.config.tracking && this.config.tracking.att;
+    if (!att || !att.enabled) return;
+    if (att.prePermission !== false) return;        // 웹이 그린다 → 브릿지는 관여하지 않는다
+    const { status } = await this.trackingStatus();
+    if (status !== 'notDetermined') return;         // 이미 응답한 유저에겐 띄우지 않는다
+    this._showAttGate(att.copy || {});
+  }
+
+  _showAttGate(copy) {
+    if (typeof document === 'undefined' || document.getElementById('appbridge-att-gate')) return;
+    const t = {
+      title: copy.title || '관심에 더 맞는 광고를 보시도록\n추적을 허용해 주세요',
+      body: copy.body
+        || '허용하시면 관심과 동떨어진 광고 대신 더 관련성 높은 광고를 보여드릴 수 있어요.\n'
+         + '광고의 개수가 줄어드는 것은 아니에요.',
+      notice: copy.notice
+        || '허용하지 않아도 모든 기능을 무료로 그대로 이용할 수 있어요.\n'
+         + '설정 › 개인정보 보호 및 보안 › 추적 에서 언제든 변경할 수 있어요.',
+      continueLabel: copy.continueLabel || '계속',
+      laterLabel: copy.laterLabel || '나중에',
+    };
+    const bg = (this.config && this.config.theme && this.config.theme.background) || '#FFFFFF';
+    const primary = (this.config && this.config.theme && this.config.theme.primary) || '#1A73E8';
+    // 배경이 어두우면 텍스트를 밝게 — 다크 테마 앱에서 글자가 안 보이는 사고 방지.
+    const dark = this._isDarkHex(bg);
+    const fg = dark ? '#F2F4F7' : '#202124';
+    const sub = dark ? '#B4BCC6' : '#5f6368';
+    const line = dark ? '#4A5159' : '#C6CBD1';
+
+    const root = document.createElement('div');
+    root.id = 'appbridge-att-gate';
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-modal', 'true');
+    root.setAttribute('style', [
+      'position:fixed', 'inset:0', 'z-index:2147483647',
+      `background:${bg}`, 'display:flex', 'flex-direction:column',
+      'align-items:center', 'justify-content:center', 'gap:16px',
+      'padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom))',
+      'font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif',
+      'text-align:center', `color:${fg}`,
+    ].join(';'));
+    const safe = (s) => String(s).replace(/[&<>"]/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const nl = (s) => safe(s).replace(/\n/g, '<br>');
+
+    // 두 버튼은 같은 폭·같은 높이. 거부 경로를 텍스트 링크로 축소하지 않는다(다크패턴 회피).
+    const btn = (id, label, filled) =>
+      `<button id="${id}" style="width:100%;max-width:320px;border-radius:12px;font-size:16px;` +
+      `font-weight:600;padding:14px 20px;cursor:pointer;` +
+      (filled
+        ? `border:0;background:${primary};color:#fff`
+        : `border:1px solid ${line};background:transparent;color:${fg}`) +
+      `">${safe(label)}</button>`;
+
+    root.innerHTML =
+      `<div style="font-size:20px;font-weight:700;line-height:1.45">${nl(t.title)}</div>` +
+      `<div style="font-size:15px;line-height:1.6;max-width:340px;color:${sub}">${nl(t.body)}</div>` +
+      `<div style="font-size:15px;line-height:1.6;max-width:340px;color:${sub};margin-top:4px">${nl(t.notice)}</div>` +
+      `<div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px;margin-top:12px">` +
+      btn('appbridge-att-continue', t.continueLabel, true) +
+      btn('appbridge-att-later', t.laterLabel, false) +
+      `</div>`;
+    document.body.appendChild(root);
+
+    const close = () => root.remove();
+    document.getElementById('appbridge-att-continue').addEventListener('click', () => {
+      close();
+      // 결과와 무관하게 진행한다 — ATT 는 기능·보상의 조건이 될 수 없다(Apple 5.1.2(i)).
+      this.requestTracking().catch(() => {});
+    });
+    // "나중에": requestTracking 을 호출하지 않는다 → 상태가 notDetermined 로 남아 다음 기회가 살아 있다.
+    document.getElementById('appbridge-att-later').addEventListener('click', close);
+  }
+
+  // #RRGGBB / #RGB 배경이 어두운지 (상대휘도 근사). 게이트 텍스트 대비 결정용.
+  _isDarkHex(hex) {
+    const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex).trim());
+    if (!m) return false;
+    let h = m[1];
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
   }
 
   // ── 권한 (just-in-time + 접근권한 안내) ────────────────────────────────

@@ -3,7 +3,10 @@
   "appName": "캐릭터챗",
   "appId": "com.aipia.characterchat",
   "startUrl": "https://chat.poptale.ai",
-  "version": { "name": "1.0.0", "code": 1 },
+  "version": {
+    "name": "1.0.0",
+    "code": 1
+  },
   "theme": {
     "primary": "#000000",
     "statusBarStyle": "light",
@@ -26,17 +29,37 @@
     "darkMode": true
   },
   "navigation": {
-    "allowedDomains": ["chat.poptale.ai", "*.poptale.ai"],
+    "allowedDomains": [
+      "chat.poptale.ai",
+      "*.poptale.ai"
+    ],
     "externalInBrowser": true
   },
   "marketing": {
-    "attribution": { "provider": null },
-    "analytics": { "provider": null },
+    "attribution": {
+      "provider": null
+    },
+    "analytics": {
+      "provider": null
+    },
     "autoCapture": false
+  },
+  "tracking": {
+    "att": {
+      "enabled": false,
+      "usageDescription": "관심에 더 맞는 광고를 제공하고 마케팅 성과를 측정하기 위해 활동 데이터를 사용합니다.",
+      "prePermission": true
+    }
   },
   "legal": {
     "privacyUrl": "https://poptale.ai/info/privacy",
     "termsUrl": "https://poptale.ai/info/terms"
   },
-  "permissions": {}
+  "permissions": {},
+  "ios": {
+    "teamId": "3W889GYPRK"
+  },
+  "android": {
+    "sha256CertFingerprints": []
+  }
 }

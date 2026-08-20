@@ -19,6 +19,21 @@ export interface AppCapabilities {
   geolocation: boolean;
   auth: boolean;
   iap: boolean;
+  /** iOS ATT(추적 동의) 사용. config.tracking.att.enabled 이고 플랫폼이 iOS 일 때만 true. */
+  att: boolean;
+}
+
+export type TrackingStatus =
+  | 'authorized' | 'denied' | 'restricted' | 'notDetermined'
+  /** iOS 가 아님 (Android/web) */
+  | 'not-applicable'
+  /** ATT 플러그인 미설치 등으로 조회 불가 — 캐시되지 않으므로 재시도 가능 */
+  | 'unavailable';
+
+export interface TrackingResult {
+  status: TrackingStatus;
+  /** status === 'authorized' 의 편의 별칭. */
+  authorized: boolean;
 }
 
 export interface IapProduct {
@@ -217,8 +232,32 @@ export interface AppBridgeSDK {
   /** 회원탈퇴/계정삭제(스토어 필수). 백엔드(auth.deleteEndpoint)가 삭제. 확인 UI 는 웹이. */
   deleteAccount(opts?: { endpoint?: string; reload?: boolean }): Promise<{ ok: boolean; reason?: string }>;
 
-  /** iOS 추적 동의(ATT). initMarketing 전에 호출 권장. iOS 외엔 not-applicable. */
-  requestTracking(): Promise<{ status: string }>;
+  /**
+   * 이 앱의 OS 설정 페이지를 연다. 브라우저에서는 no-op(`{opened:false}`).
+   *
+   * **권한을 한 번 거부한 유저를 되돌릴 유일한 경로.** ATT 는 `notDetermined` 일 때만 시스템
+   * 팝업이 뜨므로 거부 후에는 앱이 다시 물을 수 없다 — iOS 앱 설정 페이지의 "추적 허용" 토글로
+   * 보낸다. Android 는 ATT 가 없지만 권한 2회 거부 시 같은 경로가 필요하다.
+   *
+   * ⚠️ 하위 화면(설정 > 개인정보 보호 > 추적) 직행은 비공개 API 라 심사 리젝 — 앱 설정
+   * 페이지까지만 갈 수 있다. 문구로 "한 단계 더 들어가야 함"을 알려주는 게 정직하다.
+   */
+  openAppSettings(): Promise<{ opened: boolean; reason?: string }>;
+
+  /**
+   * ATT 현재 상태만 조회한다 — **시스템 팝업을 띄우지 않는다.**
+   * 사전 설명 화면을 "아직 응답 안 한 유저"에게만 보여주려면 이걸로 먼저 거른다.
+   */
+  trackingStatus(): Promise<TrackingResult>;
+
+  /**
+   * iOS 추적 동의(ATT) 요청. initMarketing 전에 호출한다. iOS 외엔 not-applicable.
+   *
+   * **멱등하다** — 여러 번 불려도 시스템 팝업은 최대 1회. 진행 중 재호출은 같은 Promise 를 받는다.
+   * ⚠️ 설명 없이 곧바로 부르지 말 것: iOS 는 notDetermined 일 때만 팝업을 띄우므로,
+   * 맥락 없이 한 번 태운 유저에게는 다시 물을 수 없다.
+   */
+  requestTracking(): Promise<TrackingResult>;
 
   /** 이 앱이 쓰는 권한 목록(한국 "접근권한 안내" 화면용). capabilities + config.permissions 로 파생. */
   getPermissionNotice(): Array<{ type: string; label: string; purpose: string; required: boolean }>;

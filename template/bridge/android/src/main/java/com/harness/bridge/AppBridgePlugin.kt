@@ -1,11 +1,14 @@
 package com.harness.bridge
 
 import android.content.ContentValues
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import android.util.Base64
 import androidx.core.view.WindowCompat
 import com.getcapacitor.JSObject
@@ -68,6 +71,32 @@ class AppBridgePlugin : Plugin() {
             call.resolve(JSObject(json))
         } catch (e: Exception) {
             call.reject("app-config.json 을 읽을 수 없습니다: ${e.message}", e)
+        }
+    }
+
+    /**
+     * 이 앱의 시스템 설정 페이지("앱 정보")를 연다.
+     *
+     * 권한을 한 번 거부한 유저를 되돌릴 경로다 — Android 는 두 번 거부하면 런타임 권한
+     * 다이얼로그가 아예 안 뜨므로(shouldShowRequestPermissionRationale=false) 설정으로
+     * 보내는 것 외에 방법이 없다. iOS 의 ATT 거부 대응과 같은 목적으로 API 를 맞춘다.
+     *
+     * (Android 에 ATT 개념은 없다. 여기서는 알림·카메라·위치 권한 회복용으로 쓰인다.)
+     */
+    @PluginMethod
+    fun openAppSettings(call: PluginCall) {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+                // 설정 화면을 별도 태스크로 — 앱 태스크 스택에 끼면 뒤로가기 동작이 어긋난다.
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            val res = JSObject()
+            res.put("opened", true)
+            call.resolve(res)
+        } catch (e: Exception) {
+            call.reject("설정 화면을 열 수 없습니다: ${e.message}", e)
         }
     }
 

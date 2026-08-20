@@ -102,6 +102,40 @@ const DEFAULT_FIREBASE = {
   crashlytics: false,
 };
 
+// 추적/프라이버시. ATT(iOS 앱 추적 투명성)는 어트리뷰션 벤더와 독립 토글이다 —
+// 벤더 없이도 ATT 만 켤 수 있고, 그 반대도 된다.
+//   usageDescription: Info.plist NSUserTrackingUsageDescription. enabled 면 필수(기본값 없음).
+//     하네스가 기본 문구를 주면 실제 용도와 다른 문구가 그대로 출시되는 사고가 난다
+//     (Poptale: 광고 어트리뷰션인데 "앱 오류 분석"으로 표기 — 심사·법규 리스크).
+//   prePermission: 웹이 사전 설명 화면을 직접 그리는가. true 면 브릿지 폴백 게이트를 끈다.
+//   copy: prePermission=false 일 때 폴백 게이트 문구 오버라이드. null 이면 브릿지 기본 문구.
+const DEFAULT_TRACKING = {
+  att: {
+    enabled: false,
+    usageDescription: null,
+    prePermission: true,
+    copy: { title: null, body: null, notice: null, continueLabel: null, laterLabel: null },
+  },
+};
+
+// 플랫폼별 서명 식별자. 딥링크(Universal Link / App Link)의 도메인 소유 증명 파일
+// (.well-known/apple-app-site-association, assetlinks.json)을 만들 때 필요하다.
+// 둘 다 공개값이다 — 실제로 웹에서 누구나 받아볼 수 있는 파일에 그대로 들어간다.
+//
+//   ios.teamId: Apple Developer 팀 ID. **조직 공통값**이라 앱마다 다르지 않다.
+//     비워두면 generate-app 이 환경변수(APPLE_TEAM_ID → FASTLANE_DEV_TEAM_ID)에서 찾는다.
+//   android.sha256CertFingerprints: **앱마다 다르다.** Play 앱 서명을 쓰면 2개가 필요하다 —
+//     업로드 키 + Play 가 관리하는 앱 서명 키. 업로드 키만 넣으면 App Link 검증이 조용히
+//     실패해 링크가 브라우저로 열린다(Poptale 도 앱마다 2개씩 등록).
+//     Play Console > 앱 > 설정 > 앱 서명 에서 두 지문을 복사한다.
+const DEFAULT_IOS = { teamId: null };
+const DEFAULT_ANDROID = { sha256CertFingerprints: [] };
+
+// SHA-256 지문: 대문자 16진수 2자리 32쌍을 콜론으로 이은 형태 (AA:BB:...:FF)
+const SHA256_FP_RE = /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/;
+// Apple 팀 ID: 영숫자 10자리 (예: 3W889GYPRK)
+const APPLE_TEAM_ID_RE = /^[0-9A-Z]{10}$/;
+
 // 법무/정책 링크 (스토어 필수: 개인정보처리방침). 성인인증(본인확인) URL 도 여기.
 const DEFAULT_LEGAL = { privacyUrl: null, termsUrl: null, ageVerifyUrl: null };
 // 권한 고지 오버라이드: { camera:{required,purpose}, location:{...}, notifications:{...} }
@@ -258,13 +292,46 @@ export function loadConfig(repoRoot, slug) {
   // 가 전부 false 면 의도 불명확 → 경고는 generate-app 이.
   const firebase = merge(DEFAULT_FIREBASE, raw.firebase ?? {});
 
+  // tracking 정규화 + 검증. ATT 는 켜는 순간 Info.plist 문구가 스토어에 노출되므로
+  // 문구 누락은 경고가 아니라 실패로 막는다(경고는 무시된다).
+  const tracking = merge(DEFAULT_TRACKING, raw.tracking ?? {});
+  if (tracking.att.enabled) {
+    const desc = tracking.att.usageDescription;
+    if (typeof desc !== 'string' || desc.trim() === '') {
+      err(slug, 'tracking.att.enabled=true 인데 tracking.att.usageDescription 이 없음 — ' +
+        'Info.plist NSUserTrackingUsageDescription 에 들어갈 문구다. ' +
+        '이 앱이 추적 데이터를 실제로 쓰는 목적을 그대로 적어라(예: "관심에 더 맞는 광고를 제공하고 ' +
+        '마케팅 성과를 측정하기 위해 활동 데이터를 사용합니다"). 실제 용도와 다른 문구는 심사·법규 리스크.');
+    }
+  }
+
+  // ios / android — 딥링크 도메인 증명 파일 생성에 쓰는 공개 식별자.
+  // 형식만 검증하고 누락은 막지 않는다. 딥링크를 안 쓰는 앱도 있고, 쓰더라도
+  // 지문은 Play Console 등록 후에야 나오므로 빌드를 세우면 순서가 꼬인다.
+  // 대신 generate-app 이 파일을 만들지 못했다고 크게 경고한다.
+  const ios = merge(DEFAULT_IOS, raw.ios ?? {});
+  const android = merge(DEFAULT_ANDROID, raw.android ?? {});
+  if (ios.teamId != null && !APPLE_TEAM_ID_RE.test(ios.teamId)) {
+    err(slug, `ios.teamId "${ios.teamId}" 형식 오류 — 영숫자 대문자 10자리 (예: 3W889GYPRK)`);
+  }
+  if (!Array.isArray(android.sha256CertFingerprints)) {
+    err(slug, 'android.sha256CertFingerprints 는 배열이어야 함');
+  }
+  for (const fp of android.sha256CertFingerprints) {
+    if (typeof fp !== 'string' || !SHA256_FP_RE.test(fp)) {
+      err(slug, `android.sha256CertFingerprints 항목 "${fp}" 형식 오류 — ` +
+        '대문자 16진수 2자리 32쌍을 콜론으로 이은 형태 (AA:BB:…:FF). ' +
+        'Play Console > 앱 > 설정 > 앱 서명 에서 복사한다.');
+    }
+  }
+
   const legal = merge(DEFAULT_LEGAL, raw.legal ?? {});
   const permissions = merge(DEFAULT_PERMISSIONS, raw.permissions ?? {});
 
   return {
     slug, appName: raw.appName, appId: raw.appId, startUrl: raw.startUrl,
     version, theme, features, navigation, assets, marketing, auth, iap, monitoring,
-    firebase, legal, permissions,
+    firebase, tracking, ios, android, legal, permissions,
     _appDir: appDir,
   };
 }
@@ -287,6 +354,7 @@ export function runtimeConfig(cfg) {
     iap: cfg.iap,             // 상품 매핑 + 검증 엔드포인트. 가격/시크릿은 스토어/백엔드.
     monitoring: cfg.monitoring, // 크래시/에러 + APM 벤더 + 공개 dsn.
     firebase: cfg.firebase,     // FCM/Analytics/Crashlytics/RemoteConfig 토글 + 표시용 프로젝트 ID.
+    tracking: cfg.tracking,     // ATT 토글 + 사전동의 화면 담당 주체(prePermission) + 폴백 문구.
     legal: cfg.legal,           // 개인정보처리방침/약관/성인인증 URL.
     permissions: cfg.permissions, // 권한 고지 오버라이드.
   };
@@ -307,6 +375,13 @@ export const AIPIA_DEFAULTS = Object.freeze({
   // 식별자 규칙
   appIdPrefix: 'com.aipia',
   appIdDevSuffix: '.dev',                                 // dev flavor 만 suffix, stage/prod 동일
+  // Apple Developer 팀 ID — 계정이 하나라 전 앱 공통. AASA 의 appID 접두사로 쓰인다.
+  // 비밀값이 아니다: 모든 앱의 공개 .well-known/apple-app-site-association 에 그대로 실린다
+  // (poptale.ai 에서 확인 가능). 그래서 gitignore 되는 fastlane/.env 가 아니라 여기 둔다 —
+  // 거기 두면 개발자·CI 마다 따로 설정해야 해서 "config 만 채우면 동작" 이 깨진다.
+  // ⚠️ 오래된 App ID 는 App ID Prefix 가 팀 ID 와 다를 수 있다. 그 경우에만 앱 config 의
+  //    ios.teamId 로 덮는다 (Certificates, Identifiers & Profiles > Identifiers 에서 확인).
+  appleTeamId: '3W889GYPRK',
   firebaseProjectPattern: {                                // {slug} 치환
     dev:   'dev-aipia-{slug}',
     stage: 'stage-aipia-{slug}',
@@ -447,6 +522,11 @@ export function aipiaPreset({ slug, appName, idp = 'direct' }) {
         prod:  sub(D.firebaseProjectPattern.prod),
       },
     },
+    // 딥링크 도메인 증명용 공개 식별자.
+    //   ios.teamId 는 조직 공통이라 비워두고 환경변수(FASTLANE_DEV_TEAM_ID)로 해결하는 게 기본.
+    //   지문은 Play Console 등록 후에야 나오므로 빈 배열로 시작 → 나오면 2개(업로드/앱서명) 채운다.
+    ios: { teamId: D.appleTeamId },
+    android: { sha256CertFingerprints: [] },
     legal: {
       privacyUrl: `https://${webProd}/info/privacy`,
       termsUrl:   `https://${webProd}/info/terms`,

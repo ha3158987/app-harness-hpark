@@ -20,4 +20,10 @@ export class AppBridgeWeb extends WebPlugin {
       navigation: { allowedDomains: [], externalInBrowser: true },
     };
   }
+
+  // 브라우저에는 "앱 설정 페이지" 개념이 없다. SDK 가 isNative 로 먼저 걸러내지만,
+  // 플러그인 프록시를 직접 쓰는 코드가 던지지 않도록 여기서도 조용히 실패시킨다.
+  async openAppSettings() {
+    return { opened: false, reason: 'not-native' };
+  }
 }

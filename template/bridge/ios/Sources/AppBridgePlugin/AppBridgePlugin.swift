@@ -17,7 +17,8 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "AppBridge"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "getConfig", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "saveImageToGallery", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "saveImageToGallery", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openAppSettings", returnType: CAPPluginReturnPromise)
     ]
 
     /**
@@ -46,6 +47,32 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
             call.resolve(obj)
         } catch {
             call.reject("app-config.json 을 읽을 수 없습니다: \(error.localizedDescription)")
+        }
+    }
+
+    /**
+     * 이 앱의 iOS 설정 페이지를 연다.
+     *
+     * 권한을 한 번 거부한 유저를 되돌릴 **유일한 합법 경로**다. 특히 ATT 는 상태가
+     * notDetermined 일 때만 시스템 팝업이 뜨므로, 거부 후에는 앱이 다시 물을 방법이 없다.
+     * iOS 는 앱 설정 페이지에 "추적 허용" 토글을 표시하므로 여기로 보내면 유저가 직접 켤 수 있다.
+     *
+     * ⚠️ `설정 > 개인정보 보호 > 추적` 같은 하위 화면으로 직접 가는 URL(App-Prefs:...)은
+     * 비공개 API 라 심사에서 리젝된다. 공개 API 는 앱 자신의 설정 페이지까지만 허용한다.
+     */
+    @objc func openAppSettings(_ call: CAPPluginCall) {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+            call.reject("설정 URL 생성 실패")
+            return
+        }
+        DispatchQueue.main.async {
+            guard UIApplication.shared.canOpenURL(url) else {
+                call.reject("설정 앱을 열 수 없습니다")
+                return
+            }
+            UIApplication.shared.open(url, options: [:]) { ok in
+                call.resolve(["opened": ok])
+            }
         }
     }
 

@@ -227,6 +227,8 @@ flowchart TB
                   "apm": { "provider": null } },
   "firebase": { "enabled": false, "fcm": false, "analytics": false, "crashlytics": false,
                 "remoteConfig": false, "project": { "dev": null, "stage": null, "prod": null } },
+  "ios": { "teamId": null },                          // 조직 공통 — 보통 환경변수로 해결
+  "android": { "sha256CertFingerprints": [] },        // 앱마다 다름 — Play 앱 서명 시 2개
   "legal": { "privacyUrl": "...", "termsUrl": "...", "ageVerifyUrl": "..." },
   "permissions": { "notifications": { "required": false, "purpose": "..." } }
 }
@@ -248,6 +250,50 @@ flowchart TB
 - `firebase.enabled`: FCM/Analytics/Crashlytics/RemoteConfig 토글 + flavor 별 프로젝트 ID 표시.
   실제 google-services.json / GoogleService-Info.plist 는 secrets 에서 빌드 시 배치.
 - `theme.statusBarStyle`: `light`(밝은 배경/어두운 텍스트) | `dark`. `version.code` 는 단조 증가 정수.
+
+**config 를 바꾼 뒤 재생성하면 어디까지 반영되나**
+
+`generate-app` 은 재실행 안전(idempotent)이지만, **네이티브 패치는 "없으면 추가" 방식**이라 이미
+들어간 값은 고치지 않는다. 무엇이 갱신되고 무엇이 안 되는지 알고 써야 한다.
+
+| 대상 | 재실행 시 |
+|---|---|
+| `www`, `app-config.json`, `capacitor.config.json`, 버전 코드 | ✅ 매번 덮어씀 |
+| `package.json` 플러그인 목록 | ✅ **빠진 것 추가**(삭제는 안 함) |
+| `Info.plist` 문구, associated-domains, Android intent-filter | ⚠️ 없으면 추가, **있으면 안 고침** |
+
+즉 `tracking.att.usageDescription` 같은 **문구를 바꾸면 기존 build 에는 반영되지 않는다.**
+확실히 하려면 `rm -rf build/<slug>` 후 재생성한다.
+
+---
+
+**딥링크 도메인 증명 파일 (`features.deepLink: true` 일 때 자동 생성)**
+
+Universal Link(iOS) / App Link(Android) 는 **앱 설정만으로는 동작하지 않는다.** 도메인이 "이 앱을
+신뢰한다"고 선언하는 파일 2개를 **웹이 서빙**해야 하고, 없으면 링크가 에러 없이 조용히 브라우저로 열린다.
+
+generate-app 이 `build/<slug>/well-known/<host>/` 에 만들어 둔다 (네이티브 플랫폼 불필요 →
+`--skip-install` 드라이 실행만으로도 받아갈 수 있다). 웹 레포로 옮기는 건 사람이 한다:
+
+| 파일 | 웹 서빙 경로 | 주의 |
+|---|---|---|
+| `apple-app-site-association` | `<웹루트>/.well-known/apple-app-site-association` | **확장자 없음**, `Content-Type: application/json`, 리다이렉트 없이 200 |
+| `assetlinks.json` | `<웹루트>/.well-known/assetlinks.json` | — |
+
+둘 다 **인증 미들웨어에서 제외**해야 한다(Apple/Google 크롤러는 비로그인으로 받아간다).
+
+필요한 입력값 2개:
+
+| 값 | 어디에 | 앱별? | 얻는 곳 |
+|---|---|---|---|
+| Apple 팀 ID | `ios.teamId` (신규 앱은 프리셋이 자동으로 채움) · env `APPLE_TEAM_ID` / `FASTLANE_DEV_TEAM_ID` 로 덮기 가능 | **조직 공통 — 이미 채워져 있음** (`3W889GYPRK`) | Apple Developer > Membership details |
+| SHA-256 지문 | `android.sha256CertFingerprints` | **앱마다 다름** | Play Console > 앱 > 설정 > 앱 서명 |
+
+> ⚠️ **Play 앱 서명을 쓰면 지문이 2개다** — 업로드 키 + Play 가 관리하는 앱 서명 키. 업로드 키만
+> 넣으면 App Link 검증이 조용히 실패한다. `adb shell pm get-app-links <package>` 로 확인할 것.
+>
+> ⚠️ **한 호스트를 여러 앱(dev/stage/prod)이 쓰면 파일 하나에 그 앱들이 전부 들어간다.** 하네스가
+> `apps/*` 를 훑어 자동으로 합친다 — 앱별로 따로 올리면 나중 것이 앞선 것을 덮어 링크가 깨진다.
 
 **`features.forceUpdate.minVersionUrl` 이 가리키는 JSON** (게이트가 읽음, 플랫폼별 우선·최상위 폴백):
 ```jsonc

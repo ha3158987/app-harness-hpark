@@ -71,6 +71,12 @@ const IOS_USAGE = {
   biometric: { NSFaceIDUsageDescription: '본인 확인을 위해 Face ID 를 사용합니다.' },
 };
 
+// ATT 활성 여부. tracking.att.enabled 가 정본이고, 어트리뷰션 벤더만 켜둔 예전 config 는
+// 하위호환으로 함께 인정한다(그 경우 문구는 usageDescription 이 없으면 주입되지 않는다).
+function attEnabled(cfg) {
+  return !!(cfg.tracking?.att?.enabled || cfg.marketing?.attribution?.provider);
+}
+
 // 마케팅 SDK: 자동 배선(npm 설치)되는 벤더 → 패키지. WIRED_PROVIDERS 와 일치.
 const MARKETING_PLUGINS = {
   attribution: { appsflyer: ['appsflyer-capacitor-plugin'] },
@@ -297,14 +303,65 @@ function pluginsFor(cfg) {
   marketingSetup(cfg).plugins.forEach((p) => set.add(p));
   authSetup(cfg).plugins.forEach((p) => set.add(p));
   iapSetup(cfg).plugins.forEach((p) => set.add(p));
-  // 어트리뷰션 있으면 iOS ATT(추적동의) 플러그인
-  if (cfg.marketing?.attribution?.provider) set.add('capacitor-plugin-app-tracking-transparency');
+  // iOS ATT(추적동의) 플러그인. tracking.att 로 독립 제어하되, 어트리뷰션 벤더가 켜져 있으면
+  // 예전 config(tracking 블록 없음)도 그대로 동작하도록 하위호환 유지.
+  if (attEnabled(cfg)) set.add('capacitor-plugin-app-tracking-transparency');
   // 크래시 리포트(@sentry/capacitor)는 프레임워크 형제(@sentry/react|vue|angular)를 peer 로 요구하므로
   // 하네스가 자동설치하지 않는다 — 웹 앱이 자기 프레임워크에 맞춰 설치(INTEGRATION.md). 브릿지는 graceful.
   return [...set];
 }
 
 // 빌드 디렉터리 package.json (없을 때만 생성). 플러그인 + 로컬 브릿지 의존성 선언.
+/**
+ * 기존 build 의 package.json 을 config 가 요구하는 플러그인 목록과 맞춘다.
+ *
+ * 왜 필요한가: 예전엔 build 가 이미 있으면 package.json 을 통째로 건너뛰었다. 그래서 config 에서
+ * 기능을 새로 켜도(예: tracking.att.enabled) 그 플러그인이 영원히 설치되지 않았다.
+ * 크래시가 아니라 **조용한 무동작**으로 나타나 원인을 찾기 어렵다 — 브릿지가 플러그인 import 에
+ * 실패하면 'unavailable' 을 돌려주고 넘어가므로 로그에도 잘 안 남는다.
+ *
+ * **추가만 하고 삭제하지 않는다.** 사람이 손으로 넣은 의존성(벤더 SDK 등)을 날리지 않기 위해서다.
+ * 기능을 껐을 때 남는 잉여 플러그인은 앱 용량만 늘 뿐 동작을 깨지 않는다 — capability 플래그가
+ * off 라 브릿지가 호출하지 않는다.
+ */
+function reconcilePackageJson(buildDir, cfg, plugins) {
+  const file = join(buildDir, 'package.json');
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    // 손상됐으면 새로 쓰는 편이 낫다.
+    log.warn('build/package.json 을 읽을 수 없어 새로 생성한다');
+    scaffoldPackageJson(buildDir, cfg, plugins);
+    return;
+  }
+  const deps = pkg.dependencies || (pkg.dependencies = {});
+
+  // 브릿지는 절대경로 file: 라 레포를 옮기면 깨진다 — 매번 현재 경로로 맞춘다.
+  const bridgePath = `file:${join(ROOT, 'template', 'bridge')}`;
+  const changed = [];
+  if (deps['@aipia-team/harness-bridge'] !== bridgePath) {
+    deps['@aipia-team/harness-bridge'] = bridgePath;
+    changed.push('@aipia-team/harness-bridge(경로 갱신)');
+  }
+  for (const p of plugins) {
+    if (!deps[p]) { deps[p] = versionFor(p); changed.push(p); }
+  }
+  // 플랫폼/CLI 는 scaffold 와 동일 규칙으로 보강
+  for (const [p, v] of [['@capacitor/cli', '^8.0.0'], ['@capacitor/android', '^8.0.0']]) {
+    if (!deps[p]) { deps[p] = v; changed.push(p); }
+  }
+  if (IS_MAC && !deps['@capacitor/ios']) { deps['@capacitor/ios'] = '^8.0.0'; changed.push('@capacitor/ios'); }
+
+  if (!changed.length) {
+    log.ok(`package.json: config 와 일치 (플러그인 ${plugins.length}개)`);
+    return;
+  }
+  writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
+  log.ok(`package.json: 누락 의존성 ${changed.length}개 추가 — ${changed.join(', ')}`);
+  log.dim('  (기존 의존성은 삭제하지 않는다 — 수동 추가분 보호)');
+}
+
 function scaffoldPackageJson(buildDir, cfg, plugins) {
   const file = join(buildDir, 'package.json');
   const deps = {};
@@ -375,6 +432,136 @@ ${dataTags}
   log.ok(`AndroidManifest: App Links intent-filter (${domains.length} 도메인)`);
 }
 
+// ── 딥링크 도메인 증명 파일 (.well-known) ──────────────────────────────────
+// Universal Link(iOS) / App Link(Android) 는 **앱 설정만으로는 동작하지 않는다.**
+// 도메인이 "이 앱을 신뢰한다"고 선언하는 파일 2개를 웹이 서빙해야 한다.
+// 앱 쪽(entitlements / intent-filter)은 위 patch* 가 자동으로 넣지만, 이 파일들은
+// 웹 레포 소관이라 하네스가 직접 배치할 수 없다 → build/<slug>/well-known/ 에 만들어 두고
+// 웹에 옮기는 방법을 안내한다. 신규 앱이 손으로 JSON 을 짜다 틀리는 것을 막는 게 목적이다.
+
+// Apple 팀 ID 해석: config → 환경변수. 조직 공통값이라 보통 환경변수 하나로 전 앱이 해결된다.
+// FASTLANE_DEV_TEAM_ID 는 이미 fastlane 이 쓰는 이름이라 그대로 재사용한다(중복 설정 방지).
+function resolveAppleTeamId(cfg) {
+  return cfg.ios?.teamId
+    || process.env.APPLE_TEAM_ID
+    || process.env.FASTLANE_DEV_TEAM_ID
+    || null;
+}
+
+// AASA/assetlinks 를 서빙해야 하는 실제 호스트 목록.
+// 와일드카드(*.example.com)는 파일을 서빙할 대상이 아니다 — 각 실호스트가 자기 파일을 준다.
+function wellKnownHosts(cfg) {
+  const hosts = (cfg.navigation.allowedDomains || []).filter((d) => !d.includes('*'));
+  const startHost = new URL(cfg.startUrl).hostname;
+  return [...new Set([startHost, ...hosts])];
+}
+
+// 같은 호스트를 선언한 **모든** 앱을 모은다.
+// 한 도메인의 증명 파일은 그 도메인을 쓰는 앱 전부를 인가해야 한다 — dev/stage/prod 를
+// 따로 쓰면 나중에 배포한 파일이 앞선 앱을 덮어 링크가 조용히 깨진다.
+// (Poptale 의 AASA 도 한 파일에 prod/stage/dev 3개 appID 가 들어 있다.)
+function collectAppsByHost(repoRoot) {
+  const byHost = new Map(); // host → [{ appId, teamId, fps }]
+  const appsDir = join(repoRoot, 'apps');
+  if (!existsSync(appsDir)) return byHost;
+  for (const slug of readdirSync(appsDir)) {
+    let c;
+    try {
+      c = loadConfig(repoRoot, slug);
+    } catch {
+      continue; // 잘못된/미완성 config 는 조용히 건너뛴다 — 남의 앱 때문에 내 빌드가 죽지 않게
+    }
+    if (!c.features?.deepLink) continue;
+    const entry = {
+      appId: c.appId,
+      teamId: resolveAppleTeamId(c),
+      fps: c.android?.sha256CertFingerprints || [],
+    };
+    for (const host of wellKnownHosts(c)) {
+      if (!byHost.has(host)) byHost.set(host, []);
+      byHost.get(host).push(entry);
+    }
+  }
+  return byHost;
+}
+
+function writeWellKnown(buildDir, cfg) {
+  const outDir = join(buildDir, 'well-known');
+  const byHost = collectAppsByHost(ROOT);
+  const myHosts = wellKnownHosts(cfg);
+  const missing = new Set();
+  let wrote = 0;
+
+  for (const host of myHosts) {
+    const apps = byHost.get(host) || [];
+    const withTeam = apps.filter((a) => a.teamId);
+    const withFps = apps.filter((a) => a.fps.length);
+    const hostDir = join(outDir, host);
+
+    // (1) apple-app-site-association — **확장자 없는 파일**. paths:["*"] = 모든 경로를 앱으로.
+    if (withTeam.length) {
+      const ids = [...new Set(withTeam.map((a) => `${a.teamId}.${a.appId}`))];
+      const aasa = {
+        applinks: {
+          apps: [],
+          details: ids.map((appID) => ({ appID, paths: ['*'] })),
+        },
+        // 앱↔웹 비밀번호 공유(iOS 자동 로그인). 있어서 손해 없고 없으면 기능이 안 붙는다.
+        webcredentials: { apps: ids },
+      };
+      mkdirSync(hostDir, { recursive: true });
+      writeFileSync(join(hostDir, 'apple-app-site-association'), JSON.stringify(aasa, null, 2) + '\n');
+      log.ok(`${host}/apple-app-site-association — 앱 ${ids.length}개: ${ids.join(', ')}`);
+      wrote++;
+    } else {
+      missing.add('Apple 팀 ID — config 의 ios.teamId 또는 환경변수 APPLE_TEAM_ID / FASTLANE_DEV_TEAM_ID');
+    }
+
+    // (2) assetlinks.json — 지문이 없으면 만들지 않는다. 틀린 지문을 배포하면 검증이 조용히
+    //     실패해 링크가 브라우저로 열리는데, 파일이 없는 것보다 디버깅이 더 어렵다.
+    if (withFps.length) {
+      const assetlinks = withFps.map((a) => ({
+        relation: ['delegate_permission/common.handle_all_urls'],
+        target: {
+          namespace: 'android_app',
+          package_name: a.appId,
+          sha256_cert_fingerprints: a.fps,
+        },
+      }));
+      mkdirSync(hostDir, { recursive: true });
+      writeFileSync(join(hostDir, 'assetlinks.json'), JSON.stringify(assetlinks, null, 2) + '\n');
+      log.ok(`${host}/assetlinks.json — 앱 ${withFps.length}개`);
+      wrote++;
+      for (const a of withFps) {
+        if (a.fps.length === 1) {
+          log.warn(`${a.appId} 지문이 1개다 — Play 앱 서명을 쓰면 업로드 키 + Play 앱 서명 키 ` +
+            '2개가 모두 필요하다. 1개만 등록하면 App Link 검증이 조용히 실패한다.');
+        }
+      }
+    } else {
+      missing.add('Android SHA-256 지문 — config 의 android.sha256CertFingerprints ' +
+        '(Play Console > 앱 > 설정 > 앱 서명 에서 업로드 키·앱 서명 키 2개)');
+    }
+  }
+
+  if (missing.size) {
+    log.warn('딥링크 도메인 증명 파일을 일부 만들지 못했다. 없으면 링크가 앱이 아니라 ' +
+      '브라우저로 열린다(에러 없이 조용히):');
+    missing.forEach((m) => log.warn(`  · ${m}`));
+  }
+
+  // 웹에 옮기는 방법 안내 — 하네스는 웹 레포를 모르므로 여기서부터는 사람의 몫이다.
+  if (wrote) {
+    log.info('각 호스트의 웹 서비스가 아래 경로로 서빙해야 한다:');
+    log.dim('  <웹루트>/.well-known/apple-app-site-association   ← 확장자 없음, Content-Type: application/json');
+    log.dim('  <웹루트>/.well-known/assetlinks.json');
+    log.dim(`  생성물: ${outDir}/<host>/`);
+    log.dim('  ⚠️ 리다이렉트 없이 200 이어야 하고, 인증 미들웨어에서 제외해야 한다(크롤러는 비로그인).');
+    log.dim('  ⚠️ 한 호스트를 여러 앱(dev/stage/prod)이 쓰면 이 파일 하나에 전부 들어 있다 — ' +
+      '앱별로 따로 올리지 말 것(덮어쓰면 다른 앱 링크가 깨진다).');
+  }
+}
+
 function patchIosDeepLinks(buildDir, cfg) {
   const iosAppDir = join(buildDir, 'ios', 'App', 'App');
   if (!existsSync(iosAppDir)) return; // iOS 플랫폼 미추가(예: Windows) — 디렉터리를 만들지 않는다
@@ -427,9 +614,22 @@ function patchIosUsageStrings(buildDir, cfg) {
   if (!add.NSPhotoLibraryAddUsageDescription) {
     add.NSPhotoLibraryAddUsageDescription = '캡쳐 이미지 저장을 위해 사진 보관함 접근이 필요합니다.';
   }
-  // ATT: 어트리뷰션(AppsFlyer 등) 있으면 추적 사용 설명 필수(없으면 ATT 호출 시 크래시)
-  if (cfg.marketing?.attribution?.provider) {
-    add.NSUserTrackingUsageDescription = '맞춤형 콘텐츠와 광고 제공을 위해 활동을 추적합니다.';
+  // ATT: 추적 사용 설명 문구. 없으면 ATT 호출 시 iOS 가 크래시한다.
+  // 기본 문구를 하네스가 제공하지 않는 이유 — 앱마다 실제 용도가 다른데 기본값이 그대로 출시되면
+  // "표기한 목적과 실제 용도가 다른" 상태가 된다(Poptale 사례). config 로 강제한다.
+  if (attEnabled(cfg)) {
+    const desc = cfg.tracking?.att?.usageDescription;
+    if (typeof desc === 'string' && desc.trim() !== '') {
+      add.NSUserTrackingUsageDescription = desc.trim();
+    } else if (cfg.tracking?.att?.enabled) {
+      // loadConfig 가 이미 막지만, tracking 블록을 우회해 들어온 경우의 최종 방어선.
+      fail('tracking.att.enabled=true 인데 tracking.att.usageDescription 이 비어 있음 — ' +
+        'Info.plist 문구 없이 ATT 를 켜면 권한 요청 시점에 iOS 가 크래시한다.');
+    } else {
+      // 하위호환 경로(어트리뷰션 벤더만 켜둔 예전 config): 문구를 임의로 만들지 않고 경고만.
+      log.warn('ATT 플러그인은 설치되지만 NSUserTrackingUsageDescription 이 없다 — ' +
+        'tracking.att.usageDescription 을 채워라. 없으면 ATT 호출 시 크래시한다.');
+    }
   }
   const entries = Object.entries(add).filter(([k]) => !xml.includes(`<key>${k}</key>`));
   if (!entries.length) return;
@@ -1245,7 +1445,15 @@ function main() {
   if (isNew || !existsSync(join(buildDir, 'package.json'))) {
     scaffoldPackageJson(buildDir, cfg, plugins);
   } else {
-    log.info('기존 package.json 유지 (플러그인 변경 시 수동 확인 권장)');
+    // 기존 build 라도 config 가 요구하는 플러그인이 빠져 있으면 채운다.
+    reconcilePackageJson(buildDir, cfg, plugins);
+  }
+
+  // 4b) 딥링크 도메인 증명 파일. config 만으로 만들 수 있어(네이티브 플랫폼 불필요)
+  // 설치/sync 앞에 둔다 — 웹 담당자가 --skip-install 드라이 실행만으로 파일을 받아갈 수 있게.
+  if (cfg.features.deepLink) {
+    log.step('딥링크 도메인 증명 파일 (.well-known)');
+    writeWellKnown(buildDir, cfg);
   }
 
   if (args.skipInstall) {
@@ -1319,6 +1527,7 @@ function main() {
     log.step('딥링크 네이티브 배선 (App Links / Universal Links)');
     patchAndroidDeepLinks(buildDir, cfg);
     patchIosDeepLinks(buildDir, cfg);
+    // .well-known 파일은 위 4b) 에서 이미 생성됐다(네이티브 불필요).
   }
   // 7b-2) 푸시 배선 (features.push)
   if (cfg.features.push) {

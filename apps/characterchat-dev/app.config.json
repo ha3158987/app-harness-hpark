@@ -44,6 +44,13 @@
     },
     "autoCapture": false
   },
+  "tracking": {
+    "att": {
+      "enabled": true,
+      "usageDescription": "관심에 더 맞는 광고를 제공하고 마케팅 성과를 측정하기 위해 활동 데이터를 사용합니다.",
+      "prePermission": true
+    }
+  },
   "legal": {
     "privacyUrl": "https://poptale.ai/info/privacy",
     "termsUrl": "https://poptale.ai/info/terms"
@@ -58,5 +65,11 @@
       "dev": "poptale-chat"
     },
     "fcm": true
+  },
+  "ios": {
+    "teamId": "3W889GYPRK"
+  },
+  "android": {
+    "sha256CertFingerprints": []
   }
 }
