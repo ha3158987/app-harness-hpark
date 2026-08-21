@@ -85,6 +85,7 @@ class AppBridgeImpl {
     // ATT: 시스템 팝업은 유저당 평생 1회만 뜬다(응답 후엔 notDetermined 로 못 돌아옴).
     // 호출부가 실수로 두 곳에서 요청하면 응답 타이밍이 엉켜 잘못된 값이 어트리뷰션 SDK 로 간다
     // (Poptale 실제 사례). 그래서 API 자체를 멱등하게 만든다 — 아래 2개가 그 상태다.
+    this._rcPromise = null;      // Remote Config 초기화 1회 공유(fetchAndActivate 중복 방지)
     this._attStatus = null;      // 확정된 status 캐시. 'unavailable' 은 캐시하지 않는다(재시도 가능)
     this._attPending = null;     // 진행 중인 요청의 Promise (중복 팝업 차단)
   }
@@ -317,34 +318,121 @@ class AppBridgeImpl {
    * force:false 면 닫을 수 있는 소프트 권유. 기본은 하드 게이트.
    * @returns {{ required:boolean, current?:number, min?:number, storeUrl?:string }}
    */
+  // ── Firebase Remote Config ────────────────────────────────────────────
+  // 앱 재배포 없이 콘솔에서 값을 바꾸기 위한 것. 강제 업데이트의 1차 소스로 쓰지만
+  // 전용은 아니다 — getRemoteConfig(key) 로 임의 값도 읽는다(기능 토글·A/B 등).
+  //
+  // ⚠️ **캐시 지연이 있다.** fetchAndActivate 는 minimumFetchInterval 안에는 서버를 다시 찌르지
+  // 않는다. 콘솔에서 눌러도 최대 그만큼 늦게 반영된다 — 긴급 차단을 RC 에만 의존하면 안 된다.
+  async _initRemoteConfig() {
+    if (this._rcPromise) return this._rcPromise;
+    const fb = this.config && this.config.firebase;
+    if (!this.isNative || !fb || !fb.enabled || !fb.remoteConfig) {
+      this._rcPromise = Promise.resolve(null);
+      return this._rcPromise;
+    }
+    this._rcPromise = (async () => {
+      try {
+        const { FirebaseRemoteConfig } = await import('@capacitor-firebase/remote-config');
+        const secs = Number(fb.remoteConfigFetchIntervalSeconds);
+        await FirebaseRemoteConfig.setSettings({
+          minimumFetchIntervalInSeconds: Number.isFinite(secs) && secs >= 0 ? secs : 3600,
+        });
+        await FirebaseRemoteConfig.fetchAndActivate();
+        return FirebaseRemoteConfig;
+      } catch {
+        // 플러그인 미설치·Firebase 파일 누락·네트워크 실패 — 어느 쪽이든 폴백으로 넘긴다.
+        return null;
+      }
+    })();
+    return this._rcPromise;
+  }
+
+  /**
+   * Remote Config 값 읽기. RC 를 못 쓰면 null.
+   * @param {string} key
+   * @param {'string'|'number'|'boolean'} [type]
+   */
+  async getRemoteConfig(key, type = 'string') {
+    const rc = await this._initRemoteConfig();
+    if (!rc) return null;
+    try {
+      if (type === 'number') return (await rc.getNumber({ key })).value;
+      if (type === 'boolean') return (await rc.getBoolean({ key })).value;
+      const { value } = await rc.getString({ key });
+      return value === '' ? null : value;
+    } catch {
+      return null;
+    }
+  }
+
+  // RC 에서 최소버전 정보를 읽는다. 값이 없으면(=콘솔에 키가 없거나 0) null 을 돌려 폴백으로 넘긴다.
+  // 플랫폼별 키를 나눈 이유: RC 조건(condition)으로도 분기할 수 있지만, 키를 나누면 콘솔에서
+  // 값이 눈에 보여 운영 실수가 줄고 브릿지 로직도 단순해진다.
+  async _forceUpdateFromRemoteConfig() {
+    const rc = await this._initRemoteConfig();
+    if (!rc) return null;
+    const suffix = this.platform === 'ios' ? 'ios' : 'android';
+    const min = await this.getRemoteConfig(`min_version_code_${suffix}`, 'number');
+    if (!min) return null; // 미설정(0) → RC 는 의견 없음 → 폴백
+    return {
+      min: Number(min) || 0,
+      storeUrl: await this.getRemoteConfig(`store_url_${suffix}`),
+      message: await this.getRemoteConfig('force_update_message'),
+      force: (await this.getRemoteConfig('force_update_hard', 'boolean')) !== false,
+      source: 'remoteConfig',
+    };
+  }
+
+  // 정적 JSON 폴백. 플랫폼별 노드 우선, 없으면 최상위.
+  async _forceUpdateFromUrl() {
+    const url = this.config?.features?.forceUpdate?.minVersionUrl;
+    if (!url) return null;
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const node = (data && data[this.platform]) || data || {};
+      const min = Number(node.minVersionCode ?? data.minVersionCode ?? 0) || 0;
+      if (!min) return null;
+      return {
+        min,
+        storeUrl: node.storeUrl || data.storeUrl || null,
+        message: node.message || data.message || null,
+        force: node.force !== false && data.force !== false,
+        source: 'url',
+      };
+    } catch {
+      return null; // 네트워크 실패로 사용자를 막지 않는다
+    }
+  }
+
+  /**
+   * 강제 업데이트 체크. **RC → URL → 통과** 순으로 해석한다.
+   *
+   * 마지막이 "통과"인 것(fail-open)은 의도된 정책이다: 값을 못 읽었다고 사용자를 막으면
+   * 호스팅 장애가 곧 전체 앱 장애가 된다. 보안 패치를 강제해야 하는 상황이라면 클라이언트
+   * 게이트가 아니라 **서버가 구버전 요청을 거부**하는 방식이 맞다.
+   */
   async checkForceUpdate(opts = {}) {
     await this.ready();
     if (!this.isNative || !this.capabilities.forceUpdate) return { required: false };
-    const url = this.config?.features?.forceUpdate?.minVersionUrl;
-    if (!url) return { required: false };
 
-    let data;
-    try {
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) return { required: false };
-      data = await res.json();
-    } catch {
-      return { required: false }; // 네트워크 실패로 사용자를 막지 않는다
-    }
+    const src = this.config?.features?.forceUpdate?.source;
+    let info = null;
+    if (src === 'remoteConfig') info = await this._forceUpdateFromRemoteConfig();
+    if (!info) info = await this._forceUpdateFromUrl();
+    if (!info) return { required: false }; // fail-open
 
-    const node = (data && data[this.platform]) || data || {};
-    const min = Number(node.minVersionCode ?? data.minVersionCode ?? 0) || 0;
     const current = Number(this.config?.version?.code ?? 0) || 0;
-    const storeUrl = node.storeUrl || data.storeUrl || this._defaultStoreUrl();
-    const message = node.message || data.message || '원활한 이용을 위해 최신 버전으로 업데이트해 주세요.';
-    const force = node.force !== false && data.force !== false;
+    if (current >= info.min) return { required: false, current, min: info.min, source: info.source };
 
-    if (current >= min) return { required: false, current, min };
-
+    const storeUrl = info.storeUrl || this._defaultStoreUrl();
+    const message = info.message || '원활한 이용을 위해 최신 버전으로 업데이트해 주세요.';
     if (opts.showPrompt !== false) {
-      this._showUpdateGate({ message, storeUrl, dismissible: !force });
+      this._showUpdateGate({ message, storeUrl, dismissible: !info.force });
     }
-    return { required: true, current, min, storeUrl };
+    return { required: true, current, min: info.min, storeUrl, source: info.source };
   }
 
   // 플랫폼별 스토어 검색 폴백 URL(storeUrl 미지정 시).

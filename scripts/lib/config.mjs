@@ -18,7 +18,12 @@ const DEFAULT_FEATURES = {
   biometric: false,
   share: false,
   camera: false,
-  forceUpdate: { enabled: false, minVersionUrl: null },
+  // 강제 업데이트 게이트.
+  //   source: 최소 버전을 어디서 읽나. 'remoteConfig'(Firebase) | 'url'(정적 JSON).
+  //     기본 'url' — Firebase 를 안 쓰는 앱도 강제 업데이트를 쓸 수 있어야 한다.
+  //   minVersionUrl: url 방식의 주소이자, remoteConfig 방식의 **폴백**.
+  //     RC 는 캐시 지연·fetch 실패가 있고 게이트는 fail-open 이라, 폴백이 있으면 그 구멍이 좁아진다.
+  forceUpdate: { enabled: false, source: 'url', minVersionUrl: null },
   secureStorage: false,
   localNotification: false,
   haptics: false,
@@ -97,7 +102,13 @@ const DEFAULT_FIREBASE = {
   enabled: false,
   project: { dev: null, stage: null, prod: null }, // 표시용 프로젝트 ID
   fcm: false,
+  // remoteConfig: 원격 설정 플러그인 설치 + 브릿지 초기화. 강제 업데이트의 1차 소스로 쓸 수 있고,
+  // getRemoteConfig(key) 로 임의 값도 읽는다(강제 업데이트 전용이 아니다).
   remoteConfig: false,
+  // RC 캐시 간격(초). Firebase 는 이 시간 안에는 서버를 다시 찌르지 않는다 —
+  // 콘솔에서 값을 바꿔도 최대 이만큼 반영이 늦는다. 강제 업데이트는 긴급성이 있어 1시간을 기본으로
+  // 둔다(Firebase 기본값 12시간은 너무 길다). debug 빌드는 generate-app 이 0 으로 덮는다.
+  remoteConfigFetchIntervalSeconds: 3600,
   analytics: false,
   crashlytics: false,
 };
@@ -222,8 +233,20 @@ export function loadConfig(repoRoot, slug) {
   if (features.deferredDeepLink.enabled && !features.deferredDeepLink.provider) {
     err(slug, `deferredDeepLink.enabled=true 인데 provider 가 없음 (branch | appsflyer ...)`);
   }
-  if (features.forceUpdate.enabled && !features.forceUpdate.minVersionUrl) {
-    err(slug, `forceUpdate.enabled=true 인데 minVersionUrl 이 없음`);
+  if (features.forceUpdate.enabled) {
+    const src = features.forceUpdate.source;
+    if (!['url', 'remoteConfig'].includes(src)) {
+      err(slug, `forceUpdate.source 는 "url" | "remoteConfig" (받음: ${src})`);
+    }
+    if (src === 'url' && !features.forceUpdate.minVersionUrl) {
+      err(slug, 'forceUpdate.source="url" 인데 minVersionUrl 이 없음');
+    }
+    // remoteConfig 를 쓰려면 실제로 RC 가 켜져 있어야 한다. 안 그러면 브릿지가 값을 못 읽고
+    // 조용히 폴백(또는 fail-open)으로 빠져 "게이트를 켰는데 안 뜬다"가 된다.
+    if (src === 'remoteConfig' && !(raw.firebase?.enabled && raw.firebase?.remoteConfig)) {
+      err(slug, 'forceUpdate.source="remoteConfig" 인데 firebase.enabled/remoteConfig 가 켜져 있지 않음 — ' +
+        '둘 다 true 여야 원격 설정을 읽을 수 있다.');
+    }
   }
   // pushPolicy.allowedPaths: null=전허용, 배열=화이트리스트(문자열 prefix)
   const allowed = features.pushPolicy?.allowedPaths;

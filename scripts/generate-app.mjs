@@ -306,6 +306,11 @@ function pluginsFor(cfg) {
   // iOS ATT(추적동의) 플러그인. tracking.att 로 독립 제어하되, 어트리뷰션 벤더가 켜져 있으면
   // 예전 config(tracking 블록 없음)도 그대로 동작하도록 하위호환 유지.
   if (attEnabled(cfg)) set.add('capacitor-plugin-app-tracking-transparency');
+  // Firebase Remote Config — 강제 업데이트 1차 소스 + 범용 원격 설정.
+  // peer 로 firebase JS SDK 를 요구하지만 그건 플러그인의 웹 구현용이고, 셸은 네이티브만 쓴다.
+  if (cfg.firebase?.enabled && cfg.firebase?.remoteConfig) {
+    set.add('@capacitor-firebase/remote-config');
+  }
   // 크래시 리포트(@sentry/capacitor)는 프레임워크 형제(@sentry/react|vue|angular)를 peer 로 요구하므로
   // 하네스가 자동설치하지 않는다 — 웹 앱이 자기 프레임워크에 맞춰 설치(docs/06-INTEGRATION.md). 브릿지는 graceful.
   return [...set];

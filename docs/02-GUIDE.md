@@ -304,6 +304,31 @@ generate-app 이 `build/<slug>/well-known/<host>/` 에 만들어 둔다 (네이�
 > ⚠️ **한 호스트를 여러 앱(dev/stage/prod)이 쓰면 파일 하나에 그 앱들이 전부 들어간다.** 하네스가
 > `apps/*` 를 훑어 자동으로 합친다 — 앱별로 따로 올리면 나중 것이 앞선 것을 덮어 링크가 깨진다.
 
+**강제 업데이트 — 최소버전을 어디서 읽나**
+
+```
+RC(source: 'remoteConfig')  →  URL(minVersionUrl)  →  통과
+```
+
+`source: 'remoteConfig'` 여도 **URL 은 폴백으로 남는다.** RC 는 캐시 지연·fetch 실패가 있고
+게이트는 fail-open 이라, 폴백이 있으면 그 구멍이 좁아진다. 둘 다 못 읽으면 **막지 않는다** —
+값을 못 읽었다고 사용자를 막으면 호스팅 장애가 곧 전체 앱 장애가 된다. 보안 패치를 강제해야 하면
+클라이언트 게이트가 아니라 **서버가 구버전 요청을 거부**하는 방식이 맞다.
+
+**Remote Config 키** (`source: 'remoteConfig'` 일 때 Firebase 콘솔에 만든다)
+
+| 키 | 타입 | 예시 |
+|---|---|---|
+| `min_version_code_ios` / `min_version_code_android` | Number | `11` |
+| `store_url_ios` / `store_url_android` | String | 스토어 URL (미설정 시 appId 로 조립) |
+| `force_update_message` | String | 게이트 본문 |
+| `force_update_hard` | Boolean | `false` 면 "나중에"로 닫히는 소프트 권유 |
+
+> ⚠️ `min_version_code_*` 가 없거나 0 이면 RC 는 "의견 없음"으로 보고 **URL 폴백으로 넘어간다.**
+>
+> ⚠️ **캐시 지연.** `firebase.remoteConfigFetchIntervalSeconds`(기본 3600) 안에는 서버를 다시
+> 찌르지 않는다. 콘솔에서 눌러도 최대 그만큼 늦다. 즉시 반영을 기대하지 말 것.
+
 **`features.forceUpdate.minVersionUrl` 이 가리키는 JSON** (게이트가 읽음, 플랫폼별 우선·최상위 폴백):
 ```jsonc
 {
