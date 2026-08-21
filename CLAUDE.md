@@ -82,7 +82,7 @@
 | 20 | [REFERENCES](docs/20-REFERENCES.md) | 레퍼런스 | 개발자 | reference | 2026-05-30 | 외부 1차 소스 링크 |
 | 21 | [POPTALE-MIGRATION](docs/21-POPTALE-MIGRATION.md) | 마이그레이션 | 전체 | active | 2026-06-01 | Poptale Flutter → 하네스 이전 인계 |
 | 22 | [NATIVE_FEATURES_PLAN](docs/22-NATIVE_FEATURES_PLAN.md) | 마이그레이션 | 개발자 | reference | 2026-08-19 | characterchat 네이티브 기능 조사 스냅샷 |
-| 23 | [FORCE-UPDATE](docs/23-FORCE-UPDATE.md) | 기능연동 | 개발자 | active | 2026-08-20 | 강제 업데이트 — Remote Config 콘솔 셋업 |
+| 23 | [FORCE-UPDATE](docs/23-FORCE-UPDATE.md) | 기능연동 | 개발자 | active | 2026-08-21 | 강제 업데이트 — Remote Config 콘솔 셋업 |
 
 **상태** — `active`: 현행 문서, 순서대로 읽는다 · `reference`: 수시 조회용, 처음부터 읽을 필요 없다
 

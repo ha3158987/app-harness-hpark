@@ -4,7 +4,7 @@ title: 강제 업데이트 가이드 — Firebase Remote Config 셋업
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-08-20
+updated: 2026-08-21
 ---
 
 # 강제 업데이트 가이드 — Firebase Remote Config 셋업
@@ -74,15 +74,25 @@ updated: 2026-08-20
 
 ### Step 2 — Remote Config 파라미터 5개 생성
 
-Firebase 콘솔 → 좌측 **참여(Engage) → Remote Config** → **구성 만들기**
+Firebase 콘솔 → 좌측 **DevOps 및 사용자 참여 → Remote Config** → **구성 만들기**
 
-| 파라미터 키 | 데이터 유형 | 기본값 예시 | 설명 |
+> 콘솔 메뉴 분류는 종종 바뀐다. 안 보이면 좌측 맨 위 **제품 검색**에 `Remote Config` 를 치거나
+> `https://console.firebase.google.com/project/<프로젝트ID>/config` 로 바로 간다.
+
+**아래 표를 그대로 콘솔에 옮겨 적는다.** 설명(Description)까지 채우는 걸 권한다 — 콘솔 목록에
+그대로 보여서, 나중에 다른 사람이 이 값을 만졌을 때 판단 근거가 된다.
+
+| 매개변수 이름 | 데이터 유형 | 기본값 | 설명(그대로 복사) |
 |---|---|---|---|
-| `min_version_code_ios` | **Number** | `11` | iOS 최소 허용 `version.code` |
-| `min_version_code_android` | **Number** | `11` | Android 최소 허용 `version.code` |
-| `force_update_message` | String | `원활한 이용을 위해 최신 버전으로 업데이트해 주세요.` | 게이트 본문 |
-| `force_update_hard` | **Boolean** | `true` | `false` 면 "나중에"로 닫히는 소프트 권유 |
-| `store_url_ios` / `store_url_android` | String | (비워도 됨) | 미설정 시 `appId` 로 자동 조립 |
+| `min_version_code_ios` | **숫자** | `11` | iOS 최소 허용 버전코드. 앱의 version.code 가 이 값보다 작으면 전체화면 업데이트 게이트가 뜬다. **스토어 승인·배포 완료 후에 올릴 것** — 먼저 올리면 심사 리뷰어가 막힌다. |
+| `min_version_code_android` | **숫자** | `11` | Android 최소 허용 버전코드. iOS 와 동일 규칙. 플랫폼별로 배포 시점이 다르므로 따로 관리한다. |
+| `force_update_message` | 문자열 | `원활한 이용을 위해 최신 버전으로 업데이트해 주세요.` | 업데이트 게이트에 표시할 안내 문구. 비워두면 앱 기본 문구가 쓰인다. |
+| `force_update_hard` | **부울** | `true` | true = 닫을 수 없는 강제 게이트. false = "나중에"로 닫히는 소프트 권유. 신규 정책은 false 로 먼저 관찰한 뒤 true 로 올리는 것을 권장. |
+| `store_url_ios` / `store_url_android` | 문자열 | (빈 값) | 업데이트 버튼이 열 스토어 주소. 비워두면 앱이 번들 ID 로 자동 조립하므로 보통 비워둔다. |
+
+> 💡 **기본값을 현재 `version.code` 와 같게** 두고 시작하는 것을 권한다(예: 현재 11 이면 `11`).
+> `11 >= 11` 이라 게이트가 뜨지 않는다 — **"장전은 됐지만 발사는 안 된"** 안전한 상태다.
+> 테스트할 때만 한 단계 올렸다가 되돌린다.
 
 - [ ] 위 파라미터를 만들었다
 - [ ] **오른쪽 위 「변경사항 게시」를 눌렀다** ← 저장만 하면 앱에 안 내려간다
@@ -216,7 +226,8 @@ curl -sI https://<도메인>/app-version.json | grep -i cache-control   # no-sto
 | 값을 바꿨는데 반영 안 됨 | **게시(Publish) 안 함** | 콘솔 오른쪽 위 「변경사항 게시」 |
 | 게시했는데도 반영 안 됨 | 캐시 지연(최대 1시간) | 앱 완전 종료 후 재실행, 그래도 안 되면 대기 |
 | 게이트가 아예 안 뜸 | 키 파일 누락 → RC 초기화 실패 → 폴백도 없음 | Secrets 확인. `source` 반환값으로 어느 소스가 쓰였는지 확인 |
-| RC 를 무시하고 URL 만 씀 | `min_version_code_*` 가 String 이거나 0 | 데이터 유형을 **Number** 로 |
+| RC 를 무시하고 URL 만 씀 | `min_version_code_*` 가 문자열이거나 0 | 데이터 유형을 **숫자**로 (문자열이면 앱이 0 으로 읽는다) |
+| `force_update_hard` 가 안 먹음 | 부울이 아니라 문자열 `"true"` 로 만듦 | 데이터 유형을 **부울**로 |
 | 빌드 실패 (`firebase.remoteConfig 가 꺼짐`) | config 반쪽 설정 | `firebase.enabled`·`remoteConfig` 둘 다 `true` |
 | 심사 중 리뷰어가 게이트에 막힘 | 심사 버전보다 `minVersionCode` 를 높게 올림 | **스토어 승인 후** 올릴 것 |
 | `version.code` 를 안 올려 게이트 오작동 | 릴리스마다 단조 증가 필요 | CI 에서 검증 권장 |
