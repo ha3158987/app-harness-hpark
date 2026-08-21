@@ -430,7 +430,7 @@ class AppBridgeImpl {
     if (current >= info.min) return { required: false, current, min: info.min, source: info.source };
 
     const storeUrl = info.storeUrl || this._defaultStoreUrl();
-    const message = info.message || '원활한 이용을 위해 최신 버전으로 업데이트해 주세요.';
+    const message = info.message || '원활한 이용을 위해\n최신 버전으로 업데이트해 주세요.';
     if (opts.showPrompt !== false) {
       this._showUpdateGate({ message, storeUrl, dismissible: !info.force });
     }
@@ -456,25 +456,40 @@ class AppBridgeImpl {
     const root = document.createElement('div');
     root.id = 'appbridge-update-gate';
     const bg = (this.config?.theme?.background) || '#FFFFFF';
-    const primary = (this.config?.theme?.primary) || '#1A73E8';
+    // ATT 폴백 게이트(_showAttGate)와 같은 대비 규칙. 여기만 #202124 로 하드코딩돼 있어서
+    // theme.background 가 어두운 앱(characterchat·poptale = #000000)에서 제목이 배경에 묻혔다.
+    const dark = this._isDarkHex(bg);
+    const fg = dark ? '#F2F4F7' : '#202124';
+    const sub = dark ? '#B4BCC6' : '#5f6368';
+    // 버튼: theme.primary 가 배경과 같은 명도대면 버튼이 안 보인다(두 앱 다 primary=배경=#000000).
+    // 그럴 때만 전경색으로 반전해 CTA 가 반드시 눈에 띄게 한다.
+    const themePrimary = (this.config?.theme?.primary) || '#1A73E8';
+    const sameTone = this._isDarkHex(themePrimary) === dark;
+    const btnBg = sameTone ? fg : themePrimary;
+    const btnFg = sameTone ? (dark ? '#111418' : '#FFFFFF') : '#fff';
     root.setAttribute('style', [
       'position:fixed', 'inset:0', 'z-index:2147483647',
       `background:${bg}`, 'display:flex', 'flex-direction:column',
       'align-items:center', 'justify-content:center', 'gap:20px',
       'padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom))',
       'font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif',
-      'text-align:center', 'color:#202124',
+      'text-align:center', `color:${fg}`,
     ].join(';'));
     const safe = (s) => String(s).replace(/[&<>"]/g, (c) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    // 문구의 줄바꿈만 살린다. **전부 이스케이프한 뒤** <br> 만 되돌리므로 임의 HTML 은 들어올 수 없다.
+    // 실제 개행(RC 값에서 Enter)과 직접 친 <br> / <br/> 둘 다 인정한다.
+    const withBreaks = (s) => safe(s)
+      .replace(/&lt;br\s*\/?&gt;/gi, '<br>')
+      .replace(/\r?\n/g, '<br>');
     root.innerHTML =
-      '<div style="font-size:20px;font-weight:700">업데이트가 필요해요</div>' +
-      `<div style="font-size:15px;line-height:1.6;max-width:320px;color:#5f6368">${safe(message)}</div>` +
+      `<div style="font-size:20px;font-weight:700;color:${fg}">업데이트가 필요해요</div>` +
+      `<div style="font-size:15px;line-height:1.6;max-width:320px;color:${sub}">${withBreaks(message)}</div>` +
       `<button id="appbridge-update-btn" style="margin-top:8px;border:0;border-radius:12px;` +
-      `background:${primary};color:#fff;font-size:16px;font-weight:600;padding:14px 28px;cursor:pointer">` +
+      `background:${btnBg};color:${btnFg};font-size:16px;font-weight:600;padding:14px 28px;cursor:pointer">` +
       '업데이트 하기</button>' +
       (dismissible
-        ? '<button id="appbridge-update-skip" style="border:0;background:none;color:#5f6368;font-size:14px;cursor:pointer">나중에</button>'
+        ? `<button id="appbridge-update-skip" style="border:0;background:none;color:${sub};font-size:14px;cursor:pointer">나중에</button>`
         : '');
     document.body.appendChild(root);
     document.getElementById('appbridge-update-btn').addEventListener('click', () => {

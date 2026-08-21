@@ -5,7 +5,7 @@
   "startUrl": "https://chat.dev.poptale.ai",
   "version": {
     "name": "1.0.0",
-    "code": 11
+    "code": 12
   },
   "theme": {
     "primary": "#000000",
@@ -20,7 +20,10 @@
     "biometric": true,
     "share": true,
     "camera": true,
-    "forceUpdate": false,
+    "forceUpdate": {
+      "enabled": true,
+      "source": "remoteConfig"
+    },
     "secureStorage": true,
     "localNotification": true,
     "haptics": true,
@@ -65,7 +68,9 @@
     "project": {
       "dev": "poptale-chat"
     },
-    "fcm": true
+    "fcm": true,
+    "remoteConfig": true,
+    "remoteConfigFetchIntervalSeconds": 3600
   },
   "ios": {
     "teamId": "3W889GYPRK"
