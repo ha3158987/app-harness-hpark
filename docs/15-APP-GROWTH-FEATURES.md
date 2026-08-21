@@ -36,8 +36,8 @@ updated: 2026-08-20
      → 결정: **Firebase Remote Config 를 1차 소스로 신규 배선**하고, RC 를 못 쓰는 앱·상황은 `minVersionUrl` JSON 으로 폴백 (DECISION #3).
   3. 딥링크 — 앱 쪽 배선은 되어 있는데 **웹에 `apple-app-site-association` / `assetlinks.json` 파일이 없다.** → Universal Link / App Link 가 물리적으로 동작 불가.
 - 그리고 characterchat 두 앱 모두 `marketing.attribution.provider: null` 이라 **ATT 플러그인 자체가 앱에 설치조차 안 된다.**
-- 어트리뷰션은 **AppsFlyer + Adbrix 병행**으로 결정됐다(DECISION #4). AppsFlyer 는 이미 자동 배선돼 있고,
-  **Adbrix 는 하네스 배선을 처음부터 만들어야 한다** — 이게 이번 작업에서 가장 무거운 항목이다.
+- 어트리뷰션은 **Adbrix 단독**으로 간다. ~~DECISION #4 = AppsFlyer + Adbrix 병행~~ 은 **2026-08-21 폐기됐다.**
+  경위와 근거는 아래 §C-2-2.
 
 ---
 
@@ -534,7 +534,9 @@ poptale 이 Adbrix 때문에 넣은 우회는 **총 5개**다.
 | 4 | 키가 비어도 `init()` 을 안 부르면 **Completer 가 영원히 미완료** → `logPurchase` 무한 대기 → 서버 검증 미실행 → **캔디 미지급** | 키가 비어도 `init()` 은 무조건 호출 | `my_app.dart:90-98` | ✅ | **패턴은 계승** (하네스도 `initMarketing` 실패 시 큐가 안 막히는지 확인 필요) |
 | 5 | ATT 응답 전에 SDK 가 초기화되면 어트리뷰션 유실 | ATT → `attAuthorized()` → **3초 대기** → init. + `iosTrackingTimeout: 120` | `my_app.dart:77-78`, `adbrix_analytics_service.dart:26-28` | ✅ | **개념 계승** — 하네스는 AppsFlyer `waitForATTUserAuthorization: 10` 으로 이미 동등 처리 |
 
-**판정 요약 (DECISION #4 = AppsFlyer + Adbrix 병행 확정 반영):**
+**판정 요약** — ⚠️ 아래 표는 **병행 전제로 쓰인 낡은 판정**이다(DECISION #4, 폐기됨).
+Adbrix 단독으로 바뀌면서 실제로 무엇을 계승했는지는 **§C-2-2 와 실제 구현**이 정본이다.
+(요지: #1·#3·#4 계승, #5 는 "남은 시간만 대기" 로 개선, #2 불필요 — 결론 자체는 같다.)
 
 | 우회 | 계승 판정 | 이유 |
 |---|---|---|
@@ -600,7 +602,11 @@ poptale 이 Adbrix 때문에 넣은 우회는 **총 5개**다.
 | B. 풀 Capacitor 플러그인 자작 | 디퍼드 딥링크 리스너까지 전부 노출 | 중~대 | Adbrix 디퍼드도 가능 / 우회 #1 상당 구현 필요 + 네이티브 동등 API 미확인 리스크 |
 | C. Adbrix 보류 | AppsFlyer 단독으로 먼저 출시, Adbrix 는 국내 매체 집행 확정 시 | 없음 | 즉시 출시 가능 / poptale 과 대시보드 통일 지연 |
 
-**A 안이 유력한 이유:** DECISION #4 에서 **디퍼드 딥링크는 AppsFlyer 단독 담당**으로 이미 정했다.
+> 🔴 **채택된 것은 B안이다.** 아래 "A 안이 유력한 이유" 는 *Adbrix 네이티브에
+> `blockDeferredDeepLinkLaunch()` 가 없을 수 있다* 는 전제 위에 쓰였는데, **그 전제가 틀렸다**(§C-2-1 정정).
+> 기록으로만 남긴다 — 경위는 §C-2-2.
+
+**(폐기) A 안이 유력했던 이유:** DECISION #4 에서 **디퍼드 딥링크는 AppsFlyer 단독 담당**으로 정했었다.
 따라서 Adbrix 에 필요한 건 ① 설치 어트리뷰션(네이티브 init 1회면 SDK 가 자동 수집) ② 이벤트 로깅(공식 브릿지)
 ③ ATT 결과 전달(`attAuthorized`) 3개뿐이고, **디퍼드 딥링크 API 를 노출할 필요가 없다.**
 → **poptale 우회 #1(`blockDeferredDeepLinkLaunch`)이 불필요해진다.** 우회 #3(`setUserId` 부재)은 그대로 유효.
@@ -609,6 +615,69 @@ poptale 이 Adbrix 때문에 넣은 우회는 **총 5개**다.
 - [ ] DFINERY 에 Capacitor 공식 지원 계획 문의 (RN·Flutter 는 있으므로 로드맵에 있을 수 있다)
 - [ ] Adbrix 대시보드를 poptale 과 공유할지 / 신규 분리할지
 - [ ] A 안으로 충분한지 — 마케팅이 **Adbrix 트래킹 링크로도 디퍼드 딥링크**를 요구하는지
+
+### C-2-2. 🔴 DECISION #4 폐기 — 병행 → Adbrix 단독 (2026-08-21)
+
+> **왜 AppsFlyer 가 이미 있는데 Adbrix 를 새로 붙였나.** 이 절이 그 답이다.
+> 나중에 "AppsFlyer 두고 왜 고생했지?" 라는 질문이 반드시 나온다.
+
+#### 무엇이 바뀌었나
+
+| | 이전 (DECISION #4, 08-14) | 지금 (08-21) |
+|---|---|---|
+| 벤더 | AppsFlyer + Adbrix **병행** | **Adbrix 단독** |
+| 디퍼드 딥링크 담당 | AppsFlyer | **Adbrix** |
+| 실행안 | A안(얇은 플러그인, 디퍼드 제외) | **B안(풀 플러그인)** |
+
+#### 왜 바뀌었나 — 이유 3가지
+
+**① AppsFlyer 는 전사 표준이 아니다. 오히려 "사용 안 함" 으로 명시돼 있었다.**
+
+하네스에 AppsFlyer 가 들어온 건 2026-05-30 최초 커밋(`5d7d0e1`, bada)이고, 어트리뷰션 벤더를
+고른 게 아니라 **디퍼드 딥링크 수단**으로 고른 것이다 — `03-STRATEGY.md` ④ *"Firebase Dynamic
+Links 는 2025-08-25 종료됨. Branch / AppsFlyer 등으로 간다."*
+
+그로부터 이틀 뒤 전사 컨벤션 정본(`c13cd8c`, 2026-06-01)이 정반대로 못 박았다:
+
+> 🅰️ Adbrix (DFINERY) — 한국 어트리뷰션. Poptale 1.1.13+181 도입.
+> **AppsFlyer 는 사용 안 함.** (디퍼드 딥링크가 필요해지면 그때 결정)
+> 결정 근거표: `Adbrix (not AppsFlyer) — 한국 어트리뷰션 시장 선호도`
+
+즉 **AppsFlyer 는 전사 결정으로 채택된 적이 없다.** 컨벤션보다 이틀 먼저 들어온 초기 구현이
+남아 있었을 뿐이고, 컨벤션은 그걸 "슬롯 유지" 로만 인정했다. 실제로 `provider: 'appsflyer'` 인
+앱은 검증용 샘플 `aipia` 하나뿐이며 **실전 검증된 적이 없다.**
+
+**② 병행의 유일한 명분이던 "디퍼드는 AppsFlyer 가 담당" 이 무너졌다.**
+
+A안을 추천한 근거가 *"Adbrix 는 네이티브에 `blockDeferredDeepLinkLaunch()` 동등 API 가 없을
+수 있다"* 였는데, **실물 SDK 를 뜯어 보니 있었다**(§C-2-1 정정). Adbrix 가 디퍼드까지 온전히
+담당할 수 있으므로, AppsFlyer 를 남길 이유가 사라졌다.
+
+**③ 병행은 공짜가 아니다.**
+
+- `attribution.provider` 가 단일 문자열이라 **스키마 확장이 선행**돼야 한다
+- `track()` 이 두 벤더로 분배 → **매출 이벤트 중복 집계**. 라우팅 테이블이 필요해진다
+- 계약·키·대시보드가 2배 (AppsFlyer 2개 + Adbrix 2개)
+- 스토어 신고의 "제3자 공유" 대상도 2곳
+
+**쓰지도 않는 벤더 때문에 이 비용을 내는 셈**이라 접었다.
+
+#### 대신 확보한 것 — 교체 가능성
+
+단독으로 가되 **한 벤더에 묶이지는 않게** 했다. `ATTRIBUTION_ADAPTERS` 레지스트리를 만들어
+벤더 하나 = 어댑터 하나로 분리했고, AppsFlyer 로직도 동작 변화 없이 그리로 이관했다.
+
+- **교체 = `provider` 한 줄.** 웹 서비스 코드는 벤더를 모른다
+- 브릿지 메서드 시그니처는 고정(POPTALE-GLOBAL "W1 시그니처 고정" 요구)
+- ⚠️ **동시 병행은 여전히 미지원.** 필요해지면 스키마 확장 + 중복 집계 설계가 따라온다
+
+#### 아직 안 끝난 것
+
+**글로벌 앱의 MMP 는 미정이다.** `POPTALE-GLOBAL` 에는 *"Adbrix 불필요 → AppsFlyer 또는
+Firebase"* 로 적혀 있고, 컨벤션 §5 의 *"디퍼드 딥링크가 필요해지면 그때 결정"* 조건도
+이번에 충족됐다. **CTO 결정 대기 중이며, 어느 쪽으로 정해지든 위 어댑터 구조는 그대로 쓴다.**
+
+---
 
 ### C-3. 우리 설계 — 앱/웹 경계 판정
 

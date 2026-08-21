@@ -37,7 +37,8 @@
   },
   "marketing": {
     "attribution": {
-      "provider": null
+      "provider": "adbrix",
+      "deferredDeepLink": true
     },
     "analytics": {
       "provider": null

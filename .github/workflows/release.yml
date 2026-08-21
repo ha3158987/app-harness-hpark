@@ -75,6 +75,14 @@ jobs:
       - run: gem install fastlane --no-document
 
       - name: Capacitor 프로젝트 생성/동기화
+        # 어트리뷰션 키는 generate-app 이 네이티브 번들에 베이크한다 — **이 스텝에** 있어야 한다.
+        # 슬러그별(<NAME>_<SLUG대문자_하이픈→언더스코어>) 우선, 없으면 공통값. 둘 다 없으면
+        # 빌드는 되지만 SDK 가 런타임 비활성이라 어트리뷰션이 수집되지 않는다.
+        env:
+          ADBRIX_APP_KEY: ${{ secrets[format('ADBRIX_APP_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.ADBRIX_APP_KEY }}
+          ADBRIX_SECRET_KEY: ${{ secrets[format('ADBRIX_SECRET_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.ADBRIX_SECRET_KEY }}
+          APPSFLYER_DEV_KEY: ${{ secrets[format('APPSFLYER_DEV_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.APPSFLYER_DEV_KEY }}
+          APPSFLYER_IOS_APP_ID: ${{ secrets[format('APPSFLYER_IOS_APP_ID_{0}', needs.resolve.outputs.slug_env)] || secrets.APPSFLYER_IOS_APP_ID }}
         run: node scripts/generate-app.mjs --slug "$SLUG" --platform android
 
       - name: 아이콘/스플래시 (소스 있을 때만)
@@ -118,7 +126,6 @@ jobs:
       - name: Play 업로드 (fastlane, 내부/베타 트랙)
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          APPSFLYER_DEV_KEY: ${{ secrets.APPSFLYER_DEV_KEY }}
         run: fastlane android beta slug:"$SLUG" track:"${{ needs.resolve.outputs.track }}"
 
       - uses: actions/upload-artifact@v4
@@ -151,6 +158,14 @@ jobs:
       - run: gem install fastlane --no-document
 
       - name: Capacitor 프로젝트 생성/동기화 (iOS 포함)
+        # 어트리뷰션 키는 generate-app 이 네이티브 번들에 베이크한다 — **이 스텝에** 있어야 한다.
+        # 슬러그별(<NAME>_<SLUG대문자_하이픈→언더스코어>) 우선, 없으면 공통값. 둘 다 없으면
+        # 빌드는 되지만 SDK 가 런타임 비활성이라 어트리뷰션이 수집되지 않는다.
+        env:
+          ADBRIX_APP_KEY: ${{ secrets[format('ADBRIX_APP_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.ADBRIX_APP_KEY }}
+          ADBRIX_SECRET_KEY: ${{ secrets[format('ADBRIX_SECRET_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.ADBRIX_SECRET_KEY }}
+          APPSFLYER_DEV_KEY: ${{ secrets[format('APPSFLYER_DEV_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.APPSFLYER_DEV_KEY }}
+          APPSFLYER_IOS_APP_ID: ${{ secrets[format('APPSFLYER_IOS_APP_ID_{0}', needs.resolve.outputs.slug_env)] || secrets.APPSFLYER_IOS_APP_ID }}
         run: node scripts/generate-app.mjs --slug "$SLUG" --platform ios
 
       - name: 아이콘/스플래시 (소스 있을 때만)
@@ -213,7 +228,6 @@ jobs:
           APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.ASC_KEY_P8 }}
-          APPSFLYER_DEV_KEY: ${{ secrets.APPSFLYER_DEV_KEY }}
           APPSFLYER_IOS_APP_ID: ${{ secrets.APPSFLYER_IOS_APP_ID }}
         run: fastlane ios beta slug:"$SLUG"
 

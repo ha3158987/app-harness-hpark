@@ -1,0 +1,18 @@
+{
+  "name": "@aipia-team/capacitor-adbrix",
+  "version": "1.0.0",
+  "description": "Adbrix(DFINERY) 네이티브 SDK 의 Capacitor 래퍼. 공식 Capacitor 플러그인이 없어 하네스가 직접 유지한다.",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "files": ["dist/", "android/src/", "android/build.gradle", "ios/Sources/", "AipiaTeamCapacitorAdbrix.podspec"],
+  "peerDependencies": { "@capacitor/core": "^8.0.0" },
+  "capacitor": {
+    "ios": { "src": "ios" },
+    "android": { "src": "android" }
+  }
+}

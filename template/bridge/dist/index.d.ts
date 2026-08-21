@@ -273,7 +273,12 @@ export interface AppBridgeSDK {
 
   /**
    * 마케팅 SDK 초기화(앱 시작 시 1회). 키는 네이티브 베이크 config 에서 읽는다.
-   * 현재 자동 배선: AppsFlyer(어트리뷰션+디퍼드 딥링크). 그 외 벤더는 슬롯만.
+   *
+   * 벤더는 `marketing.attribution.provider` 로 고르고, **웹 코드는 벤더를 몰라도 된다** —
+   * 교체 시 바뀌는 건 config 뿐이다. 현재 자동 배선: AppsFlyer.
+   *
+   * 초기화에 실패하거나 벤더를 안 쓰는 앱이어도 **반드시 반환한다**(never-hang).
+   * 실패 시 `track()` 은 조용히 버려지고, 대기 중이던 호출부는 풀린다.
    */
   initMarketing(opts?: {
     debug?: boolean;

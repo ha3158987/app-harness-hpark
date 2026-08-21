@@ -1,5 +1,14 @@
 # Adbrix (DFINERY) Capacitor 플러그인 — 작업 사양서
 
+> ✅ **2026-08-21 구현 완료.** 이 문서는 이제 사양서가 아니라 기록이다.
+> 실제 플러그인: [`plugin/`](./plugin/) · 콘솔 셋업: [docs/24-MMP-CONSOLE-SETUP.md](../../../docs/24-MMP-CONSOLE-SETUP.md)
+>
+> **실물 SDK 를 뜯어 확인한 사실 (이전 기재 정정)**
+> - Android `com.igaworks.adbrix:android-sdk:3.0.10` (Maven Central) / iOS pod `adbrix2.0` 3.2.1
+> - `blockDeferredDeepLinkLaunch()` 는 **네이티브 정식 API 다.** Flutter 전용이 아니다.
+> - `setUserId` 는 **여전히 없다.** user_id 를 이벤트 프로퍼티로 싣되 `abx:` 표준 이벤트엔 넣지 않는다.
+> - iOS SDK 는 딥링크를 스스로 열지 않는다 — 열던 쪽은 래퍼였다. 우리는 안 연다.
+
 > 한국 어트리뷰션 SDK (DFINERY Adbrix). Poptale 1.1.13+181 에서 도입된 분석 시스템.
 > 하네스 `marketing.attribution.provider: "adbrix"` 슬롯의 실제 배선을 채운다.
 
@@ -16,12 +25,13 @@
 ```jsonc
 {
   "marketing": {
-    "attribution": { "provider": "adbrix", "deferredDeepLink": false }
+    "attribution": { "provider": "adbrix", "deferredDeepLink": true }
   }
 }
 ```
 
-- 디퍼드 딥링크는 보통 AppsFlyer 가 잘함. Adbrix 만 쓰면 `deferredDeepLink: false`.
+- Adbrix 가 **단독 MMP 면 `deferredDeepLink: true`** 로 둔다. Adbrix 도 디퍼드 딥링크를 온전히 지원한다.
+  `false` 로 두는 건 **다른 벤더가 디퍼드를 담당할 때**뿐이다(두 SDK 가 같이 라우팅하면 이중 이동).
 
 ## 3. 키 주입 (환경변수 — 레포에 커밋 금지)
 

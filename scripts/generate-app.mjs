@@ -56,10 +56,22 @@ const FEATURE_PLUGINS = {
 // npm 으로 자동 설치하지 않고 사람에게 안내만 하는 기능 (현재 없음 — 전부 자동 배선).
 const MANUAL_FEATURES = {};
 
-// 패키지 버전 해석: 공식 @capacitor/* 는 코어와 같은 메이저(^8), 커뮤니티/벤더 SDK 는
-// 메이저가 코어와 다르므로 'latest' 로 npm 이 호환 버전을 고르게 한다.
+// 레포 안에서 유지하는 로컬 Capacitor 플러그인 → template/ 하위 경로.
+// 공식/커뮤니티 플러그인이 없어 우리가 직접 짠 것들만 여기 온다. npm 에 올리지 않고
+// build/<slug>/package.json 에 file: 절대경로로 박는다(브릿지와 같은 방식).
+const LOCAL_PLUGINS = {
+  '@aipia-team/capacitor-adbrix': ['template', 'plugins', 'adbrix', 'plugin'],
+};
+
+function localPluginPath(pkg) {
+  const seg = LOCAL_PLUGINS[pkg];
+  return seg ? `file:${join(ROOT, ...seg)}` : null;
+}
+
+// 패키지 버전 해석: 로컬 플러그인은 file: 경로, 공식 @capacitor/* 는 코어와 같은 메이저(^8),
+// 커뮤니티/벤더 SDK 는 메이저가 코어와 다르므로 'latest' 로 npm 이 호환 버전을 고르게 한다.
 function versionFor(pkg) {
-  return pkg.startsWith('@capacitor/') ? '^8.0.0' : 'latest';
+  return localPluginPath(pkg) || (pkg.startsWith('@capacitor/') ? '^8.0.0' : 'latest');
 }
 
 // iOS Info.plist 권한 사용 설명 문구 (기능 켜질 때만 주입). 누락 시 iOS 가 권한 요청 즉시 크래시.
@@ -79,7 +91,12 @@ function attEnabled(cfg) {
 
 // 마케팅 SDK: 자동 배선(npm 설치)되는 벤더 → 패키지. WIRED_PROVIDERS 와 일치.
 const MARKETING_PLUGINS = {
-  attribution: { appsflyer: ['appsflyer-capacitor-plugin'] },
+  attribution: {
+    appsflyer: ['appsflyer-capacitor-plugin'],
+    // Adbrix 는 공식 Capacitor 플러그인이 없다(2026-08 npm/GitHub/공식문서 전수 확인).
+    // 그래서 하네스가 직접 유지하는 로컬 플러그인을 쓴다 → LOCAL_PLUGINS 참조.
+    adbrix: ['@aipia-team/capacitor-adbrix'],
+  },
 };
 
 // 인증: 네이티브 SDK 가 필요한 공급자만 플러그인 설치. 나머지(google/naver/kakao/facebook/x/threads)는
@@ -184,6 +201,18 @@ function marketingSetup(cfg) {
 function bakedConfig(cfg, rc) {
   const baked = structuredClone(rc);
   const ap = cfg.marketing?.attribution;
+  if (ap?.provider === 'adbrix') {
+    const appKey = envFor(cfg.slug, 'ADBRIX_APP_KEY');
+    const secretKey = envFor(cfg.slug, 'ADBRIX_SECRET_KEY');
+    baked.marketing.attribution.adbrix = {
+      appKey: appKey || null,
+      secretKey: secretKey || null,
+    };
+    if (!appKey || !secretKey) {
+      log.warn('ADBRIX_APP_KEY / ADBRIX_SECRET_KEY 환경변수 없음 — Adbrix 는 키 없이 빌드되어 ' +
+        '런타임 비활성(어트리뷰션 미수집). 키 주입 후 재실행하면 활성화된다.');
+    }
+  }
   if (ap?.provider === 'appsflyer') {
     const devKey = envFor(cfg.slug, 'APPSFLYER_DEV_KEY');
     const iosAppId = envFor(cfg.slug, 'APPSFLYER_IOS_APP_ID'); // iOS App Store 숫자 ID
@@ -350,7 +379,13 @@ function reconcilePackageJson(buildDir, cfg, plugins) {
     changed.push('@aipia-team/harness-bridge(경로 갱신)');
   }
   for (const p of plugins) {
-    if (!deps[p]) { deps[p] = versionFor(p); changed.push(p); }
+    const local = localPluginPath(p);
+    if (local) {
+      // 로컬 플러그인도 절대경로 file: 이라 브릿지와 같은 이유로 매번 맞춘다.
+      if (deps[p] !== local) { deps[p] = local; changed.push(`${p}(경로 갱신)`); }
+    } else if (!deps[p]) {
+      deps[p] = versionFor(p); changed.push(p);
+    }
   }
   // 플랫폼/CLI 는 scaffold 와 동일 규칙으로 보강
   for (const [p, v] of [['@capacitor/cli', '^8.0.0'], ['@capacitor/android', '^8.0.0']]) {

@@ -20,6 +20,11 @@ updated: 2026-05-30
 | **AppBridge 코어** | deviceId(@capacitor/device), platform, 앱버전 | 앱 기능, 기기↔계정 바인딩 | X |
 | **푸시**(@capacitor/push-notifications) | 푸시 토큰(기기 식별자) | 알림 발송 | X |
 | **AppsFlyer**(attribution) | **광고 식별자(IDFA/GAID/IDFV)**, 기기정보, 설치/이벤트 | 설치 어트리뷰션·마케팅 | **O (ATT 대상)** |
+| **Adbrix/DFINERY**(attribution) | **광고 식별자(IDFA/GAID)**, 기기정보, 설치/이벤트 | 설치 어트리뷰션·마케팅 | **O (ATT 대상)** |
+
+> ⚠️ Adbrix 를 켜면 Android 매니페스트에 `com.google.android.gms.permission.AD_ID` 가 자동으로 붙는다.
+> **Play Console 데이터 안전성에 광고 ID 수집을 신고하지 않으면 반려된다.**
+> 절차: [24-MMP-CONSOLE-SETUP §3](./24-MMP-CONSOLE-SETUP.md)
 | **IAP**(cordova-plugin-purchase) | 구매 내역(거래ID) | 결제/지갑 | X |
 | **Sentry**(monitoring, 켰을 때) | 크래시 로그, 기기정보, IP(가능) | 진단/안정성 | X |
 | **인증**(auth) | 계정 식별자(이메일/소셜 sub), 이름(선택) | 로그인/회원관리 | X |

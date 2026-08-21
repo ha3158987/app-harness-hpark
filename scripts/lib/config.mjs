@@ -143,7 +143,10 @@ const DEFAULT_TRACKING = {
 //     업로드 키 + Play 가 관리하는 앱 서명 키. 업로드 키만 넣으면 App Link 검증이 조용히
 //     실패해 링크가 브라우저로 열린다(Poptale 도 앱마다 2개씩 등록).
 //     Play Console > 앱 > 설정 > 앱 서명 에서 두 지문을 복사한다.
-const DEFAULT_IOS = { teamId: null };
+// appStoreId = App Store 숫자 ID. 강제 업데이트 게이트의 기본 스토어 URL 조립에 쓴다.
+// (예전엔 marketing.attribution.appsflyer.iosAppId 에서 읽었는데, 어트리뷰션 벤더를
+//  안 쓰거나 AppsFlyer 가 아닌 앱은 URL 이 깨졌다 — 벤더 중립 자리로 옮긴다.)
+const DEFAULT_IOS = { teamId: null, appStoreId: null };
 const DEFAULT_ANDROID = { sha256CertFingerprints: [] };
 
 // SHA-256 지문: 대문자 16진수 2자리 32쌍을 콜론으로 이은 형태 (AA:BB:...:FF)
@@ -157,9 +160,9 @@ const DEFAULT_LEGAL = { privacyUrl: null, termsUrl: null, ageVerifyUrl: null };
 const DEFAULT_PERMISSIONS = {};
 
 // 현재 generate-app 이 npm 설치까지 자동 배선하는 벤더 (나머지는 슬롯만 + 수동 안내)
-const WIRED_PROVIDERS = { attribution: ['appsflyer'] };
+const WIRED_PROVIDERS = { attribution: ['appsflyer', 'adbrix'] };
 const KNOWN_PROVIDERS = {
-  // adbrix = DFINERY (한국 어트리뷰션) — 슬롯만, 배선은 template/plugins/adbrix/SPEC.md 참조
+  // adbrix = DFINERY (한국 어트리뷰션, AIPIA 표준 — 01-AIPIA-CONVENTIONS §5). 자체 플러그인으로 배선됨.
   attribution: ['appsflyer', 'branch', 'adjust', 'airbridge', 'adbrix'],
   analytics: ['amplitude', 'ga4', 'firebase', 'mixpanel'],
   crm: ['braze', 'onesignal', 'moengage'],
@@ -338,6 +341,9 @@ export function loadConfig(repoRoot, slug) {
   // 대신 generate-app 이 파일을 만들지 못했다고 크게 경고한다.
   const ios = merge(DEFAULT_IOS, raw.ios ?? {});
   const android = merge(DEFAULT_ANDROID, raw.android ?? {});
+  if (ios.appStoreId != null && !/^\d+$/.test(String(ios.appStoreId))) {
+    err(slug, `ios.appStoreId "${ios.appStoreId}" 형식 오류 — 숫자만 (예: "6480000000")`);
+  }
   if (ios.teamId != null && !APPLE_TEAM_ID_RE.test(ios.teamId)) {
     err(slug, `ios.teamId "${ios.teamId}" 형식 오류 — 영숫자 대문자 10자리 (예: 3W889GYPRK)`);
   }
@@ -382,6 +388,7 @@ export function runtimeConfig(cfg) {
     monitoring: cfg.monitoring, // 크래시/에러 + APM 벤더 + 공개 dsn.
     firebase: cfg.firebase,     // FCM/Analytics/Crashlytics/RemoteConfig 토글 + 표시용 프로젝트 ID.
     tracking: cfg.tracking,     // ATT 토글 + 사전동의 화면 담당 주체(prePermission) + 폴백 문구.
+    ios: cfg.ios,               // Apple 팀 ID + App Store 숫자 ID. 둘 다 공개값이라 노출해도 된다.
     legal: cfg.legal,           // 개인정보처리방침/약관/성인인증 URL.
     permissions: cfg.permissions, // 권한 고지 오버라이드.
   };

@@ -160,7 +160,7 @@ AIPIA 모든 앱의 기본 인증 제공자 세트:
 
 ```jsonc
 "marketing": {
-  "attribution": { "provider": "adbrix",   "deferredDeepLink": false },
+  "attribution": { "provider": "adbrix",   "deferredDeepLink": true },
   "analytics":   { "provider": "amplitude" },
   "crm":         { "provider": null }
 }
@@ -169,6 +169,11 @@ AIPIA 모든 앱의 기본 인증 제공자 세트:
 - 🅰️ Adbrix (DFINERY) — 한국 어트리뷰션. Poptale 1.1.13+181 도입.
 - 🅰️🅱️ Amplitude — 분석. 웹/앱 공통.
 - AppsFlyer 는 **사용 안 함**. (디퍼드 딥링크가 필요해지면 그때 결정)
+  > 🔴 **2026-08-21 — 위 괄호의 조건이 충족됐다.** 디퍼드 딥링크를 붙이게 되어 재검토 시점이다.
+  > 하네스는 **벤더 교체 가능한 어댑터 구조**로 바꿔 뒀고 Adbrix·AppsFlyer 둘 다 동작한다
+  > (교체 = config 한 줄). 다만 **동시 병행은 미지원**이다.
+  > 글로벌 앱 MMP 를 무엇으로 갈지는 **CTO 결정 대기 중**.
+  > `deferredDeepLink` 는 Adbrix 단독이면 `true` 다 — 위 예시의 `false` 는 AppsFlyer 병행 전제였다.
 
 ### 5-1. 이벤트 명명 표준 (필수)
 

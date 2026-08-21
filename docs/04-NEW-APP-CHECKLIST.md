@@ -150,6 +150,25 @@ curl -sI https://<host>/.well-known/apple-app-site-association
 
 ---
 
+## F-2. 어트리뷰션 MMP (광고 집행할 때)
+
+MMP 를 안 쓰면 이 절 전체를 건너뛴다. 상세 절차는 **[24-MMP-CONSOLE-SETUP.md](./24-MMP-CONSOLE-SETUP.md)**.
+
+- [ ] `app.config.json` 의 `marketing.attribution.provider` 결정 (`adbrix` = AIPIA 표준)
+- [ ] 벤더 대시보드(DFINERY 등)에 앱 등록 — **iOS / Android 각각**
+- [ ] App Key / Secret Key 발급
+- [ ] **GitHub Secrets 등록** — `ADBRIX_APP_KEY_<SLUG>` / `ADBRIX_SECRET_KEY_<SLUG>`
+      (`<SLUG>` = 대문자 + 하이픈→언더스코어. 예: `characterchat-dev` → `CHARACTERCHAT_DEV`)
+- [ ] 트래킹 링크 생성 (마케팅) + 목적지 딥링크 형식 합의
+- [ ] **검증** — 베이크된 `app-config.json` 의 키가 `null` 이 아닌지 확인
+
+> 🔴 **키가 없어도 빌드는 성공한다.** 경고만 뜨고 앱도 정상 동작하며, 어트리뷰션만 조용히 0건이 된다.
+> 그래서 마지막 검증 항목이 필수다 — 방법은 [24-MMP-CONSOLE-SETUP §6](./24-MMP-CONSOLE-SETUP.md).
+
+> 🔴 **Adbrix 를 켜면 Android 에 `AD_ID` 권한이 자동으로 붙는다.** 아래 G 의 광고 ID 신고가 필수가 된다.
+
+---
+
 ## G. 스토어 신고 양식 — **앱마다 필수**
 
 무엇을 신고할지는 [17-DATA-COLLECTION.md](./17-DATA-COLLECTION.md) 가 정답지다. 켠 기능만 보고 옮겨 적으면 된다.
@@ -159,8 +178,9 @@ curl -sI https://<host>/.well-known/apple-app-site-association
 - [ ] 개인정보처리방침 URL 작성·게시 → `app.config.json` 의 `legal.privacyUrl`
 - [ ] 연령 등급 설정 (Apple / GRAC)
 
-> 🔴 **어트리뷰션 SDK(AppsFlyer·Adbrix)를 켰다면 "광고 식별자 수집·제3자 공유"를 반드시 신고**한다.
-> 빠뜨리는 것이 가장 흔한 리젝 사유다.
+> 🔴 **어트리뷰션 SDK(Adbrix·AppsFlyer)를 켰다면 "광고 식별자 수집·제3자 공유"를 반드시 신고**한다.
+> 빠뜨리는 것이 가장 흔한 리젝 사유다. 양쪽 콘솔에 정확히 무엇을 답할지는
+> [24-MMP-CONSOLE-SETUP §3·§4](./24-MMP-CONSOLE-SETUP.md) 에 항목별로 적어 뒀다.
 
 ---
 

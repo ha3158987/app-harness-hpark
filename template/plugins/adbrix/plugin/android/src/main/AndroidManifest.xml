@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 광고 ID. Android 13+ 는 이 권한이 있어야 GAID 를 읽는다. 어트리뷰션의 핵심 식별자다.
+         ⚠️ 이 권한이 붙으면 Play Console "데이터 안전성" 에 광고 ID 수집을 반드시 신고해야 한다
+         (docs/17-DATA-COLLECTION.md). 신고 누락은 심사 반려 사유다. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+</manifest>

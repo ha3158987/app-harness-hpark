@@ -75,8 +75,10 @@ class AppBridgeImpl {
     this.config = null;
     this.capabilities = NO_CAPS;
     this._readyPromise = null;
-    // 초기화된 마케팅 SDK 핸들들. track()/setUser() 가 켜진 것 전부에 분배한다.
-    this._providers = {};        // { appsflyer: <plugin>, amplitude: ..., braze: ... }
+    // 붙은 마케팅 벤더들. track()/setUser() 가 켜진 것 전부에 분배한다.
+    // { <벤더명>: { adapter: <어댑터 정의>, handle: <벤더 SDK 핸들> } }
+    this._providers = {};
+    this._attResolvedAt = null;  // ATT 응답이 확정된 시각(ms). 어트리뷰션 init 대기 계산용.
     this._autoCaptureStarted = false;
     this._eventQueue = [];       // 초기화 전 track() 호출 버퍼
     this._deepLinkHandlers = []; // onDeepLink 로 등록된 라우팅 콜백들
@@ -439,7 +441,12 @@ class AppBridgeImpl {
   _defaultStoreUrl() {
     const id = this.config?.appId || '';
     if (this.platform === 'android') return `https://play.google.com/store/apps/details?id=${id}`;
-    if (this.platform === 'ios') return `https://apps.apple.com/app/id${this.config?.marketing?.attribution?.appsflyer?.iosAppId || ''}`;
+    if (this.platform === 'ios') {
+      // ios.appStoreId 가 정본. 구 config 호환으로 AppsFlyer 값도 본다.
+      const asid = this.config?.ios?.appStoreId
+        || this.config?.marketing?.attribution?.appsflyer?.iosAppId || '';
+      return `https://apps.apple.com/app/id${asid}`;
+    }
     return '';
   }
 
@@ -1026,7 +1033,12 @@ class AppBridgeImpl {
         }
         const r = await AppTrackingTransparency.requestPermission();
         const status = (r && r.status) || 'notDetermined';
-        if (status !== 'notDetermined') this._attStatus = status;
+        if (status !== 'notDetermined') {
+          this._attStatus = status;
+          // 어트리뷰션 SDK 는 ATT 응답 직후 곧바로 init 하면 IDFA 를 못 잡는 경우가 있어
+          // 벤더가 짧은 대기를 권한다. 어댑터가 "얼마나 지났는지" 를 알 수 있게 남긴다.
+          this._attResolvedAt = Date.now();
+        }
         return this._attResult(status);
       } catch {
         return this._attResult('unavailable'); // 캐시 안 함 → 다음 호출에서 재시도 가능
@@ -1489,51 +1501,53 @@ class AppBridgeImpl {
   // ── 마케팅 SDK ─────────────────────────────────────────────────────────
   // 마케팅 SDK 초기화. 앱 시작 시 1회 호출. 키는 네이티브 베이크 config 에서 읽는다.
   // opts.onDeepLink(url, raw): 디퍼드/딥링크 도착 시 라우팅 콜백.
+  //
+  // 벤더별 코드는 여기 없다 — ATTRIBUTION_ADAPTERS(파일 하단)의 어댑터가 갖는다.
+  // 벤더 교체는 config 의 provider 값만 바꾸면 되고, 웹 서비스 코드는 손대지 않는다.
   async initMarketing(opts = {}) {
     await this.ready();
     // 전달된 onDeepLink 콜백은 통합 딥링크 핸들러로 등록(직접 딥링크와 동일 경로).
     if (typeof opts.onDeepLink === 'function') this.onDeepLink(opts.onDeepLink);
 
     const att = this.config && this.config.marketing && this.config.marketing.attribution;
-    if (!this.isNative || !att || !att.provider) return { initialized: false };
 
-    if (att.provider === 'appsflyer') {
-      const af = att.appsflyer || {};
-      if (!af.devKey) return { initialized: false, reason: 'no-devkey' };
-      let AppsFlyer;
-      try { ({ AppsFlyer } = await import('appsflyer-capacitor-plugin')); }
-      catch { return { initialized: false, reason: 'plugin-missing' }; }
-      await AppsFlyer.initSDK({
-        appID: af.iosAppId || '',
-        devKey: af.devKey,
-        isDebug: !!opts.debug,
-        waitForATTUserAuthorization: 10, // iOS ATT 동의 대기(초)
-        registerOnDeepLink: true,
-        registerConversionListener: true,
-      });
-      this._providers.appsflyer = AppsFlyer; // track()/setUser() 가 사용
-      if (att.deferredDeepLink) {
-        const route = (dl, res) => { if (dl) this._emitDeepLink(dl, res); };
-        AppsFlyer.addListener('onDeepLink', (res) => {
-          const d = res && res.deepLink;
-          route(d && (d.deep_link_value || (d.click_event && d.click_event.deep_link_value)), res);
-        });
-        AppsFlyer.addListener('onConversionDataSuccess', (res) => {
-          const d = res && res.data;
-          if (d && (d.is_first_launch === true || d.is_first_launch === 'true')) {
-            route(d.deep_link_value || d.af_dp, res);
-          }
-        });
-      }
+    // ⚠️ 아래 이탈 경로는 전부 _afterInit 을 거쳐야 한다. 안 그러면 _eventQueue 가 영영
+    // 안 비워져서 track() 을 기다리는 호출부가 멈추고 큐가 무한히 자란다.
+    // (poptale 우회 #4 와 같은 사고: logPurchase 무한 대기 → 서버 검증 미실행 → 재화 미지급.
+    //  벤더를 아예 안 쓰는 앱 — provider:null — 이 정확히 이 경로로 들어온다.)
+    if (!this.isNative || !att || !att.provider) {
       this._afterInit(opts);
-      return { initialized: true, provider: 'appsflyer' };
+      return { initialized: false, reason: att && att.provider ? 'not-native' : 'no-provider' };
     }
-    // 다른 벤더(branch/adjust/airbridge)는 아직 자동 배선 안 됨.
-    return { initialized: false, reason: `provider-not-wired:${att.provider}` };
+
+    const name = att.provider;
+    const adapter = ATTRIBUTION_ADAPTERS[name];
+    if (!adapter) {
+      this._afterInit(opts);
+      return { initialized: false, reason: `provider-not-wired:${name}` };
+    }
+    if (this._providers[name]) return { initialized: true, provider: name }; // 중복 init 방지
+
+    let res;
+    // 어댑터가 던져도 앱 부팅을 막지 않는다. 단 _afterInit 은 반드시 지나가야 한다 —
+    // 안 그러면 _eventQueue 가 영영 안 비워져 track() 을 기다리는 호출부가 멈춘다
+    // (poptale 우회 #4 와 같은 사고: logPurchase 무한 대기 → 재화 미지급).
+    try { res = await adapter.init(this, att, opts); }
+    catch { res = { ok: false, reason: 'init-threw' }; }
+
+    if (!res || !res.ok) {
+      this._afterInit(opts);
+      return { initialized: false, provider: name, reason: (res && res.reason) || 'init-failed' };
+    }
+    this._providers[name] = { adapter, handle: res.handle };
+    this._afterInit(opts);
+    return { initialized: true, provider: name };
   }
 
   // 초기화 직후 공통 처리: 큐 비우기 + 자동 수집 시작.
   _afterInit(opts) {
+    if (this._afterInitDone) return;
+    this._afterInitDone = true;
     const q = this._eventQueue.splice(0);
     for (const [name, params] of q) this.track(name, params);
     const auto = this.config?.marketing?.autoCapture !== false;
@@ -1541,33 +1555,36 @@ class AppBridgeImpl {
   }
 
   /**
-   * 통합 이벤트 로깅. 켜진 모든 마케팅 SDK(AppsFlyer/분석/CRM)로 자동 분배.
+   * 통합 이벤트 로깅. 켜진 모든 마케팅 벤더로 자동 분배.
    * 웹 서비스는 벤더를 몰라도 이 한 줄만 부르면 된다: AppBridge.track('purchase', { price: 9900 })
    */
   async track(event, params = {}) {
     if (!this.isNative) return; // 브라우저: no-op (원하면 여기서 dataLayer push 등 폴백 가능)
-    // 아직 초기화 안 됐으면 큐잉
-    if (Object.keys(this._providers).length === 0) {
+    // 초기화 전이면 큐잉. _afterInit 이 비운다(초기화 실패해도 비워진다).
+    if (!this._afterInitDone) {
+      // initMarketing 을 아예 호출하지 않는 앱도 있으므로 상한을 둔다(오래된 것부터 버림).
+      if (this._eventQueue.length >= 200) this._eventQueue.shift();
       this._eventQueue.push([event, params]);
       return;
     }
-    const af = this._providers.appsflyer;
-    if (af) {
-      try { await af.logEvent({ eventName: event, eventValue: params || {} }); }
-      catch { /* 단일 벤더 실패가 전체를 막지 않게 */ }
-    }
-    // analytics/crm 벤더가 배선되면 여기에 동일 패턴으로 추가 (this._providers.amplitude 등)
+    await this._fanout('track', event, params || {});
   }
 
   /** 사용자 식별 — 켜진 벤더 전체에 동일 ID 적용 (크로스 디바이스/어트리뷰션 연결) */
   async setUser(userId, traits = {}) {
     if (!this.isNative) return;
-    const af = this._providers.appsflyer;
-    if (af) {
-      try {
-        if (userId) await af.setCustomerUserId({ cuid: String(userId) });
-        if (traits && Object.keys(traits).length) await af.setAdditionalData({ additionalData: traits });
-      } catch { /* noop */ }
+    this._userId = userId ? String(userId) : null; // 어댑터가 이벤트에 실어야 할 때 읽는다
+    await this._fanout('setUser', userId, traits || {});
+  }
+
+  /** 붙은 벤더 전체에 같은 호출을 분배. 한 벤더가 실패해도 나머지는 진행한다. */
+  async _fanout(method, a, b) {
+    for (const name of Object.keys(this._providers)) {
+      const { adapter, handle } = this._providers[name];
+      const fn = adapter && adapter[method];
+      if (typeof fn !== 'function') continue;
+      try { await fn(handle, a, b, this); }
+      catch { /* 단일 벤더 실패가 전체를 막지 않게 */ }
     }
   }
 
@@ -1620,6 +1637,118 @@ class AppBridgeImpl {
     return () => remove();
   }
 }
+
+// ── 어트리뷰션 어댑터 레지스트리 ─────────────────────────────────────────
+//
+// 벤더 하나 = 어댑터 하나. `marketing.attribution.provider` 이름으로 골라 쓴다.
+// **벤더 교체는 config 한 줄이고, 웹 서비스 코드는 절대 바뀌지 않는다.**
+// (AIPIA 표준은 Adbrix, 글로벌은 다른 벤더 예정 — 그래서 교체 가능해야 한다.)
+//
+// 어댑터가 구현할 것:
+//   init(bridge, att, opts) → { ok, handle?, reason? }   ※ throw 하지 말 것. 실패는 ok:false 로.
+//   track(handle, event, params, bridge)                  ※ 선택
+//   setUser(handle, userId, traits, bridge)               ※ 선택
+//
+// handle 은 그 벤더의 SDK 객체. 브릿지는 내용을 모른 채 되돌려주기만 한다.
+const ATTRIBUTION_ADAPTERS = {
+  // Adbrix(DFINERY) — AIPIA 표준 어트리뷰션(01-AIPIA-CONVENTIONS §5).
+  // 공식 Capacitor 플러그인이 없어 하네스가 직접 유지한다: template/plugins/adbrix/plugin.
+  //
+  // **호출 순서를 지켜야 한다** (SDK 요구):
+  //   1) blockDeferredDeepLink() — SDK 가 딥링크를 받고 자기가 화면을 띄우는 걸 막는다.
+  //      init 뒤에 부르면 늦는다(poptale 우회 #1 이 막으려던 사고).
+  //   2) attAuthorized() — ATT 결과. init 뒤에 주면 IDFA 가 어트리뷰션에 안 붙는다.
+  //   3) initialize()
+  adbrix: {
+    async init(bridge, att, opts) {
+      const k = att.adbrix || {};
+      if (!k.appKey || !k.secretKey) return { ok: false, reason: 'no-keys' };
+      let Adbrix;
+      try { ({ Adbrix } = await import('@aipia-team/capacitor-adbrix')); }
+      catch { return { ok: false, reason: 'plugin-missing' }; }
+
+      // 1) 디퍼드 딥링크 자동 실행 차단 + 수신 배선 — init 보다 먼저.
+      if (att.deferredDeepLink) {
+        try {
+          await Adbrix.blockDeferredDeepLink();
+          await Adbrix.addListener('deferredDeepLink', (e) => {
+            if (e && e.url) bridge._emitDeepLink(e.url, e);
+          });
+          // 리스너가 붙기 전 도착해 네이티브가 버퍼링해 둔 링크를 흘려보낸다.
+          // 설치 첫 실행에서 SDK 콜백이 웹 로딩보다 빠른 경우가 실제로 있다.
+          await Adbrix.flushPendingDeepLink();
+        } catch { /* 차단 실패해도 초기화는 계속한다 */ }
+      }
+
+      // 2) ATT 결과 전달 — iOS 만. requestTracking() 이 이미 캐시해 둔 값을 쓴다.
+      //    poptale 은 ATT 직후 3초를 대기했는데(우회 #5), 하네스는 ATT 를 온보딩 직후에
+      //    받고 initMarketing 은 그보다 늦게 부르므로 이미 충분히 벌어져 있다.
+      //    그래도 같은 턴에 연달아 불린 경우를 대비해 남은 시간만 채운다.
+      if (bridge.platform === 'ios') {
+        const settle = Number(opts.attSettleMs ?? 3000);
+        const since = bridge._attResolvedAt ? Date.now() - bridge._attResolvedAt : Infinity;
+        if (since < settle) await new Promise((r) => setTimeout(r, settle - since));
+        try { await Adbrix.attAuthorized({ authorized: bridge._attStatus === 'authorized' }); }
+        catch { /* 전달 실패가 초기화를 막지는 않는다 */ }
+      }
+
+      // 3) 초기화
+      const r = await Adbrix.initialize({ appKey: k.appKey, secretKey: k.secretKey });
+      if (!r || !r.initialized) return { ok: false, reason: (r && r.reason) || 'init-failed' };
+      return { ok: true, handle: Adbrix };
+    },
+
+    async track(Adbrix, event, params, bridge) {
+      // ⚠️ Adbrix SDK 3.0.10 에는 사용자 식별 API 가 없다. 그래서 user_id 를 이벤트
+      // 프로퍼티로 실어 보낸다(poptale 우회 #3 과 같은 이유, 그쪽 SDK 제약이 아직 유효).
+      // 단 `abx:` 표준 이벤트에 비표준 키를 넣으면 **수집 자체가 실패**한다(DFINERY 확인).
+      const props = { ...(params || {}) };
+      if (bridge._userId && !event.startsWith('abx:')) props.user_id = bridge._userId;
+      await Adbrix.logEvent({ eventName: event, properties: props });
+    },
+
+    // setUser 는 구현하지 않는다 — SDK 에 해당 API 가 없다. track() 이 user_id 를 싣는다.
+  },
+
+  appsflyer: {
+    async init(bridge, att, opts) {
+      const af = att.appsflyer || {};
+      if (!af.devKey) return { ok: false, reason: 'no-devkey' };
+      let AppsFlyer;
+      try { ({ AppsFlyer } = await import('appsflyer-capacitor-plugin')); }
+      catch { return { ok: false, reason: 'plugin-missing' }; }
+      await AppsFlyer.initSDK({
+        appID: af.iosAppId || '',
+        devKey: af.devKey,
+        isDebug: !!opts.debug,
+        waitForATTUserAuthorization: 10, // iOS ATT 동의 대기(초)
+        registerOnDeepLink: true,
+        registerConversionListener: true,
+      });
+      if (att.deferredDeepLink) {
+        const route = (dl, res) => { if (dl) bridge._emitDeepLink(dl, res); };
+        AppsFlyer.addListener('onDeepLink', (res) => {
+          const d = res && res.deepLink;
+          route(d && (d.deep_link_value || (d.click_event && d.click_event.deep_link_value)), res);
+        });
+        AppsFlyer.addListener('onConversionDataSuccess', (res) => {
+          const d = res && res.data;
+          if (d && (d.is_first_launch === true || d.is_first_launch === 'true')) {
+            route(d.deep_link_value || d.af_dp, res);
+          }
+        });
+      }
+      return { ok: true, handle: AppsFlyer };
+    },
+    async track(af, event, params) {
+      await af.logEvent({ eventName: event, eventValue: params || {} });
+    },
+    async setUser(af, userId, traits) {
+      if (userId) await af.setCustomerUserId({ cuid: String(userId) });
+      if (traits && Object.keys(traits).length) await af.setAdditionalData({ additionalData: traits });
+    },
+  },
+};
 
 export const AppBridge = new AppBridgeImpl();
 export default AppBridge;
