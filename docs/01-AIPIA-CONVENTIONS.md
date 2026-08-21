@@ -1,9 +1,18 @@
+---
+doc: 01
+title: AIPIA-CONVENTIONS — 전사 앱 컨벤션 (정본)
+category: 시작
+audience: 개발자
+status: active
+updated: 2026-08-19
+---
+
 # AIPIA-CONVENTIONS — 전사 앱 컨벤션 (정본)
 
 > 이 하네스는 *범용 Capacitor 하네스*가 아니라 **AIPIA 전사 앱 하네스**다.
 > 여러 앱(Poptale, AIPIA, ...)을 찍어내지만, 식별자/도메인/스택/SDK 선택은 **AIPIA 표준**을 따른다.
 > 이 문서는 두 레퍼런스 레포에서 추출한 그 표준을 한 곳에 모은 *정본*이다.
-> 새 앱을 추가할 때는 [GUIDE.md](GUIDE.md) 전에 **이 문서를 먼저** 읽는다.
+> 새 앱을 추가할 때는 [02-GUIDE.md](./02-GUIDE.md) 전에 **이 문서를 먼저** 읽는다.
 
 **출처**:
 - 🅰️ [aipia-team/poptale-app](https://github.com/aipia-team/poptale-app) — Flutter 1.1.15+183 (운영 중)
@@ -123,7 +132,7 @@ AIPIA 모든 앱의 기본 인증 제공자 세트:
 ### 4-1. 표준 정책
 
 - 디지털 재화 = **스토어 IAP 강제** (Apple/Google), 외부 결제 anti-steering 준수
-- 가격 분기: 웹 100원 / 앱 120원 (스토어 수수료 부분 상쇄) — 자세히 [IAP.md](IAP.md)
+- 가격 분기: 웹 100원 / 앱 120원 (스토어 수수료 부분 상쇄) — 자세히 [11-IAP.md](./11-IAP.md)
 - 영수증 검증은 백엔드 (`iap.verifyEndpoint`)
 
 ### 4-2. AIPIA 기본값
@@ -377,9 +386,9 @@ POST /api/v2/webhooks/google    # Google RTDN
 4. **도메인 발급** — `<slug>.ai` + `dev.<slug>.ai` + `stg.<slug>.ai` (+ API/CDN 서브도메인)
 5. **소셜 OAuth 앱 등록** — Apple, Google, Kakao, Naver (4종 기본)
 6. **백엔드** — `/api/v2/auth/*` `/api/v2/iap/verify` 표준 엔드포인트 구현
-7. **이 하네스에 `apps/<slug>/app.config.json` 추가** — [POPTALE-MIGRATION.md](POPTALE-MIGRATION.md) §9 의 예시 또는 [apps/poptale/](apps/poptale/) 복제
+7. **이 하네스에 `apps/<slug>/app.config.json` 추가** — [21-POPTALE-MIGRATION.md](./21-POPTALE-MIGRATION.md) §9 의 예시 또는 [apps/poptale/](../apps/poptale/) 복제
 8. **(필수 외부)** Apple Dev / Play Console 권한, 스토어 IAP 상품 등록, 개인정보처리방침 URL, 연령등급
-9. **(웹)** [INTEGRATION.md](INTEGRATION.md) 따라 `@harness/bridge` 통합. 기존 웹앱이면 `installAppChannelShim()` 만.
+9. **(웹)** [06-INTEGRATION.md](./06-INTEGRATION.md) 따라 `@harness/bridge` 통합. 기존 웹앱이면 `installAppChannelShim()` 만.
 
 ---
 

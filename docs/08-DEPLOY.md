@@ -1,3 +1,12 @@
+---
+doc: 08
+title: DEPLOY — 빌드 후 자동 배포 (CI/CD)
+category: 빌드배포
+audience: 배포담당자
+status: active
+updated: 2026-08-06
+---
+
 # DEPLOY — 빌드 후 자동 배포 (CI/CD)
 
 `.github/workflows/release.yml` 이 앱을 빌드해 **베타/내부 트랙까지** 자동 업로드한다.

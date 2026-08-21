@@ -1,3 +1,12 @@
+---
+doc: 19
+title: DEVICE-SUPPORT — 기기 / OS 지원 매트릭스
+category: 레퍼런스
+audience: 개발자
+status: reference
+updated: 2026-07-24
+---
+
 # DEVICE-SUPPORT — 기기 / OS 지원 매트릭스
 
 최근 4년 기기·OS를 어디까지 지원할지, 버전별로 무엇을 챙겨야 하는지 정리.

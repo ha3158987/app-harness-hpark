@@ -1,9 +1,18 @@
+---
+doc: 14
+title: ATT 연동 가이드 — 신규 앱이 추적 동의를 붙이는 방법
+category: 기능연동
+audience: 개발자
+status: active
+updated: 2026-08-20
+---
+
 # ATT 연동 가이드 — 신규 앱이 추적 동의를 붙이는 방법
 
 > **읽는 사람**: 하네스로 새 앱을 만드는 개발자. ATT 를 처음 다뤄도 이 문서만으로 끝나게 썼다.
 > **소요**: config 3줄 + 웹 화면 1개(선택). 네이티브 코드 작성은 없다.
 >
-> 관련: [APP-GROWTH-FEATURES.md](./APP-GROWTH-FEATURES.md)(설계·결정 기록) · [GUIDE.md](./GUIDE.md) §6(스키마 정본)
+> 관련: [15-APP-GROWTH-FEATURES.md](./15-APP-GROWTH-FEATURES.md)(설계·결정 기록) · [02-GUIDE.md](./02-GUIDE.md) §6(스키마 정본)
 
 ---
 

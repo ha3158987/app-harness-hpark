@@ -173,7 +173,7 @@ function marketingSetup(cfg) {
       (MARKETING_PLUGINS[cat]?.[provider] || []).forEach((p) => plugins.push(p));
     } else {
       warnings.push(`marketing.${cat} = "${provider}" — 아직 자동 배선 안 됨. 슬롯만 생성됨. ` +
-        `벤더 SDK 수동 설치 + 브릿지 핸들러 연결 필요 (REFERENCES.md).`);
+        `벤더 SDK 수동 설치 + 브릿지 핸들러 연결 필요 (docs/20-REFERENCES.md).`);
     }
   }
   return { plugins, warnings };
@@ -307,7 +307,7 @@ function pluginsFor(cfg) {
   // 예전 config(tracking 블록 없음)도 그대로 동작하도록 하위호환 유지.
   if (attEnabled(cfg)) set.add('capacitor-plugin-app-tracking-transparency');
   // 크래시 리포트(@sentry/capacitor)는 프레임워크 형제(@sentry/react|vue|angular)를 peer 로 요구하므로
-  // 하네스가 자동설치하지 않는다 — 웹 앱이 자기 프레임워크에 맞춰 설치(INTEGRATION.md). 브릿지는 graceful.
+  // 하네스가 자동설치하지 않는다 — 웹 앱이 자기 프레임워크에 맞춰 설치(docs/06-INTEGRATION.md). 브릿지는 graceful.
   return [...set];
 }
 
@@ -744,7 +744,7 @@ ${block}</dict>
 // features.push + iOS 에 필요한 4가지: (1) aps-environment 엔타이틀먼트 (2) UIBackgroundModes
 // remote-notification (3) GoogleService-Info.plist 번들 등록 (4) AppDelegate FirebaseApp.configure().
 // ⚠️ (1) 을 넣는 순간 프로비저닝 프로파일에 Push Notifications capability 가 있어야 빌드가 통과한다
-//    (associated-domains 와 동일 실패모드). App ID capability + match 프로파일 재생성 선행 필수 → DEPLOY.md §9.
+//    (associated-domains 와 동일 실패모드). App ID capability + match 프로파일 재생성 선행 필수 → docs/08-DEPLOY.md §9.
 // ⚠️ (3)(4) 는 pbxproj/AppDelegate 정규식 편집 — 첫 macOS 빌드에서 검증 필요.
 
 // (1) aps-environment. app-store/TestFlight 배포 = production APNs.
@@ -796,7 +796,7 @@ function patchIosPushBackgroundMode(buildDir) {
 // (3) GoogleService-Info.plist 를 App 타깃 번들 리소스로 등록(pbxproj). 실제 파일은
 //     CI(release.yml) 또는 로컬 secrets 가 build/<slug>/ios/App/GoogleService-Info.plist 로 넣는다.
 //     (pbxproj 참조가 sourceTree "<group>"=SOURCE_ROOT 로 잡혀 ios/App/ 기준으로 찾으므로 그 위치에 둔다.)
-//     ⚠️ 이 참조를 넣으면 빌드 시 그 경로에 파일이 반드시 있어야 한다(없으면 xcodebuild 실패) → 시크릿 필수(DEPLOY.md §9).
+//     ⚠️ 이 참조를 넣으면 빌드 시 그 경로에 파일이 반드시 있어야 한다(없으면 xcodebuild 실패) → 시크릿 필수(docs/08-DEPLOY.md §9).
 function patchIosGoogleServicePlistRef(buildDir) {
   const pbx = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
   if (!existsSync(pbx)) return;

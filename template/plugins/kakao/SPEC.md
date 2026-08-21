@@ -52,7 +52,7 @@ AppBridge.login('kakao'): Promise<AuthResult2>
 
 `AuthResult2.backend` 필드에 카카오 SDK 가 반환한 토큰 객체 전체가 들어간다(백엔드가 그대로 받음).
 
-## 5. 배선 체크리스트 (MARKETING.md §4 패턴)
+## 5. 배선 체크리스트 (docs/13-MARKETING.md §4 패턴)
 
 1. `scripts/lib/config.mjs` — `KNOWN_AUTH_PROVIDERS` 에 `kakao` 가 이미 있음 ✅
 2. `scripts/generate-app.mjs`:

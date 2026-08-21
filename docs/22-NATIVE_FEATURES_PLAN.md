@@ -1,3 +1,12 @@
+---
+doc: 22
+title: 네이티브 기능 조사 + 적용 플랜 (characterchat)
+category: 마이그레이션
+audience: 개발자
+status: reference
+updated: 2026-08-19
+---
+
 # 네이티브 기능 조사 + 적용 플랜 (characterchat)
 
 > 조사 범위: `app-harness`(Capacitor 하네스) + `character-chatbot-web`(웹).
@@ -166,7 +175,7 @@
 
 ### Phase 4 — 백엔드/신규플러그인 (난이도 상, 별도 스프린트)
 **4-1. 푸시 알림 (G)** — 가치 최고, 백엔드 필수
-- 하네스: `features.push: true` + generate. iOS APNs Capability+인증서(`CREDENTIALS.md`/fastlane), Android FCM `google-services.json`. (브릿지에 `registerPush`·푸시탭→딥링크 emit은 이미 구현 — 새 네이티브 코드 불필요, 플래그+자격증명+재빌드만.)
+- 하네스: `features.push: true` + generate. iOS APNs Capability+인증서(`09-CREDENTIALS.md`/fastlane), Android FCM `google-services.json`. (브릿지에 `registerPush`·푸시탭→딥링크 emit은 이미 구현 — 새 네이티브 코드 불필요, 플래그+자격증명+재빌드만.)
 - 통신 프로토콜:
   1. 앱 시작 시 웹이 `AppBridge.registerPush()` → `{granted, token}` 수신.
   2. 토큰을 **백엔드에 등록**. 백엔드는 **별도 레포 `character-chatbot-api`(Python/FastAPI)** — `POST /api/push/register {token, platform}` 신설. `userId`는 바디로 받지 말고 인증(`require_auth`)의 `ctx.user_id`로 강제.

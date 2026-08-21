@@ -7,7 +7,7 @@
 //   4) 약관/추가정보 가입 확정(/auth/signup), 로그아웃(/auth/logout)
 //
 // ⚠️ 학습/참고용이다. 사용자/세션을 인메모리 Map 으로 둔다 → 실제로는 DB/세션스토어로 교체.
-//    secret/쿠키키는 환경변수로. (AUTH.md 규약과 1:1 대응)
+//    secret/쿠키키는 환경변수로. (docs/10-AUTH.md 규약과 1:1 대응)
 //
 // 실행: cp .env.example .env && 값 채우기 && npm i && npm start
 
@@ -111,7 +111,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 1) 소셜 인증 자격증명 → 세션 (AUTH.md §3-1)
+// 1) 소셜 인증 자격증명 → 세션 (docs/10-AUTH.md §3-1)
 app.post('/auth/native', async (req, res) => {
   try {
     const { authorizationCode, codeVerifier, redirectUri, deviceId, platform } = req.body || {};
@@ -145,7 +145,7 @@ app.post('/auth/native', async (req, res) => {
   }
 });
 
-// 2) 약관 동의 + 추가정보 → 가입 확정 (AUTH.md §3-4)
+// 2) 약관 동의 + 추가정보 → 가입 확정 (docs/10-AUTH.md §3-4)
 app.post('/auth/signup', async (req, res) => {
   try {
     const pendingId = req.cookies?.aipia_pending;

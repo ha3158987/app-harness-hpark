@@ -1,3 +1,12 @@
+---
+doc: 06
+title: INTEGRATION — 프론트엔드 통합 가이드
+category: 앱추가
+audience: 개발자
+status: active
+updated: 2026-05-30
+---
+
 # INTEGRATION — 프론트엔드 통합 가이드
 
 당신의 웹 서비스를 하네스 앱과 엮는 방법. **웹 코드를 앱에 넣는 게 아니다** — 앱은 당신의
@@ -5,7 +14,7 @@
 
 ## 0. 핵심 모델
 - 앱 = `server.url` 로 **당신 웹사이트를 그대로 로드**하는 셸. 프론트 변경은 **웹만 배포하면 앱에 즉시 반영**(앱 재배포 불필요).
-- 당신이 할 일은 두 가지: ① 웹에 `@harness/bridge` 추가 + 호출, ② 하네스에 `apps/<slug>/app.config.json` 등록(ONBOARDING.md).
+- 당신이 할 일은 두 가지: ① 웹에 `@harness/bridge` 추가 + 호출, ② 하네스에 `apps/<slug>/app.config.json` 등록(../ONBOARDING.md).
 
 ## 추천: 어댑터 패턴 + 자동 연동(integrate-web 스킬)
 call site 를 여기저기 고치는 대신 **어댑터 한 곳**(`template/integration/harness-adapter.js` 를 웹에 복사)
@@ -54,7 +63,7 @@ if (AppBridge.isNative) { /* 앱 */ } else { /* 브라우저 */ }
 
 ## 3. 자주 쓰는 패턴
 
-### 로그인 + 신규 온보딩 (AUTH.md)
+### 로그인 + 신규 온보딩 (10-AUTH.md)
 ```js
 const r = await AppBridge.login('kakao');
 if (r.isNew || r.needsProfile) {
@@ -63,7 +72,7 @@ if (r.isNew || r.needsProfile) {
 }
 ```
 
-### 인앱결제 — 웹/앱 가격 분기 (IAP.md)
+### 인앱결제 — 웹/앱 가격 분기 (11-IAP.md)
 ```js
 if (AppBridge.isNative) {
   await AppBridge.purchase('coin_100');                 // 스토어 IAP(앱 가격티어) → 서버지갑
@@ -112,10 +121,10 @@ const campaigns = await fetch('/campaigns', {
 onResume(async () => { walletEl.textContent = await fetchWallet(); });
 ```
 > 클라 분기로 간단히 `if (isApp()) showAppEvent()` 도 가능하나, 운영성(무재배포 교체)은 백엔드 주도가 우월.
-> 서버 렌더(SSR)면 컨텍스트 대신 UA 표식(`HarnessApp/...`)으로 분기(IAP.md §2).
+> 서버 렌더(SSR)면 컨텍스트 대신 UA 표식(`HarnessApp/...`)으로 분기(11-IAP.md §2).
 
 ## 4. 주의
 - **앱/브라우저 둘 다 잘 돌게**: 항상 `isNative`/`capabilities` 로 분기하고 폴백 가정.
 - **민감정보는 `secureSet`**(토큰/세션). `setPref` 는 비암호화.
 - **OS 분기 금지**: `platform` 직접 분기보다 capability 피처 디텍션.
-- 자세한 정책/백엔드 규약: `AUTH.md`(로그인/SSO/회원가입), `IAP.md`(결제), `DEPLOY.md`(배포).
+- 자세한 정책/백엔드 규약: `10-AUTH.md`(로그인/SSO/회원가입), `11-IAP.md`(결제), `08-DEPLOY.md`(배포).

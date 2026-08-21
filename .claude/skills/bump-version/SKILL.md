@@ -28,4 +28,4 @@ description: 특정 앱(slug)의 버전을 올린다. app.config.json 의 versio
   한쪽을 건너뛰면 단조 증가만 깨진다. 사용자에게 "같은 버전"인지는 `version.name` 이 정한다.
 - 여러 앱 동시 bump 요청이면 각 slug 별로 처리하고 결과를 표로 요약.
 
-전체 규칙: [AIPIA-CONVENTIONS.md §16](../../../AIPIA-CONVENTIONS.md)
+전체 규칙: [docs/01-AIPIA-CONVENTIONS.md §16](../../../docs/01-AIPIA-CONVENTIONS.md)

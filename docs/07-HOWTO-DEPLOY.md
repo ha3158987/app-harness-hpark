@@ -1,7 +1,16 @@
+---
+doc: 07
+title: HOWTO-DEPLOY — 팀원용 배포 사용법
+category: 빌드배포
+audience: 배포담당자
+status: active
+updated: 2026-06-19
+---
+
 # HOWTO-DEPLOY — 팀원용 배포 사용법
 
 app-harness 로 앱을 테스터에게 배포하는 **실전 가이드**.
-(인증 요소 설명·관리는 `CREDENTIALS.md`, CI 시크릿 등록은 `DEPLOY.md` 참조)
+(인증 요소 설명·관리는 `09-CREDENTIALS.md`, CI 시크릿 등록은 `08-DEPLOY.md` 참조)
 
 > TL;DR: **`app.config.json` 의 versionCode 올리고 → `git tag <slug>-v<버전>` 푸시 → 끝.**
 > CI가 빌드·서명·업로드까지 자동. iOS=TestFlight / Android=Play 내부트랙. (정식 출시는 사람이 콘솔에서)
@@ -14,7 +23,7 @@ app-harness 로 앱을 테스터에게 배포하는 **실전 가이드**.
   → 평소 배포할 땐 **키 파일을 만질 일이 없다.**
 - 배포하려는 앱은 `apps/<slug>/app.config.json` 이 있고, 스토어(Play/App Store Connect)에 앱 레코드가 등록돼 있다.
 
-처음 셋업(조직 1회) 방법은 `CREDENTIALS.md §5` 참조.
+처음 셋업(조직 1회) 방법은 `09-CREDENTIALS.md §5` 참조.
 
 ---
 

@@ -25,5 +25,5 @@
 
 ## 참고
 
-- 배선 절차 전반: [MARKETING.md §4](../../MARKETING.md)
-- Poptale 호환성: [POPTALE-MIGRATION.md §3](../../POPTALE-MIGRATION.md)
+- 배선 절차 전반: [docs/13-MARKETING.md §4](../../docs/13-MARKETING.md)
+- Poptale 호환성: [docs/21-POPTALE-MIGRATION.md §3](../../docs/21-POPTALE-MIGRATION.md)

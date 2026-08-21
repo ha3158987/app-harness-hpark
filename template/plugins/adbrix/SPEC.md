@@ -53,7 +53,7 @@ AppBridge.track('iap_purchase', { price: 9900, item: 'coin_100' });
 AppBridge.setUser('user_123', { plan: 'premium' });
 ```
 
-## 6. 배선 체크리스트 (MARKETING.md §4 패턴)
+## 6. 배선 체크리스트 (docs/13-MARKETING.md §4 패턴)
 
 1. `scripts/lib/config.mjs` — `KNOWN_PROVIDERS.attribution` 에 `'adbrix'` 추가됨 ✅
 2. `scripts/generate-app.mjs`:

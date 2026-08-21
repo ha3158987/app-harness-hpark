@@ -1,9 +1,18 @@
+---
+doc: 02
+title: GUIDE — Appharness 마스터 가이드
+category: 시작
+audience: 전체
+status: active
+updated: 2026-08-20
+---
+
 # GUIDE — Appharness 마스터 가이드
 
 > 이 문서 하나로 **무엇이 지원되는지 · 무엇을 읽어야 하는지 · 무엇을 직접 해야 하는지(필수 입력)** 를 파악한다.
 > 서식: Markdown + Mermaid(다이어그램) + 최소한의 HTML(표/접기). AI가 읽고 사람이 시각화하기 위한 공통 서식만 사용.
 >
-> 📌 이 하네스는 AIPIA 전사 앱 하네스 — 식별자/도메인/스택/SDK 표준은 [`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md).
+> 📌 이 하네스는 AIPIA 전사 앱 하네스 — 식별자/도메인/스택/SDK 표준은 [`01-AIPIA-CONVENTIONS.md`](./01-AIPIA-CONVENTIONS.md).
 > 이 GUIDE 는 *하네스 동작 방식*, AIPIA-CONVENTIONS 는 *전사 합의값*. 둘은 보완관계.
 
 ---
@@ -133,7 +142,7 @@ flowchart TB
   S8["8. 콘솔에서 프로덕션 공개 (사람)"]
 ```
 
-문서 시작점: **새 서비스 추가 = `ONBOARDING.md`**, **프론트 통합 = `INTEGRATION.md`**.
+문서 시작점: **새 서비스 추가 = `../ONBOARDING.md`**, **프론트 통합 = `06-INTEGRATION.md`**.
 
 ---
 
@@ -149,7 +158,7 @@ flowchart TB
 - (성인 콘텐츠 시) 본인확인 PG 계약: NICE/PASS/KCB 등
 </details>
 
-<details><summary><b>5-2. 서명 · 시크릿 (GitHub Secrets — DEPLOY.md §4)</b></summary>
+<details><summary><b>5-2. 서명 · 시크릿 (GitHub Secrets — 08-DEPLOY.md §4)</b></summary>
 
 | Secret | 용도 |
 |---|---|
@@ -182,7 +191,7 @@ flowchart TB
 <details><summary><b>5-4. 스토어 콘솔 (사람)</b></summary>
 
 - IAP 상품 등록(Consumable, 가격 티어 = 앱 가격)
-- 개인정보 라벨 / 데이터 안전성 양식 → `DATA-COLLECTION.md` 대로(AppsFlyer 광고ID+ATT 주의)
+- 개인정보 라벨 / 데이터 안전성 양식 → `17-DATA-COLLECTION.md` 대로(AppsFlyer 광고ID+ATT 주의)
 - 개인정보처리방침 URL(`legal.privacyUrl`), 연령 등급(Apple 17+/GRAC)
 - iOS 딥링크/소셜 복귀: 엔타이틀먼트는 generate-app 이 pbxproj 연결(첫 macOS 빌드서 확인)
 </details>
@@ -326,42 +335,11 @@ generate-app 이 `build/<slug>/well-known/<host>/` 에 만들어 둔다 (네이�
 
 ## 8. 문서 색인 — "무엇을 볼까"
 
-```mermaid
-mindmap
-  root((Appharness 문서))
-    시작
-      GUIDE(이 문서)
-      ONBOARDING(새 서비스 추가)
-      INTEGRATION(프론트 통합·API)
-    인증/결제
-      AUTH(로그인·SSO·게스트·탈퇴)
-      IAP(인앱결제·지갑)
-      COMPLIANCE(권한·성인인증)
-      DATA-COLLECTION(개인정보 양식)
-    빌드/배포
-      DEPLOY(CI·시크릿·서명)
-      DEVICE-SUPPORT(기기·안전영역)
-      idp/README(Keycloak)
-    참고
-      README(스키마·레이아웃)
-      STRATEGY MARKETING REFERENCES
-      backend/auth-reference
-```
+> 문서 색인은 **레포 루트 [`CLAUDE.md`](../CLAUDE.md) 하나로 통합**됐다.
+> 목적별 라우팅 · 전체 22개 문서 · 카테고리 · 대상 독자 · 상태가 그 한 파일에 있다.
+> (이 자리에 있던 mindmap 은 문서 4개가 누락된 채 낡아 있어 제거했다.)
 
-| 하고 싶은 것 | 볼 문서 |
-|---|---|
-| 새 서비스 앱화 | `ONBOARDING.md` |
-| 웹에 기능 연결 | `INTEGRATION.md` (+ `template/integration/harness-adapter.js`) |
-| 환경/키 단계별 준비 | `SETUP.md` |
-| 로그인/SSO/회원가입/게스트/탈퇴 | `AUTH.md` |
-| 인앱결제/지갑/웹앱 가격차 | `IAP.md` |
-| 권한 고지/개인정보/성인인증 | `COMPLIANCE.md` |
-| 스토어 개인정보 양식 채우기 | `DATA-COLLECTION.md` |
-| CI 자동배포/서명/시크릿 | `DEPLOY.md` |
-| 기기/해상도/노치/폴더블 | `DEVICE-SUPPORT.md` |
-| 중앙 IdP 띄우기 | `idp/README.md` |
-| config 스키마 상세 | `GUIDE.md` §6 (이 문서) |
-| 백엔드 구현 참고 | `backend/auth-reference/` |
+config 스키마 상세는 이 문서 §6.
 
 ---
 

@@ -1,10 +1,19 @@
+---
+doc: 21
+title: POPTALE-MIGRATION — Poptale Flutter → Capacitor 하네스 이전
+category: 마이그레이션
+audience: 전체
+status: active
+updated: 2026-06-01
+---
+
 # POPTALE-MIGRATION — Poptale Flutter → Capacitor 하네스 이전
 
 > 이 문서는 **인계 문서**다. 신규 앱(프로토타입) 출시를 맡은 담당자가 가장 먼저 읽는다.
 > Poptale Flutter 앱(`aipia-team/poptale-app`)을 하네스 기반 Capacitor 앱으로 옮길 때
 > *무엇이 호환되어야 하고, 누가 무엇을 책임지는지*가 이 문서에 모여 있다.
 >
-> 📌 **선행 필독**: [`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md) — 번들ID/도메인/소셜/SDK 등 *전사 표준*.
+> 📌 **선행 필독**: [`01-AIPIA-CONVENTIONS.md`](./01-AIPIA-CONVENTIONS.md) — 번들ID/도메인/소셜/SDK 등 *전사 표준*.
 > 이 문서는 AIPIA-CONVENTIONS 위에 *Poptale 특이값* 만 다룬다.
 
 ---
@@ -95,7 +104,7 @@ P0 = 10주 안에 반드시. P1 = Poptale 마이그 직전. P2 = 이후.
 | **P0** | Kakao Capacitor 플러그인 | `template/plugins/kakao/` | Flutter `kakao_flutter_sdk_user` 동작 매칭 |
 | **P0** | Naver Capacitor 플러그인 | `template/plugins/naver/` | Flutter `flutter_naver_login` 동작 매칭 |
 | **P0** | IAP Google 토큰 압축 옵션 | `template/bridge/dist/index.js` `purchase()` | Poptale 0.28.21+102 |
-| **P0** | Adbrix provider | `template/plugins/adbrix/`, `MARKETING.md §4` 절차 | Poptale 1.1.13+181 (DFINERY) |
+| **P0** | Adbrix provider | `template/plugins/adbrix/`, `13-MARKETING.md §4` 절차 | Poptale 1.1.13+181 (DFINERY) |
 | **P0** | Amplitude 이벤트 스펙 | `template/bridge/dist/index.js` `track()` | `app_*/push_*/sns_*/iap_*` lowercase snake_case (Poptale 1.1.8+175) |
 | **P0** | WhaTap APM provider | `template/plugins/whatap/` | — |
 | **P0** | 푸시 경로 화이트리스트 | bridge native side (Android FCM service / iOS notification handler) | config `features.pushPolicy.allowedPaths` |
@@ -137,14 +146,14 @@ P0 = 10주 안에 반드시. P1 = Poptale 마이그 직전. P2 = 이후.
 
 | 필요한 것 | 위치 |
 |---|---|
-| 하네스 사용법 마스터 | [`GUIDE.md`](GUIDE.md) |
-| 새 서비스 추가 흐름 | [`ONBOARDING.md`](ONBOARDING.md) |
-| 웹 통합 API | [`INTEGRATION.md`](INTEGRATION.md) + `template/integration/harness-adapter.js` |
-| 인증/SSO/회원탈퇴/게스트 | [`AUTH.md`](AUTH.md) |
-| 인앱결제 정책·구현 | [`IAP.md`](IAP.md) |
-| 마케팅 SDK (Adbrix·Amplitude·AppsFlyer) | [`MARKETING.md`](MARKETING.md) |
-| 빌드/CI/시크릿 | [`DEPLOY.md`](DEPLOY.md) |
-| Poptale 레퍼런스 config | [`apps/poptale/app.config.json`](apps/poptale/app.config.json), [`apps/poptale-dev/app.config.json`](apps/poptale-dev/app.config.json) |
+| 하네스 사용법 마스터 | [`02-GUIDE.md`](./02-GUIDE.md) |
+| 새 서비스 추가 흐름 | [`../ONBOARDING.md`](../ONBOARDING.md) |
+| 웹 통합 API | [`06-INTEGRATION.md`](./06-INTEGRATION.md) + `template/integration/harness-adapter.js` |
+| 인증/SSO/회원탈퇴/게스트 | [`10-AUTH.md`](./10-AUTH.md) |
+| 인앱결제 정책·구현 | [`11-IAP.md`](./11-IAP.md) |
+| 마케팅 SDK (Adbrix·Amplitude·AppsFlyer) | [`13-MARKETING.md`](./13-MARKETING.md) |
+| 빌드/CI/시크릿 | [`08-DEPLOY.md`](./08-DEPLOY.md) |
+| Poptale 레퍼런스 config | [`apps/poptale/app.config.json`](../apps/poptale/app.config.json), [`apps/poptale-dev/app.config.json`](../apps/poptale-dev/app.config.json) |
 | AppChannel shim 사용 | `template/integration/harness-adapter.js` 의 `installAppChannelShim()` |
 | 네이티브 플러그인 작업 사양 | `template/plugins/{kakao,naver,adbrix,whatap}/SPEC.md` |
 | Poptale Flutter 동작 정본 | [`aipia-team/poptale-app`](https://github.com/aipia-team/poptale-app) 의 `.claude/docs/app-web-connection.md` |

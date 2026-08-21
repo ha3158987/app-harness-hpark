@@ -1,3 +1,12 @@
+---
+doc: 09
+title: CREDENTIALS — 배포 인증(자격증명) 관리 단일 출처
+category: 빌드배포
+audience: 배포담당자
+status: active
+updated: 2026-08-20
+---
+
 # CREDENTIALS — 배포 인증(자격증명) 관리 단일 출처
 
 이 문서는 app-harness 가 앱을 스토어에 배포할 때 필요한 **모든 인증 요소**를 한곳에 정리한다.
@@ -110,7 +119,7 @@ base64 -i secrets/android/upload.jks | tr -d '\n'   # macOS
 > 특히 알림 확장은 애플 눈에 **별개의 앱**이라 App ID·프로파일이 따로 필요하고, 이 사실은
 > 확장을 도입한 뒤 **첫 iOS 빌드에서야** 드러난다.
 >
-> 콘솔·계정 작업 전체 목록은 **[NEW-APP-CHECKLIST.md](./NEW-APP-CHECKLIST.md)** 참조.
+> 콘솔·계정 작업 전체 목록은 **[04-NEW-APP-CHECKLIST.md](./04-NEW-APP-CHECKLIST.md)** 참조.
 
 ---
 
@@ -122,5 +131,5 @@ base64 -i secrets/android/upload.jks | tr -d '\n'   # macOS
 4. **Android keystore**: 공유 업로드 키(aipia.jks) → `secrets/android/upload.jks`
 5. 위 값들을 `fastlane/.env`(로컬) + GitHub Secrets(CI)에 입력 → §3 매핑표대로
 
-> CI에 필요한 GitHub Secret 전체 목록·등록법은 `DEPLOY.md §4` 참조.
-> 단계별 환경 셋업은 `SETUP.md` 참조.
+> CI에 필요한 GitHub Secret 전체 목록·등록법은 `08-DEPLOY.md §4` 참조.
+> 단계별 환경 셋업은 `05-SETUP.md` 참조.

@@ -1,7 +1,7 @@
 # 중앙 IdP (Keycloak) — 로컬 구동 + 소셜 연결 가이드
 
 패밀리 SSO 의 "신분증 발급소". 로컬에서 한번 띄워 개념을 눈으로 확인하고, 그대로 운영
-(`auth.aipia.co.kr`)으로 옮기면 된다. 하네스 연동은 `../AUTH.md` §5 참조.
+(`auth.aipia.co.kr`)으로 옮기면 된다. 하네스 연동은 `../docs/10-AUTH.md` §5 참조.
 
 ---
 
@@ -34,7 +34,7 @@ realm: aipia                         ← 패밀리 공용 사용자 풀(여기 �
 ```
 
 신규 패밀리 앱 = **client 1개 추가**가 전부(소셜은 이미 realm 에 있음). 하네스 config 는
-`auth.idp.clientId` 만 그 client 로 바꿔 복붙(`../AUTH.md` §5 템플릿).
+`auth.idp.clientId` 만 그 client 로 바꿔 복붙(`../docs/10-AUTH.md` §5 템플릿).
 
 ---
 
@@ -95,7 +95,7 @@ http://localhost:8080/realms/aipia/protocol/openid-connect/auth
 
 ## 5. 하네스 연결
 
-`apps/<slug>/app.config.json` 의 `auth.idp` 를 이 IdP 로 향하게 한다(`../AUTH.md` §5 템플릿):
+`apps/<slug>/app.config.json` 의 `auth.idp` 를 이 IdP 로 향하게 한다(`../docs/10-AUTH.md` §5 템플릿):
 ```jsonc
 "idp": {
   "issuer": "http://localhost:8080/realms/aipia",   // 운영: https://auth.aipia.co.kr/realms/aipia
@@ -106,7 +106,7 @@ http://localhost:8080/realms/aipia/protocol/openid-connect/auth
 }
 ```
 그러면 앱의 `AppBridge.login('kakao')` → IdP authorize + `kc_idp_hint=kakao` → 카카오 → IdP 세션 →
-앱 복귀(code) → 백엔드가 IdP 와 교환(`../AUTH.md` §5 "백엔드 단순화").
+앱 복귀(code) → 백엔드가 IdP 와 교환(`../docs/10-AUTH.md` §5 "백엔드 단순화").
 
 ---
 

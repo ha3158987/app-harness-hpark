@@ -1,12 +1,21 @@
+---
+doc: 04
+title: NEW-APP-CHECKLIST — 사람이 직접 해야 하는 일 전부
+category: 앱추가
+audience: 배포담당자
+status: active
+updated: 2026-08-20
+---
+
 # NEW-APP-CHECKLIST — 사람이 직접 해야 하는 일 전부
 
 > **읽는 사람**: 하네스로 새 앱을 처음 만드는 사람.
 > **이 문서의 범위**: 코드가 아니라 **콘솔·계정 작업**. `generate-app` 이 대신 해주지 않는 것만 모았다.
 > **원칙**: 위에서부터 순서대로. 순서를 지키지 않으면 막히는 지점이 실제로 있다(§C-2, §H).
 >
-> 관련: [ONBOARDING.md](./ONBOARDING.md)(코드 흐름) · [CREDENTIALS.md](./CREDENTIALS.md)(시크릿 구조) ·
-> [DEPLOY.md](./DEPLOY.md)(CI) · [DATA-COLLECTION.md](./DATA-COLLECTION.md)(신고 항목 정답지) ·
-> [ATT-INTEGRATION.md](./ATT-INTEGRATION.md)(ATT 상세)
+> 관련: [../ONBOARDING.md](../ONBOARDING.md)(코드 흐름) · [09-CREDENTIALS.md](./09-CREDENTIALS.md)(시크릿 구조) ·
+> [08-DEPLOY.md](./08-DEPLOY.md)(CI) · [17-DATA-COLLECTION.md](./17-DATA-COLLECTION.md)(신고 항목 정답지) ·
+> [14-ATT-INTEGRATION.md](./14-ATT-INTEGRATION.md)(ATT 상세)
 
 ---
 
@@ -28,7 +37,7 @@
 | **데이터 안전성 / 개인정보 라벨** | 🙋 사람 |
 | **Firebase 프로젝트·키 파일** | 🙋 사람 |
 
-> ⚠️ `CREDENTIALS.md §4` 의 "새 앱 추가 = 인증 작업 0" 은 **시크릿 발급이 0**이라는 뜻이지
+> ⚠️ `09-CREDENTIALS.md §4` 의 "새 앱 추가 = 인증 작업 0" 은 **시크릿 발급이 0**이라는 뜻이지
 > **콘솔 작업이 0**이라는 뜻이 아니다. 아래가 그 콘솔 작업이다.
 
 ---
@@ -38,7 +47,7 @@
 - [ ] **Apple Developer 멤버십이 유효한가** — developer.apple.com/account 상단 배너 확인.
       만료되면 **기존 프로파일까지 전부 무효**가 되어 빌드·업로드가 모두 멈춘다. 갱신은 계정 소유자만 가능.
 - [ ] Play Console 접근 권한이 있는가
-- [ ] 이 앱의 슬러그·번들 ID·도메인이 정해졌는가 ([AIPIA-CONVENTIONS.md](./AIPIA-CONVENTIONS.md) 규칙)
+- [ ] 이 앱의 슬러그·번들 ID·도메인이 정해졌는가 ([01-AIPIA-CONVENTIONS.md](./01-AIPIA-CONVENTIONS.md) 규칙)
 
 ---
 
@@ -143,7 +152,7 @@ curl -sI https://<host>/.well-known/apple-app-site-association
 
 ## G. 스토어 신고 양식 — **앱마다 필수**
 
-무엇을 신고할지는 [DATA-COLLECTION.md](./DATA-COLLECTION.md) 가 정답지다. 켠 기능만 보고 옮겨 적으면 된다.
+무엇을 신고할지는 [17-DATA-COLLECTION.md](./17-DATA-COLLECTION.md) 가 정답지다. 켠 기능만 보고 옮겨 적으면 된다.
 
 - [ ] **App Store Connect** → 앱 개인정보(App Privacy)
 - [ ] **Play Console** → 데이터 안전성
@@ -192,7 +201,7 @@ gh workflow run release.yml -f slug=<slug> -f platform=ios -f track=internal
 
 | 기능 | 추가로 필요한 것 |
 |---|---|
-| **ATT** | `tracking.att.usageDescription` 필수(없으면 빌드 실패) · 문구 법무 검토 · [ATT-INTEGRATION.md](./ATT-INTEGRATION.md) |
+| **ATT** | `tracking.att.usageDescription` 필수(없으면 빌드 실패) · 문구 법무 검토 · [14-ATT-INTEGRATION.md](./14-ATT-INTEGRATION.md) |
 | **딥링크** | §D 지문 · §F `.well-known` · Xcode 에서 Associated Domains 확인 |
 | **푸시** | §E Firebase · §C-1 확장 App ID · APNs 키 |
 | **IAP** | 스토어 상품 등록(가격 티어) · 영수증 검증 백엔드(`iap.verifyEndpoint`) |
@@ -214,7 +223,7 @@ gh workflow run release.yml -f slug=<slug> -f platform=ios -f track=internal
 | `The Capacitor CLI requires NodeJS >=22` | Node 20 | §H-1 |
 | `Unicode Normalization … ASCII-8BIT` | `LANG` 미설정 | §H-1 |
 | 딥링크가 브라우저로 열림 | `.well-known` 미배포 또는 지문 1개 | §D, §F |
-| ATT 팝업이 안 뜸 | 기기 전역 추적 설정 OFF / 이미 응답함 / 로그인 전 | [ATT-INTEGRATION.md](./ATT-INTEGRATION.md) §7 |
+| ATT 팝업이 안 뜸 | 기기 전역 추적 설정 OFF / 이미 응답함 / 로그인 전 | [14-ATT-INTEGRATION.md](./14-ATT-INTEGRATION.md) §7 |
 | 기능을 켰는데 플러그인이 안 깔림 | 기존 `build/` 의 package.json 미갱신 | 2026-08-20 수정됨(자동 보강). 그전 버전은 `rm -rf build/<slug>` |
 | config 문구를 바꿨는데 앱에 반영 안 됨 | plist 는 **add-once** — 기존 값은 안 고침 | `rm -rf build/<slug>` 후 재생성 |
 | TestFlight 에 빌드가 안 보임 | 테스터 미추가 / 처리 중 | §H-3 |

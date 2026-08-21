@@ -1,3 +1,12 @@
+---
+doc: 18
+title: APP-FEATURES — 앱에서 할 수 있는 기능 + 버전
+category: 레퍼런스
+audience: 전체
+status: reference
+updated: 2026-05-30
+---
+
 # APP-FEATURES — 앱에서 할 수 있는 기능 + 버전
 
 하네스로 만든 앱이 제공할 수 있는 기능 전체 목록과, 각 기능을 담당하는 패키지/버전.

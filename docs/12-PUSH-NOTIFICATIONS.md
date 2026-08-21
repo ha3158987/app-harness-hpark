@@ -1,9 +1,18 @@
+---
+doc: 12
+title: 푸시 알림(FCM) 셋업 가이드 — 새 앱 출시용
+category: 기능연동
+audience: 개발자
+status: active
+updated: 2026-08-10
+---
+
 # 푸시 알림(FCM) 셋업 가이드 — 새 앱 출시용
 
 app-harness 로 새 앱을 만들 때 **푸시 알림(원격 FCM)** 을 붙이는 전체 과정을 정리한다.
 **하네스가 자동으로 해주는 것**과 **직접 세팅해야 하는 것**을 구분했다. 순서를 지키면 iOS 빌드가 안 깨진다.
 
-> 배포/서명 런북은 [DEPLOY.md](DEPLOY.md) §6(capability→프로파일)·§9(iOS 푸시)와 함께 본다.
+> 배포/서명 런북은 [08-DEPLOY.md](./08-DEPLOY.md) §6(capability→프로파일)·§9(iOS 푸시)와 함께 본다.
 
 ---
 
@@ -93,7 +102,7 @@ app-harness 로 새 앱을 만들 때 **푸시 알림(원격 FCM)** 을 붙이�
 ```bash
 /opt/homebrew/bin/fastlane ios regen_profile slug:<slug>
 ```
-- capability 를 켰는데 프로파일을 재생성 안 하면 **iOS 빌드가 서명에서 깨진다**(DEPLOY.md §6과 동일 실패모드).
+- capability 를 켰는데 프로파일을 재생성 안 하면 **iOS 빌드가 서명에서 깨진다**(08-DEPLOY.md §6과 동일 실패모드).
 - 기본 `fastlane`(시스템 Ruby+LibreSSL)은 ASC `.p8`(EC키)에서 `invalid curve name` → **`/opt/homebrew/bin/fastlane`** 사용.
 
 ### Step 6 — GitHub Secrets 등록  ⚠️ 실제 프로젝트를 결정하는 파일

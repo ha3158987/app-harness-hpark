@@ -1,3 +1,12 @@
+---
+doc: 03
+title: STRATEGY — 전략 전체 정리
+category: 전략
+audience: 전체
+status: active
+updated: 2026-05-30
+---
+
 # STRATEGY — 전략 전체 정리
 
 이 문서는 지금까지 내린 모든 결정과 그 이유, 그리고 진행 순서를 한 곳에 모은 것이다.
@@ -68,7 +77,7 @@
 4. 테스트용 서비스 1개로 `new-app` → `generate-assets` → `build-android`
 5. **실기기 확인 항목**: 화면 표시/세이프에어리어, 화면전환, WebP 재생, 하드웨어 백버튼
 6. iOS도 `build-ios`로 한 바퀴 (맥에서)
-7. 푸시·딥링크 붙여서 동작 확인 (→ DEVICE-SUPPORT.md 의 버전별 체크 참고)
+7. 푸시·딥링크 붙여서 동작 확인 (→ 19-DEVICE-SUPPORT.md 의 버전별 체크 참고)
 
 ### Phase 3 — 파이프라인 완성
 8. fastlane으로 서명·TestFlight/내부트랙 업로드 자동화 (`submit-store`)
@@ -85,5 +94,5 @@
 - **프로덕션 스토어 공개는 사람이 승인.** 자동화는 베타/내부 업로드까지.
 - 자격증명·결제정보는 자동 입력하지 않는다.
 
-관련 문서: `GUIDE.md`(마스터·config 스키마 정본), `README.md`(레이아웃), `REFERENCES.md`(참조 깃/문서),
-`APP-FEATURES.md`(기능·버전), `DEVICE-SUPPORT.md`(기기·OS·버전별 체크).
+관련 문서: `02-GUIDE.md`(마스터·config 스키마 정본), `../README.md`(레이아웃), `20-REFERENCES.md`(참조 깃/문서),
+`18-APP-FEATURES.md`(기능·버전), `19-DEVICE-SUPPORT.md`(기기·OS·버전별 체크).

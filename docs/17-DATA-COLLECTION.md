@@ -1,3 +1,12 @@
+---
+doc: 17
+title: DATA-COLLECTION — 하네스가 수집하는 데이터
+category: 정책
+audience: 기획자
+status: active
+updated: 2026-05-30
+---
+
 # DATA-COLLECTION — 하네스가 수집하는 데이터
 
 **App Store 개인정보 라벨(App Privacy)** 과 **Google Play 데이터 안전성(Data Safety)** 양식, 그리고

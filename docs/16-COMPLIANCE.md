@@ -1,7 +1,16 @@
+---
+doc: 16
+title: COMPLIANCE — 권한 고지 · 개인정보 · 성인인증 (한국 + 스토어)
+category: 정책
+audience: 기획자
+status: active
+updated: 2026-05-30
+---
+
 # COMPLIANCE — 권한 고지 · 개인정보 · 성인인증 (한국 + 스토어)
 
-가입/이용 시 법·정책상 처리해야 하는 것들. 데이터 수집 신고는 `DATA-COLLECTION.md`, 동의(약관/14세/
-마케팅)는 `AUTH.md §3-4`.
+가입/이용 시 법·정책상 처리해야 하는 것들. 데이터 수집 신고는 `17-DATA-COLLECTION.md`, 동의(약관/14세/
+마케팅)는 `10-AUTH.md §3-4`.
 
 ## 1. 접근권한 고지 + 요청
 - **가입 시 권한을 통째로 요청하지 말 것.** 기능을 처음 쓸 때 **just-in-time** + 사전 설명(rationale).
@@ -20,14 +29,14 @@ photoBtn.onclick = async () => {                   // 사진 첨부 누를 때 �
 
 ## 2. 개인정보 / 스토어 정책
 - **개인정보처리방침 URL 필수**(양 스토어) → config `legal.privacyUrl`, `legal.termsUrl`. 앱/스토어에 노출.
-- **App Store 개인정보 라벨 / Play 데이터 안전성** 양식 → `DATA-COLLECTION.md` 대로 신고
+- **App Store 개인정보 라벨 / Play 데이터 안전성** 양식 → `17-DATA-COLLECTION.md` 대로 신고
   (특히 **AppsFlyer 광고식별자 + ATT**).
-- **동의**: 약관/개인정보(필수), 마케팅(선택)은 가입 온보딩에서 수집(AUTH.md §3-4). 광고추적은 ATT(`requestTracking`).
+- **동의**: 약관/개인정보(필수), 마케팅(선택)은 가입 온보딩에서 수집(10-AUTH.md §3-4). 광고추적은 ATT(`requestTracking`).
 - PIPA: 수집·이용/제3자 제공/처리위탁 고지, 14세 미만 법정대리인.
 
 ## 3. 성인인증 (19+) + 연령 등급
 **두 가지를 구분**:
-- **만 14세 이상 확인**(일반 가입) → 가입 동의의 `age14`(AUTH.md). 가벼움.
+- **만 14세 이상 확인**(일반 가입) → 가입 동의의 `age14`(10-AUTH.md). 가벼움.
 - **성인(19+) 본인확인**(성인 콘텐츠/일부 서비스) → 한국은 **본인확인기관(PASS/NICE/KCB, 휴대폰 본인인증)**
   플로우 필요. 무겁고 한국 특수.
 

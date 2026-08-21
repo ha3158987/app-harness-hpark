@@ -24,7 +24,7 @@ description: 기존 웹 서비스 레포를 하네스에 "연결"한다. 웹 코
 
 ## 절차
 1. **정의 확인/생성** — `apps/<slug>/app.config.json` 있는지. 없으면 `new-app` 으로 만들고
-   필요한 블록(auth/iap/marketing/monitoring) 채운다. (스키마: GUIDE.md §6, AUTH.md, IAP.md)
+   필요한 블록(auth/iap/marketing/monitoring) 채운다. (스키마: docs/02-GUIDE.md §6, docs/10-AUTH.md, docs/11-IAP.md)
 2. **의존성 추가** — 웹 레포에 `@harness/bridge` 추가.
    - 모노레포면 `file:` 경로, 아니면 배포된 패키지/깃 의존성.
 3. **어댑터 배치** — `template/integration/harness-adapter.js` 를 웹 레포의 적절한 위치
@@ -40,8 +40,8 @@ description: 기존 웹 서비스 레포를 하네스에 "연결"한다. 웹 코
    찾는 단서: `oauth`, `signin`/`login`, `google`/`kakao`/`naver`, `checkout`/`payment`/`purchase`,
    `navigator.share`, `window.open`.
 6. **신규회원 온보딩** — 소셜은 신원만 주므로, `login` 의 `onNewUser` 에서 웹의 약관+추가정보 화면을
-   띄우고 `completeSignup(profile)` 로 확정(AUTH.md §3-4). 기존 웹 가입 폼 재사용.
-7. **가격/지갑 정합** — 앱 IAP 와 웹 PG 가 **같은 서버 지갑(계정)** 에 적립되도록 백엔드 확인(IAP.md).
+   띄우고 `completeSignup(profile)` 로 확정(docs/10-AUTH.md §3-4). 기존 웹 가입 폼 재사용.
+7. **가격/지갑 정합** — 앱 IAP 와 웹 PG 가 **같은 서버 지갑(계정)** 에 적립되도록 백엔드 확인(docs/11-IAP.md).
 8. **검증** — `node scripts/doctor.mjs` (config 점검) → `node scripts/generate-app.mjs --slug <slug>`
    → 디버그 빌드(build-android)로 동작 확인.
    - **세이프에어리어 전수 점검(노치 기기/시뮬레이터)**: 모든 화면의 상/하단 고정요소가 상태바·홈인디케이터에
@@ -58,5 +58,5 @@ description: 기존 웹 서비스 레포를 하네스에 "연결"한다. 웹 코
 ## 하지 말 것
 - 기존 웹 결제/로그인 코드를 지우거나 한쪽만 동작하게 만들지 않는다(웹/앱 둘 다 살아야 함).
 - 백엔드(영수증/토큰 검증, 세션, 지갑)나 스토어/소셜 콘솔 작업을 코드로 흉내내지 않는다 — 규약 문서를
-  가리키고 사람에게 넘긴다(AUTH.md / IAP.md / DEPLOY.md).
+  가리키고 사람에게 넘긴다(docs/10-AUTH.md / docs/11-IAP.md / docs/08-DEPLOY.md).
 - 웹 코드 구조가 불명확하면 추측해서 광범위 수정하지 말고, 분기 지점을 사람에게 확인.

@@ -92,7 +92,7 @@ const KNOWN_APM_PROVIDERS = [null, 'whatap', 'datadog'];
 
 // Firebase 멀티-flavor 설정. enabled=true 이면 generate-app 이 flavor 별 google-services / plist 를
 // secrets/env 에서 받아 build/<slug>/{android/app, ios} 에 배치. fcm/analytics/crashlytics/remoteConfig
-// 는 어느 SDK 를 활성화할지 토글. (실제 키 파일은 레포에 절대 두지 않는다 — DEPLOY.md §4)
+// 는 어느 SDK 를 활성화할지 토글. (실제 키 파일은 레포에 절대 두지 않는다 — docs/08-DEPLOY.md §4)
 const DEFAULT_FIREBASE = {
   enabled: false,
   project: { dev: null, stage: null, prod: null }, // 표시용 프로젝트 ID

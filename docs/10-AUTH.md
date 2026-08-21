@@ -1,3 +1,12 @@
+---
+doc: 10
+title: AUTH — 인증 / SSO 가이드
+category: 기능연동
+audience: 개발자
+status: active
+updated: 2026-05-30
+---
+
 # AUTH — 인증 / SSO 가이드
 
 이 하네스의 로그인은 **"인증은 WebView 밖에서, 복귀는 딥링크로, 토큰 교환은 백엔드에서"** 라는

@@ -15,7 +15,7 @@ description: 하네스에 새 웹 서비스를 앱으로 추가한다. apps/<slu
 - 켤 기능 (push / deepLink / deferredDeepLink / biometric ...)
 
 ## 절차
-1. `GUIDE.md` §6 의 `app.config.json` 스키마(정본)를 기준으로 삼는다.
+1. `docs/02-GUIDE.md` §6 의 `app.config.json` 스키마(정본)를 기준으로 삼는다.
 2. `apps/<slug>/` 생성, `app.config.json` 작성. 기능은 사용자가 명시 안 한 건 안전한 기본값
    (`push:false`, `deepLink:false` 등)으로 두고, 어떤 값으로 채웠는지 사용자에게 요약 보고.
 3. `apps/<slug>/icon.png`, `splash.png` 자리 안내. 없으면 사용자에게 1024² 아이콘 /

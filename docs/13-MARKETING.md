@@ -1,3 +1,12 @@
+---
+doc: 13
+title: MARKETING — 마케팅 SDK 연동 가이드
+category: 기능연동
+audience: 개발자
+status: active
+updated: 2026-06-01
+---
+
 # MARKETING — 마케팅 SDK 연동 가이드
 
 하네스에 어트리뷰션/분석/CRM SDK 를 붙이는 방법. **키/시크릿은 절대 config·레포에 넣지 않는다** —

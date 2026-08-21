@@ -4,7 +4,7 @@
 #   1) 태그 푸시:   <slug>-v<버전>   예) aipia-v1.2.0   → slug=aipia, 양쪽 플랫폼, internal 트랙
 #   2) 수동 실행:   Actions 탭에서 slug/platform/track 선택
 #
-# 필요한 GitHub Secrets 는 DEPLOY.md 참조. 시크릿 없으면 해당 잡은 실패(빌드까지는 가능).
+# 필요한 GitHub Secrets 는 docs/08-DEPLOY.md 참조. 시크릿 없으면 해당 잡은 실패(빌드까지는 가능).
 name: release
 
 on:

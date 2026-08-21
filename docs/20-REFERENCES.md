@@ -1,3 +1,12 @@
+---
+doc: 20
+title: 참조 깃 / 문서 모음
+category: 레퍼런스
+audience: 개발자
+status: reference
+updated: 2026-05-30
+---
+
 # 참조 깃 / 문서 모음
 
 Claude Code가 구현 중 참조할 1차 소스. 버전 차이가 잦으니 **항상 해당 메이저(Capacitor 8)

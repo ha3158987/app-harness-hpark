@@ -1,3 +1,12 @@
+---
+doc: 15
+title: APP-GROWTH-FEATURES — ATT 동의 · 강제 업데이트 · 딥링크/디퍼드 딥링크
+category: 기능연동
+audience: 개발자
+status: active
+updated: 2026-08-20
+---
+
 # APP-GROWTH-FEATURES — ATT 동의 · 강제 업데이트 · 딥링크/디퍼드 딥링크
 
 > aipia 앱들이 **설치 이후 성장(리텐션·어트리뷰션·운영 안정성)** 을 위해 공통으로 필요로 하는 3개 기능을
@@ -5,8 +14,8 @@
 > **1차 목표** = characterchat 에 실제로 붙인다. **2차 목표** = 하네스로 찍는 모든 신규 앱이 config 값만 채우면 동작한다.
 >
 > 이 문서는 **설계·조사 결과**다. 2026-08-14 기준 **코드는 아직 한 줄도 안 바뀌었다.**
-> **신규 앱에 ATT 를 붙이는 방법은 [ATT-INTEGRATION.md](./ATT-INTEGRATION.md) 참조**(연동 가이드).
-> 웹 측 상세는 [character-chatbot-web `docs/native/growth-features-web.md`](../character-chatbot-web/docs/native/growth-features-web.md) 참조.
+> **신규 앱에 ATT 를 붙이는 방법은 [14-ATT-INTEGRATION.md](./14-ATT-INTEGRATION.md) 참조**(연동 가이드).
+> 웹 측 상세는 [character-chatbot-web `docs/native/growth-features-web.md`](../../character-chatbot-web/docs/native/growth-features-web.md) 참조.
 >
 > **2026-08-14 — DECISION 6건 모두 확정됐다.** 결정 내용과 그에 따라 늘어난 작업은 §3 참조.
 > 요지: ATT 폴백 게이트 O · 사전화면은 온보딩 후 · 버전소스는 **Firebase Remote Config(+URL 폴백)** ·
@@ -190,8 +199,8 @@ Info.plist 문구가 `"이 앱은 앱 오류 분석을 위해 추적 권한을 �
 - ✅ **`openAppSettings()` 추가 (브릿지 1.4.0)** — 거부한 유저를 OS 설정으로 보내는 유일한 경로.
   iOS `UIApplication.openSettingsURLString` / Android `ACTION_APPLICATION_DETAILS_SETTINGS`.
   하위 화면(설정 > 개인정보 보호 > 추적) 직행은 비공개 API 라 심사 리젝 → 앱 설정 페이지까지만 간다
-- ✅ **[ATT-INTEGRATION.md](./ATT-INTEGRATION.md) 신설** — 신규 앱용 연동 가이드(셋업·순서·법적 제약·함정)
-- ⬜ `MARKETING.md` / `DATA-COLLECTION.md` 갱신
+- ✅ **[14-ATT-INTEGRATION.md](./14-ATT-INTEGRATION.md) 신설** — 신규 앱용 연동 가이드(셋업·순서·법적 제약·함정)
+- ⬜ `13-MARKETING.md` / `17-DATA-COLLECTION.md` 갱신
 
 **검증 결과 (2026-08-14)**
 
@@ -309,7 +318,7 @@ setIsVisible(appBuild === TARGET_BUILD)   // "미만"이 아니라 "정확히 �
 | 전체화면 게이트 | `:345-386` `_showUpdateGate()` — 테마색 반영, `force:false` 면 "나중에" | ✅ |
 | 스토어 URL 폴백 | `:339-344` appId 로 Play/App Store URL 조립 | ✅ |
 
-minVersion JSON 스키마 (`GUIDE.md:252-260`):
+minVersion JSON 스키마 (`02-GUIDE.md:252-260`):
 ```jsonc
 {
   "ios":     { "minVersionCode": 5, "storeUrl": "https://apps.apple.com/app/idXXXX", "message": "...", "force": true },
@@ -326,7 +335,7 @@ minVersion JSON 스키마 (`GUIDE.md:252-260`):
 
 조사 시점의 사실: **하네스에는 Remote Config 를 읽는 코드가 전혀 없다**
 (`grep -n "remoteConfig" template/bridge/dist/index.js` → 0건).
-`app.config.json` 의 `firebase.remoteConfig` 플래그는 `GUIDE.md` 에 선언만 있고 브릿지가 소비하지 않는다.
+`app.config.json` 의 `firebase.remoteConfig` 플래그는 `02-GUIDE.md` 에 선언만 있고 브릿지가 소비하지 않는다.
 따라서 **RC 배선은 이번 작업의 신규 개발 항목**이다.
 
 **왜 폴백을 함께 두는가 (설계 보완)**
@@ -411,7 +420,7 @@ checkForceUpdate()
 - ⬜ `apps/characterchat-dev/app.config.json` → `features.forceUpdate: { enabled: true, source: "remoteConfig", minVersionUrl: "..." }` + `firebase.remoteConfig: true`
 - ⬜ `apps/characterchat/app.config.json` → 동일. ⚠️ **prod 는 `firebase` 블록이 아예 없다** — Firebase 프로젝트 신규 설정 선행 필요
 - ⬜ `_showUpdateGate()` 문구/디자인이 서비스 테마와 어울리는지 확인 (현재 하드코딩된 회색 계열 `#202124`/`#5f6368` — **다크 테마 앱(characterchat 은 배경 `#000000`)에서 대비 확인 필수**)
-- ⬜ `GUIDE.md` §6 forceUpdate 설명 갱신 + RC 키 표 추가
+- ⬜ `02-GUIDE.md` §6 forceUpdate 설명 갱신 + RC 키 표 추가
 
 **character-chatbot-web (폴백 JSON)**
 - ⬜ `app/app-version.json/route.ts` 생성 (`Cache-Control: no-store`) — RC 실패 구간의 안전망
@@ -662,7 +671,7 @@ poptale 이 Adbrix 때문에 넣은 우회는 **총 5개**다.
 - ⬜ `initMarketing()` 을 **다중 벤더 루프**로 재작성 (현재는 `if (provider === 'appsflyer')` 단일 분기)
 - ⬜ `apps/characterchat*/app.config.json` → `features.deepLink: true` (dev 는 이미 true, **prod 는 false**)
 - ⬜ `initMarketing()` 실패 시 `_eventQueue` 가 영구히 안 비워지는지 점검 (poptale 우회 #4 의 하네스판)
-- ⬜ iOS pbxproj 의 `CODE_SIGN_ENTITLEMENTS` 수동 연결 절차를 DEPLOY.md 에 명시 (현재 경고만 출력)
+- ⬜ iOS pbxproj 의 `CODE_SIGN_ENTITLEMENTS` 수동 연결 절차를 08-DEPLOY.md 에 명시 (현재 경고만 출력)
 
 **app-harness — Adbrix 배선 (신규)** — ⏸ **실행 경로 A/B/C 결정 대기 (C-2-1)**
 - ✅ 선행 조사 완료 (2026-08-14) — 공식 Capacitor 플러그인 없음. 공식 하이브리드 WebView 브릿지는 존재하나 **이벤트 로깅 전용**
@@ -771,10 +780,10 @@ RC 의 알려진 비용 3가지(캐시 지연 / Firebase 파일 필수 / 앱 재
 
 | 기존 문서 | 겹치는 내용 | 처리 |
 |---|---|---|
-| `MARKETING.md` | 어트리뷰션 벤더 슬롯, AppsFlyer 키 주입 절차 | **정본.** `providers` 배열 스키마(#4) 도입 시 **갱신 필요** |
-| `GUIDE.md` §6 | `app.config.json` 스키마, forceUpdate JSON 스키마 | **정본.** `tracking.att` · `forceUpdate.source` · `firebase.remoteConfig*` 추가 시 **갱신 필요** |
-| `NATIVE_FEATURES_PLAN.md` | 기능별 가능/불가 매트릭스, Phase 2-2 강제업데이트 | 상태만 중복. 착수 후 상태 동기화 필요 |
-| `DATA-COLLECTION.md` / `COMPLIANCE.md` | 개인정보 라벨·수집 항목 | ATT + 어트리뷰션 2벤더 켤 때 **갱신 대상** |
+| `13-MARKETING.md` | 어트리뷰션 벤더 슬롯, AppsFlyer 키 주입 절차 | **정본.** `providers` 배열 스키마(#4) 도입 시 **갱신 필요** |
+| `02-GUIDE.md` §6 | `app.config.json` 스키마, forceUpdate JSON 스키마 | **정본.** `tracking.att` · `forceUpdate.source` · `firebase.remoteConfig*` 추가 시 **갱신 필요** |
+| `22-NATIVE_FEATURES_PLAN.md` | 기능별 가능/불가 매트릭스, Phase 2-2 강제업데이트 | 상태만 중복. 착수 후 상태 동기화 필요 |
+| `17-DATA-COLLECTION.md` / `16-COMPLIANCE.md` | 개인정보 라벨·수집 항목 | ATT + 어트리뷰션 2벤더 켤 때 **갱신 대상** |
 | `template/plugins/adbrix/SPEC.md` | Adbrix 배선 6단계 | **정본.** 이 문서는 우회 코드 분석을 추가 제공. #4 확정으로 이 SPEC 이 **실행 대상**이 됐다 |
 | `character-chatbot-web/docs/27-*` | ATT/Adbrix/Amplitude 체크리스트 | **선행 문서.** "왜 ATT 팝업이 안 떴나" 진단이 여기 결론과 일치 |
 

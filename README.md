@@ -1,7 +1,7 @@
 # Appharness — AIPIA Web→Native Harness (Capacitor)
 
 > ⚠️ **범용 하네스가 아니라 AIPIA 전사 앱 하네스.** 식별자/도메인/스택/SDK 선택은
-> [`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md) 의 전사 표준을 따른다.
+> [`docs/01-AIPIA-CONVENTIONS.md`](docs/01-AIPIA-CONVENTIONS.md) 의 전사 표준을 따른다.
 
 AIPIA 의 여러 웹 서비스(Poptale, AIPIA, ...)를 **하나의 얇은 네이티브 셸 + 공유 브릿지**로 감싸
 iOS/Android 앱으로 *반복 추출* 하는 하네스. 앱은 `server.url` 로 **배포된 웹을 원격 로드**하고,
@@ -26,9 +26,9 @@ flowchart LR
 
 | 당신이 누구냐 | 어디부터 | 결과물 |
 |---|---|---|
-| **새 앱을 하네스에 추가하는 개발자** | [`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md) → [`ONBOARDING.md`](ONBOARDING.md) | `apps/<slug>/app.config.json` + 디버그 APK |
-| **Poptale 이전을 맡은 담당자** | [`POPTALE-MIGRATION.md`](POPTALE-MIGRATION.md) ⭐ | 10주 일정 + 호환성 매트릭스 + 플러그인 SPEC |
-| **하네스 자체를 손보는 사람** | [`GUIDE.md`](GUIDE.md) → [`STRATEGY.md`](STRATEGY.md) | 스키마/스킬/CI 변경 |
+| **새 앱을 하네스에 추가하는 개발자** | [`docs/01-AIPIA-CONVENTIONS.md`](docs/01-AIPIA-CONVENTIONS.md) → [`ONBOARDING.md`](ONBOARDING.md) | `apps/<slug>/app.config.json` + 디버그 APK |
+| **Poptale 이전을 맡은 담당자** | [`docs/21-POPTALE-MIGRATION.md`](docs/21-POPTALE-MIGRATION.md) ⭐ | 10주 일정 + 호환성 매트릭스 + 플러그인 SPEC |
+| **하네스 자체를 손보는 사람** | [`docs/02-GUIDE.md`](docs/02-GUIDE.md) → [`docs/03-STRATEGY.md`](docs/03-STRATEGY.md) | 스키마/스킬/CI 변경 |
 
 ---
 
@@ -47,7 +47,7 @@ writeFileSync('apps/newservice/app.config.json', JSON.stringify(cfg, null, 2));
 자동 도출되는 값: 번들 ID(`com.aipia.newservice`), Firebase 프로젝트 3개
 (`dev-aipia-newservice` / `stage-aipia-newservice` / `aipia-newservice`), 도메인
 (`https://newservice.ai`), K-market 4 socials, Adbrix+Amplitude, Crashlytics+WhaTap,
-다크모드, AppChannel 호환 등 — 전부 [`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md) 표준.
+다크모드, AppChannel 호환 등 — 전부 [`docs/01-AIPIA-CONVENTIONS.md`](docs/01-AIPIA-CONVENTIONS.md) 표준.
 
 남은 작업: 서비스별 IAP 상품 등록, 푸시 화이트리스트, 아이콘/스플래시.
 
@@ -76,9 +76,9 @@ cd build/<slug>/android && ./gradlew assembleDebug        # 서명 없는 디버
 ```
 
 - 새 서비스 추가 흐름 → [`ONBOARDING.md`](ONBOARDING.md)
-- 웹에 기능 연결 → [`INTEGRATION.md`](INTEGRATION.md)
-- config 스키마(정본) → [`GUIDE.md`](GUIDE.md) §6
-- 인계 문서(Poptale) → [`POPTALE-MIGRATION.md`](POPTALE-MIGRATION.md)
+- 웹에 기능 연결 → [`docs/06-INTEGRATION.md`](docs/06-INTEGRATION.md)
+- config 스키마(정본) → [`docs/02-GUIDE.md`](docs/02-GUIDE.md) §6
+- 인계 문서(Poptale) → [`docs/21-POPTALE-MIGRATION.md`](docs/21-POPTALE-MIGRATION.md)
 
 ---
 
@@ -86,9 +86,9 @@ cd build/<slug>/android && ./gradlew assembleDebug        # 서명 없는 디버
 
 ```
 Appharness/
-├── AIPIA-CONVENTIONS.md         ⭐ 전사 컨벤션 정본 (번들ID·도메인·SDK·이벤트명)
-├── POPTALE-MIGRATION.md         ⭐ Poptale Flutter → 하네스 이전 인계 문서
-├── GUIDE.md / ONBOARDING.md / INTEGRATION.md / AUTH.md / IAP.md / ...
+├── docs/01-AIPIA-CONVENTIONS.md         ⭐ 전사 컨벤션 정본 (번들ID·도메인·SDK·이벤트명)
+├── docs/21-POPTALE-MIGRATION.md         ⭐ Poptale Flutter → 하네스 이전 인계 문서
+├── docs/02-GUIDE.md / ONBOARDING.md / docs/06-INTEGRATION.md / docs/10-AUTH.md / docs/11-IAP.md / ...
 ├── apps/<slug>/app.config.json  # 앱 정의(단일 진실 공급원) + icon.png/splash.png
 │   ├── aipia/                   #   AIPIA 본 앱 레퍼런스
 │   ├── poptale/                 #   Poptale prod (com.aipia.poptale)
@@ -114,33 +114,18 @@ Appharness/
 
 ---
 
-## 📚 문서 색인
+## 📚 문서
 
-| 문서 | 내용 |
+문서 **22개**는 전부 [`docs/`](docs/) 에 번호순으로 있다.
+**색인은 [`CLAUDE.md`](CLAUDE.md) 하나뿐이다** — 목적별 라우팅 · 카테고리 · 대상 독자 · 상태를 한 표에서 본다.
+(Claude Code 가 매 세션 자동으로 읽는 파일이라 사람과 AI 가 같은 색인을 본다.)
+
+| 급하면 이것부터 | |
 |---|---|
-| **[`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md)** ⭐ | **AIPIA 전사 컨벤션 정본.** 번들ID·Firebase·도메인·소셜·결제·트래킹·모니터링·이벤트명·최소OS — 새 앱 추가 전 필독 |
-| **[`GUIDE.md`](GUIDE.md)** | 하네스 사용법 마스터 — 지원 기능·흐름·필수 입력·스키마 정본·문서 색인 |
-| **[`POPTALE-MIGRATION.md`](POPTALE-MIGRATION.md)** ⭐ | **Poptale Flutter → 하네스 이전** 인계 문서(호환성 매트릭스 10개·10주 일정·책임 분담·플러그인 SPEC 색인) |
-| **[`NEW-APP-CHECKLIST.md`](NEW-APP-CHECKLIST.md)** ⭐ | **사람이 직접 해야 하는 콘솔·계정 작업 전부.** 새 앱을 처음 만들 때 이 문서를 따라가면 헤매지 않는다 |
-| [`ONBOARDING.md`](ONBOARDING.md) | 새 서비스 추가 전체 흐름 (코드 관점) |
-| [`CREDENTIALS.md`](CREDENTIALS.md) | 인증·시크릿 단일 출처 — 조직 공유 / 앱별 고유 구분 |
-| [`INTEGRATION.md`](INTEGRATION.md) | 프론트 통합 — `@harness/bridge` + 어댑터 + API + AppChannel shim |
-| [`SETUP.md`](SETUP.md) | 환경/키 단계별 준비 |
-| [`AUTH.md`](AUTH.md) | 로그인/SSO/회원가입/게스트/탈퇴/중앙 IdP/백엔드 규약 |
-| [`IAP.md`](IAP.md) | 인앱결제/웹앱 가격분기/지갑/백엔드 검증/Google 토큰 압축 |
-| [`COMPLIANCE.md`](COMPLIANCE.md) | 접근권한/개인정보/성인인증/연령등급 |
-| [`DATA-COLLECTION.md`](DATA-COLLECTION.md) | 스토어 개인정보 양식·처리방침용 수집 목록 |
-| [`DEPLOY.md`](DEPLOY.md) | CI/CD 자동배포/시크릿/서명 |
-| [`DEVICE-SUPPORT.md`](DEVICE-SUPPORT.md) | 기기/OS/해상도/노치/폴더블 |
-| [`MARKETING.md`](MARKETING.md) | 마케팅 SDK (AppsFlyer / Adbrix / Amplitude) |
-| [`APP-GROWTH-FEATURES.md`](APP-GROWTH-FEATURES.md) | 성장 기능 설계 정본 — ATT·강제업데이트·딥링크. 결정 기록·Adbrix 우회 분석 |
-| [`ATT-INTEGRATION.md`](ATT-INTEGRATION.md) | ATT(추적 동의) 연동 가이드 — 셋업·호출 순서·법적 제약·함정 |
-| [`PUSH-NOTIFICATIONS.md`](PUSH-NOTIFICATIONS.md) | 푸시(FCM) 셋업 — 키·확장·발송 규약 |
-| [`NATIVE_FEATURES_PLAN.md`](NATIVE_FEATURES_PLAN.md) | 네이티브 기능 가능/불가 매트릭스 + 단계별 도입 플랜 |
-| [`HOWTO-DEPLOY.md`](HOWTO-DEPLOY.md) | 배포 실행 절차 (DEPLOY.md 의 실무 요약) |
-| [`template/plugins/`](template/plugins/) | 네이티브 플러그인 작업 사양서 (Kakao/Naver/Adbrix/WhaTap) |
-| [`STRATEGY.md`](STRATEGY.md) · [`REFERENCES.md`](REFERENCES.md) · [`APP-FEATURES.md`](APP-FEATURES.md) | 전략 · 외부참조 · 기능·플러그인 |
-| [`idp/README.md`](idp/README.md) · [`backend/auth-reference/`](backend/auth-reference/) | Keycloak 구동 · 백엔드 레퍼런스 |
+| 새 앱을 추가한다 | [`01-AIPIA-CONVENTIONS`](docs/01-AIPIA-CONVENTIONS.md) → [`04-NEW-APP-CHECKLIST`](docs/04-NEW-APP-CHECKLIST.md) |
+| 테스터에게 배포한다 | [`07-HOWTO-DEPLOY`](docs/07-HOWTO-DEPLOY.md) |
+| 하네스 동작을 알고 싶다 | [`02-GUIDE`](docs/02-GUIDE.md) |
+| 플러그인 사양 | [`template/plugins/`](template/plugins/) |
 
 ---
 
@@ -172,7 +157,7 @@ Appharness/
 ### 미검증 ⚠️
 - **iOS 빌드** (Windows 환경에서 작성) — 첫 macOS/CI 실행에서 엔타이틀먼트 pbxproj 연결 확인 필요
 - Kakao/Naver/Adbrix/WhaTap 네이티브 플러그인 — `template/plugins/*/SPEC.md` 작업 사양만 있음, 실제 SDK 통합은 dev 가 채워야 함
-- Poptale 마이그 호환성 매트릭스(`POPTALE-MIGRATION.md §3`) — 10개 항목 PASS/FAIL 검증 미실행
+- Poptale 마이그 호환성 매트릭스(`docs/21-POPTALE-MIGRATION.md §3`) — 10개 항목 PASS/FAIL 검증 미실행
 
 ### 외부 의존(사람 몫) 🙋
 - Apple Developer Program / Google Play Console 계정 · 멤버십
@@ -182,7 +167,7 @@ Appharness/
 - Adbrix/Amplitude/WhaTap 대시보드 앱 등록
 - IdP 배포(Keycloak) — 중앙 SSO 사용 시
 
-자세히: [`AIPIA-CONVENTIONS.md §14·§15`](AIPIA-CONVENTIONS.md), [`GUIDE.md §5`](GUIDE.md).
+자세히: [`docs/01-AIPIA-CONVENTIONS.md §14·§15`](docs/01-AIPIA-CONVENTIONS.md), [`docs/02-GUIDE.md §5`](docs/02-GUIDE.md).
 
 ---
 
@@ -200,4 +185,4 @@ Appharness/
 
 - 사내 비공개 레포(aipia-team org)
 - 컨벤션/하네스 관련 문의: AIPIA 팀 내부 채널
-- Poptale 이전 인계: [`POPTALE-MIGRATION.md §2`](POPTALE-MIGRATION.md) 책임 분담 표 참조
+- Poptale 이전 인계: [`docs/21-POPTALE-MIGRATION.md §2`](docs/21-POPTALE-MIGRATION.md) 책임 분담 표 참조
