@@ -106,7 +106,8 @@
 
 | 위치 | 내용 |
 |---|---|
-| [idp/README.md](idp/README.md) | 중앙 IdP(Keycloak) 구동 |
+| [docs/25-AUTH-DELEGATION.md](docs/25-AUTH-DELEGATION.md) | **인증 — 외부 인증서버 위탁(기본)** |
+| [idp/README.md](idp/README.md) | 중앙 IdP(Keycloak) 구동 — 레거시 |
 | [backend/auth-reference/README.md](backend/auth-reference/README.md) | 백엔드 레퍼런스 구현 (인메모리 · 학습용) |
 | [secrets/README.md](secrets/README.md) | 로컬 키 파일 배치 규칙 |
 | [template/plugins/README.md](template/plugins/README.md) | 네이티브 플러그인 작업 개요 |

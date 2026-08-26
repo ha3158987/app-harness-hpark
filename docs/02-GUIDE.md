@@ -39,7 +39,7 @@ flowchart TB
     APP["Capacitor 앱 (APK/IPA)<br/>server.url → 원격 웹 로드"]
   end
   BE["백엔드 (당신)<br/>세션·지갑·영수증검증·성인인증"]
-  IDP["중앙 IdP (Keycloak, 당신 서버)<br/>소셜 페더레이션 + SSO"]
+  IDP["인증서버 (외부·타팀 운영)<br/>신원 판정 · 토큰 발급"]
   STORE["App Store / Play"]
 
   CFG --> GEN --> APP
@@ -47,7 +47,8 @@ flowchart TB
   W -- "원격 로드" --> APP
   W <-- "login/purchase/track..." --> BR
   W <--> BE
-  APP -- "OAuth(시스템브라우저)" --> IDP --> BE
+  APP -- "OAuth(시스템브라우저)" --> PROV["소셜 공급자"] --> APP
+  BE -- "internal API" --> IDP
   APP -- "fastlane (CI)" --> STORE
 ```
 
@@ -124,7 +125,8 @@ flowchart LR
 
 **capabilities 플래그**: `push, deepLink, deferredDeepLink, biometric, share, camera, forceUpdate, secureStorage, localNotification, haptics, clipboard, geolocation, auth, iap`
 
-**인증/계정 지원 범위**: 이메일 + 소셜 8(apple/google/naver/kakao/facebook/x/threads) · 중앙 IdP(SSO) · 회원가입 온보딩(약관/추가정보) · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인 · 기기 등록.
+**인증/계정 지원 범위**: 이메일 + 소셜(apple/google/naver/kakao/facebook/x/threads) — `line`·`discord` 추가 예정(H-1) · 회원가입 온보딩(약관/추가정보) · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인 · 기기 등록.
+**기본 경로는 외부 인증서버 위탁**이다 — [25-AUTH-DELEGATION.md](25-AUTH-DELEGATION.md). 중앙 IdP 자체 구축은 레거시.
 
 ---
 

@@ -23,7 +23,7 @@ call site 를 여기저기 고치는 대신 **어댑터 한 곳**(`template/inte
 ```js
 import { initHarness, login, buy } from './harness-adapter';
 await initHarness({ onDeepLink: (url) => router.push(new URL(url).pathname) });
-loginBtn.onclick = () => login('google', () => startWebGoogleOAuth());  // 앱=IdP, 웹=기존
+loginBtn.onclick = () => login('google', () => startWebGoogleOAuth());  // 앱=네이티브 경로, 웹=기존
 buyBtn.onclick   = () => buy('coin_100', () => myWebCheckout('coin_100'));
 ```
 아래는 어댑터 없이 브릿지를 직접 쓰는 저수준 사용법이다.
