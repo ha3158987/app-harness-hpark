@@ -71,10 +71,6 @@ const DEFAULT_AUTH = {
   deleteEndpoint: null,     // 회원탈퇴/계정삭제 백엔드 URL (스토어 정책상 사실상 필수)
   guestEndpoint: null,      // 게스트(익명) 계정 생성 백엔드 URL (IAP/진행상황 보관 시)
   deviceEndpoint: null,     // 푸시토큰/기기를 계정에 등록하는 백엔드 URL (기기↔계정 바인딩)
-  // 중앙 IdP 모드(패밀리 SSO): 설정 시 앱은 IdP 하나만 바라본다. IdP 가 소셜을 페더레이션.
-  //   { issuer | authorizeUrl, clientId, hintParam?, hints?, scopes?, redirectUri? }
-  //   빈 객체({})면 미설정 = 직접 모드. (merge 가 null+객체에서 깨지므로 기본은 {})
-  idp: {},
   oauth: {},                // 직접 모드: { google: { clientId, scopes?, redirectUri?, authorizeUrl?, extraQuery? }, ... }
 };
 const KNOWN_AUTH_PROVIDERS = ['email', 'apple', 'google', 'naver', 'kakao', 'facebook', 'x', 'threads'];
@@ -295,6 +291,12 @@ export function loadConfig(repoRoot, slug) {
 
   // auth 정규화 + 검증 (공급자명만 검증, clientId 누락은 generate-app 이 경고)
   const auth = merge(DEFAULT_AUTH, raw.auth ?? {});
+  // 자체 IdP 모드는 제거됐다. 설정이 남아 있으면 브릿지가 조용히 무시해 로그인이 통째로
+  // 실패하므로, 빌드 시점에 무엇을 고쳐야 하는지 알려주고 멈춘다.
+  if (raw.auth && 'idp' in raw.auth) {
+    err(slug, 'auth.idp 는 더 이상 지원되지 않습니다 — 자체 IdP(Keycloak) 모드가 제거됐습니다. ' +
+      '공급자별 auth.oauth.<provider>.clientId 로 옮기세요(docs/25-AUTH-DELEGATION.md).');
+  }
   if (!Array.isArray(auth.providers)) err(slug, 'auth.providers 는 배열이어야 함');
   for (const p of auth.providers) {
     if (!KNOWN_AUTH_PROVIDERS.includes(p)) {
@@ -504,15 +506,32 @@ export const AIPIA_DEFAULTS = Object.freeze({
  * new-app 스킬이 이걸 호출해서 시작 config 를 만들고, 사람은 차이가 나는 부분만 덮어쓴다.
  * 시크릿/외부 발급값은 채우지 않는다(엔드포인트 URL 같은 공개값만).
  *
- * @param {{ slug: string, appName: string, idp?: 'keycloak'|'direct' }} opts
+ * @param {{ slug: string, appName: string }} opts
+ *
+ * 인증은 항상 **외부 인증서버 위탁**이다(docs/25-AUTH-DELEGATION.md). Keycloak 등 자체 IdP 는
+ * 쓰지 않기로 확정됐으므로 이 프리셋은 `auth.idp` 를 어떤 경우에도 내보내지 않는다.
  * @returns {object} app.config.json 시작 보일러플레이트
  */
-export function aipiaPreset({ slug, appName, idp = 'direct' }) {
+export function aipiaPreset({ slug, appName, ...rest }) {
   if (!SLUG_RE.test(slug)) throw new Error(`slug "${slug}" 형식 오류`);
+  // 예전 시그니처의 idp 인자를 조용히 무시하면 호출자의 의도가 사라진다 — 명시적으로 막는다.
+  if ('idp' in rest) {
+    throw new Error(
+      'aipiaPreset 은 더 이상 idp 인자를 받지 않습니다 — 자체 IdP(Keycloak)는 사용하지 않기로 ' +
+      '확정됐습니다. 인증은 외부 인증서버 위탁이며 auth.oauth 로 배선합니다. ' +
+      '(docs/25-AUTH-DELEGATION.md)',
+    );
+  }
   const sub = (tpl) => tpl.replaceAll('{slug}', slug);
   const D = AIPIA_DEFAULTS;
   const webProd = sub(D.domainPattern.web.prod);
   const apiProd = sub(D.domainPattern.api.prod);
+  // 소셜 provider 마다 clientId 자리를 만들어 둔다 — 값은 각 공급자 콘솔에서 발급받아 채운다.
+  // email 은 웹이 처리하므로(브릿지는 email-handled-by-web 반환) oauth 항목이 필요 없다.
+  const providers = [...D.auth.providers];
+  const oauth = Object.fromEntries(
+    providers.filter((p) => p !== 'email').map((p) => [p, { clientId: null }]),
+  );
   return {
     slug,
     appName: appName || slug,
@@ -533,14 +552,14 @@ export function aipiaPreset({ slug, appName, idp = 'direct' }) {
     },
     marketing: { ...D.marketing },
     auth: {
-      providers: [...D.auth.providers],
+      providers,
       sessionEndpoint: `https://${apiProd}${D.backendEndpoints.authNative}`,
       signupEndpoint:  `https://${apiProd}${D.backendEndpoints.authSignup}`,
       logoutEndpoint:  `https://${apiProd}${D.backendEndpoints.authLogout}`,
       deleteEndpoint:  `https://${apiProd}${D.backendEndpoints.authDelete}`,
       guestEndpoint:   `https://${apiProd}${D.backendEndpoints.authGuest}`,
       deviceEndpoint:  `https://${apiProd}${D.backendEndpoints.authDevice}`,
-      idp: idp === 'keycloak' ? { issuer: `https://auth.${slug}.ai/realms/${slug}`, clientId: `${slug}-app` } : {},
+      oauth,
     },
     iap: {
       verifyEndpoint: `https://${apiProd}${D.backendEndpoints.iapVerify}`,

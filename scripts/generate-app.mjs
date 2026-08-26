@@ -105,23 +105,14 @@ const AUTH_NATIVE_PLUGINS = {
   apple: ['@capacitor-community/apple-sign-in'], // iOS 네이티브 Sign in with Apple
 };
 
-// 중앙 IdP 모드 여부 (auth.idp 에 issuer/authorizeUrl 있음)
-function isIdpMode(cfg) {
-  const i = cfg.auth?.idp;
-  return !!(i && (i.issuer || i.authorizeUrl));
-}
-
 // 인증 플러그인 + 경고(Apple 4.8 / clientId 누락) 수집
 function authSetup(cfg) {
   const providers = cfg.auth?.providers || [];
   const plugins = [];
   const warnings = [];
   const social = providers.filter((p) => p !== 'email');
-  const idp = isIdpMode(cfg);
 
-  // 네이티브 플러그인: IdP 모드면 Apple 도 IdP 경유 → apple-sign-in 플러그인 불필요.
   for (const p of providers) {
-    if (p === 'apple' && idp) continue;
     (AUTH_NATIVE_PLUGINS[p] || []).forEach((x) => plugins.push(x));
   }
 
@@ -132,23 +123,15 @@ function authSetup(cfg) {
       'providers 에 추가해야 합니다 — 없으면 iOS 심사에서 리젝될 수 있음.');
   }
 
-  if (idp) {
-    // IdP 모드: clientId 는 IdP 클라이언트 하나. 공급자별 oauth.clientId 는 보지 않는다.
-    if (!cfg.auth?.idp?.clientId) {
-      warnings.push('auth.idp.clientId 누락 — 중앙 IdP 클라이언트 ID 가 필요합니다(런타임 misconfigured).');
-    }
-  } else {
-    // 직접 모드: 시스템 브라우저 OAuth 공급자는 공개 clientId 필요
-    for (const p of social) {
-      if (p === 'apple') continue;
-      if (!cfg.auth?.oauth?.[p]?.clientId) {
-        warnings.push(`auth.oauth.${p}.clientId 누락 — OAuth 가 런타임에 동작하지 않음(빌드는 됨). ` +
-          '공개 clientId 를 config 에 넣거나 빌드 시 주입하세요(client secret 은 백엔드 전용).');
-      }
+  // 시스템 브라우저 OAuth 공급자는 공개 clientId 가 필요하다.
+  for (const p of social) {
+    if (p === 'apple') continue;
+    if (!cfg.auth?.oauth?.[p]?.clientId) {
+      warnings.push(`auth.oauth.${p}.clientId 누락 — OAuth 가 런타임에 동작하지 않음(빌드는 됨). ` +
+        '공개 clientId 를 config 에 넣거나 빌드 시 주입하세요(client secret 은 백엔드 전용).');
     }
   }
-  // OAuth 복귀 URL scheme 은 두 모드 다 필요(IdP/공급자가 appId://oauth/... 로 복귀)
-  return { plugins, warnings, hasOAuth: social.length > 0, idp };
+  return { plugins, warnings, hasOAuth: social.length > 0 };
 }
 
 // 인앱결제: 상품이 있으면 IAP 플러그인 설치. 디지털 재화 결제는 스토어 IAP 강제.
@@ -1598,8 +1581,7 @@ function main() {
     log.step('인증 네이티브 배선 (OAuth URL scheme / Apple Sign In)');
     patchAndroidAuthScheme(buildDir, cfg);
     patchIosAuthScheme(buildDir, cfg);
-    // IdP 모드면 Apple 도 IdP 경유 → 네이티브 Sign in with Apple 엔타이틀먼트 불필요
-    if (!authConf.idp) patchIosAppleEntitlement(buildDir, cfg);
+    patchIosAppleEntitlement(buildDir, cfg);
   }
 
   // 7d) iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(App.entitlements 있을 때만)

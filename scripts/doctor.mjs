@@ -45,8 +45,7 @@ for (const slug of slugs) {
   const feats = Object.entries(cfg.features).filter(([, v]) => v === true || v?.enabled).map(([k]) => k);
   if (feats.length) ok(`features: ${feats.join(', ')}`);
   if (cfg.auth.providers.length) {
-    const idp = cfg.auth.idp && (cfg.auth.idp.issuer || cfg.auth.idp.authorizeUrl);
-    ok(`auth: ${cfg.auth.providers.join(', ')}${idp ? ' (중앙 IdP)' : ' (직접)'}`);
+    ok(`auth: ${cfg.auth.providers.join(', ')}`);
     const social = cfg.auth.providers.filter((p) => p !== 'email' && p !== 'apple');
     if (social.length && !cfg.auth.providers.includes('apple')) w('소셜 제공 시 apple(Sign in with Apple) 권장 — iOS 4.8');
     if (!cfg.auth.sessionEndpoint) w('auth.sessionEndpoint 없음 — 백엔드 세션 발급 자동화 불가');

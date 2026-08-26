@@ -51,7 +51,12 @@
     "deleteEndpoint": "https://dev.api.poptale.ai/api/v2/auth/delete",
     "guestEndpoint": "https://dev.api.poptale.ai/api/v2/auth/guest",
     "deviceEndpoint": "https://dev.api.poptale.ai/api/v2/auth/device",
-    "idp": {}
+    "oauth": {
+      "apple":  { "clientId": null },
+      "google": { "clientId": null },
+      "kakao":  { "clientId": null },
+      "naver":  { "clientId": null }
+    }
   },
   "iap": {
     "verifyEndpoint": "https://dev.api.poptale.ai/api/v2/iap/verify",

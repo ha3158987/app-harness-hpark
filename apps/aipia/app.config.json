@@ -41,14 +41,14 @@
     "deleteEndpoint": "https://aipia.co.kr/auth/delete",
     "guestEndpoint": "https://aipia.co.kr/auth/guest",
     "deviceEndpoint": "https://aipia.co.kr/auth/device",
-    "idp": {
-      "issuer": "https://auth.aipia.co.kr/realms/aipia",
-      "clientId": "aipia-app",
-      "hintParam": "kc_idp_hint",
-      "hints": {
-        "google": "google", "kakao": "kakao", "naver": "naver", "apple": "apple",
-        "facebook": "facebook", "x": "twitter", "threads": "threads"
-      }
+    "oauth": {
+      "apple":    { "clientId": null },
+      "google":   { "clientId": null },
+      "naver":    { "clientId": null },
+      "kakao":    { "clientId": null },
+      "facebook": { "clientId": null },
+      "x":        { "clientId": null },
+      "threads":  { "clientId": null }
     }
   },
   "iap": {

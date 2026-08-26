@@ -865,11 +865,9 @@ class AppBridgeImpl {
     if (!this.isNative) return { ok: false, reason: 'web-should-redirect' };          // 브라우저는 일반 리다이렉트로
 
     // 1) 자격증명 획득.
-    //    - 직접 모드 + Apple/iOS: 네이티브 Sign in with Apple 우선(미설치/실패 시 OAuth 폴백)
-    //    - IdP 모드: Apple 도 IdP 경유해야 사용자 풀이 IdP 한 곳에 모인다(SSO 일관성)
-    const idpMode = !!(auth.idp && (auth.idp.issuer || auth.idp.authorizeUrl));
+    //    Apple/iOS 는 네이티브 Sign in with Apple 우선(미설치/실패 시 OAuth 폴백)
     let credential;
-    if (provider === 'apple' && this.platform === 'ios' && !idpMode) {
+    if (provider === 'apple' && this.platform === 'ios') {
       credential = (await this._appleNative(opts)) || (await this._oauth2(provider, opts));
     } else {
       credential = await this._oauth2(provider, opts);
@@ -1256,29 +1254,16 @@ class AppBridgeImpl {
   // 범용 OAuth2 Authorization Code + PKCE (시스템 브라우저 + 딥링크 복귀)
   async _oauth2(provider, opts) {
     const auth = this.config.auth || {};
-    const idp = auth.idp;
-    let clientId, authorizeUrl, redirectUri, scopes, extraQuery;
 
-    if (idp && (idp.issuer || idp.authorizeUrl)) {
-      // 중앙 IdP 모드: 앱은 IdP 하나만 바라본다. IdP 가 구글/카카오/… 를 페더레이션한다.
-      // hintParam(예: Keycloak kc_idp_hint)로 특정 소셜로 바로 점프해 네이티브 버튼 UX 유지.
-      clientId = idp.clientId;
-      authorizeUrl = idp.authorizeUrl
-        || `${String(idp.issuer).replace(/\/$/, '')}/protocol/openid-connect/auth`;
-      redirectUri = idp.redirectUri || this._defaultRedirect(provider);
-      scopes = idp.scopes || ['openid', 'email', 'profile'];
-      const alias = (idp.hints && idp.hints[provider]) || provider;
-      if (idp.hintParam && alias) extraQuery = `${idp.hintParam}=${encodeURIComponent(alias)}`;
-    } else {
-      // 직접 모드: 공급자 OAuth 엔드포인트를 앱이 직접 호출.
-      const conf = (auth.oauth && auth.oauth[provider]) || {};
-      const preset = OAUTH_PRESETS[provider] || {};
-      clientId = conf.clientId;
-      authorizeUrl = conf.authorizeUrl || preset.authorizeUrl;
-      redirectUri = conf.redirectUri || this._defaultRedirect(provider);
-      scopes = conf.scopes || preset.scopes || [];
-      extraQuery = conf.extraQuery;
-    }
+    // 공급자 OAuth 엔드포인트를 앱이 직접 호출한다(길 B). 자체 IdP 모드는 제거됐다 —
+    // 인증은 외부 인증서버 위탁이다(docs/25-AUTH-DELEGATION.md).
+    const conf = (auth.oauth && auth.oauth[provider]) || {};
+    const preset = OAUTH_PRESETS[provider] || {};
+    const clientId = conf.clientId;
+    const authorizeUrl = conf.authorizeUrl || preset.authorizeUrl;
+    const redirectUri = conf.redirectUri || this._defaultRedirect(provider);
+    const scopes = conf.scopes || preset.scopes || [];
+    const extraQuery = conf.extraQuery;
     if (!clientId || !authorizeUrl) return { ok: false, reason: 'oauth-misconfigured', provider };
 
     const codeVerifier = this._randomString(64);
