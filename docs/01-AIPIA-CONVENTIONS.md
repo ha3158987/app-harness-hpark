@@ -4,7 +4,7 @@ title: AIPIA-CONVENTIONS — 전사 앱 컨벤션 (정본)
 category: 시작
 audience: 개발자
 status: active
-updated: 2026-08-19
+updated: 2026-08-27
 ---
 
 # AIPIA-CONVENTIONS — 전사 앱 컨벤션 (정본)
@@ -114,16 +114,29 @@ AIPIA 모든 앱의 기본 인증 제공자 세트:
 - 🅰️ 1.0.1+143: 카카오·네이버는 **JWT 전체** 를 백엔드에 전달 (token-only → full-jwt 전환).
 - 백엔드 엔드포인트는 `<api-domain>/api/v2/auth/...` 패턴 (🅰️🅱️ 확인됨).
 
-### 3-1. AIPIA 자체 앱(이 하네스 1호)이 8 socials 인 이유
+### 3-1. AIPIA 자체 앱(이 하네스 1호)이 8종인 이유
 
-- AIPIA 앱은 `apple/google/naver/kakao/facebook/x/threads` 까지 8종 (글로벌 서비스). K-market 만이면 4종으로 충분.
+- AIPIA 앱은 `email/apple/google/naver/kakao/facebook/x/threads` 8종 (글로벌 서비스). K-market 만이면 4종으로 충분.
+- 하네스가 아는 provider 는 **10종** — `email · apple · google · naver · kakao · facebook · x · threads · line · discord`.
+  `line` · `discord` 는 **팝챗(characterchat)** 때문에 추가됐다.
+- 정본은 `scripts/lib/config.mjs` 의 `KNOWN_AUTH_PROVIDERS` 다. 목록에 없는 값을 `auth.providers` 에 넣으면
+  `loadConfig` 가 빌드를 멈춘다. provider 를 늘리려면 **세 곳을 동시에** 고쳐야 한다
+  → [25-AUTH-DELEGATION.md](./25-AUTH-DELEGATION.md) §6.
+- **`threads` 는 하네스 허용목록에만 있고 위탁 인증서버(poptale-auth)가 지원하지 않는다.** 그 인증서버를
+  쓰는 앱의 `auth.providers` 에는 넣지 마라 — 팝챗이 10종에서 threads 만 뺀 9종인 이유다.
 - 신규 앱은 **K-market 4 종이 기본값**. 글로벌 확장 시 facebook/x/threads 추가.
 
-### 3-2. 중앙 IdP (Keycloak) vs 직접 OAuth
+### 3-2. 인증은 외부 인증서버 위탁이 기본 (자체 IdP 모드는 제거됨)
 
-- AIPIA 본 앱: Keycloak 중앙 IdP 모드 (`auth.idp.issuer` 설정)
-- Poptale: 직접 OAuth + 백엔드 JWT 검증 (Spring) — `auth.idp: {}`
-- → 둘 다 지원. 신규 앱은 *서비스 백엔드 정책*에 맞춰 선택.
+- **기본 경로**: 앱이 **시스템 브라우저로 공급자와 직접 OAuth**(길 B)를 돌고, 받은 자격증명을 서비스의
+  **외부 인증서버에 위탁**해 검증·세션 발급을 맡긴다. 하네스는 자격증명을 **운반만** 한다.
+- 배선은 공급자별 **`auth.oauth.<provider>.clientId`**. `clientId` 는 공개값이라 config 에 둔다
+  (secret 은 넣지 않는다 — 인증서버가 보유).
+- **자체 IdP(Keycloak) 모드는 PR #25 에서 코드에서 제거됐다.** `idp/` 디렉터리도 없고 브릿지에 IdP 분기도 없다.
+- **`auth.idp` 는 금지 키다.** `auth.idp.issuer` 든 `auth.idp: {}` 든 **키가 있기만 하면** `loadConfig` 가
+  `err()` 로 **빌드를 멈춘다**. 남아 있으면 지우고 `auth.oauth` 로 옮겨라.
+- → 상세 규약(시퀀스·config 예시·provider 추가 절차)은 [25-AUTH-DELEGATION.md](./25-AUTH-DELEGATION.md).
+  [10-AUTH.md](./10-AUTH.md) 의 Keycloak 절은 **배경 기록**이다 — 따라 하지 마라.
 
 ---
 
