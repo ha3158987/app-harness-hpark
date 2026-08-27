@@ -1400,7 +1400,9 @@ class AppBridgeImpl {
       const data = (await res.json().catch(() => ({}))) || {};
       if (res.ok && data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }
       if (res.ok && opts.reload !== false) location.reload();
-      return { ok: res.ok, user: data.user, backend: data };
+      // 미지 필드 pass-through — login() 과 같은 규약이다. ...data 를 먼저 펼쳐
+      // 뒤의 필드가 이겨야 백엔드가 브릿지 판정을 덮어쓰지 못한다.
+      return { ...data, ok: res.ok, user: data.user, backend: data };
     } catch {
       return { ok: false, reason: 'signup-endpoint-failed' };
     }

@@ -59,11 +59,14 @@ test('팝챗이 쓰는 8종이 세 곳 전부에 있다', () => {
   }
 });
 
-test('generate-app 의 OAUTH_PRESET_PROVIDERS 가 브릿지 프리셋과 같다', (t) => {
-  // Task 5 에서 만드는 상수다. 손으로 복제한 목록이라 drift 를 테스트로 막는다.
-  const src = readFileSync(join(ROOT, 'scripts/generate-app.mjs'), 'utf8');
-  const block = src.match(/const OAUTH_PRESET_PROVIDERS = \[([\s\S]*?)\]/);
-  if (!block) return t.skip('Task 5 이전 — OAUTH_PRESET_PROVIDERS 없음');
+test('auth-setup 의 OAUTH_PRESET_PROVIDERS 가 브릿지 프리셋과 같다', () => {
+  // 손으로 복제한 목록이라 drift 를 테스트로 막는다.
+  // 상수는 scripts/lib/auth-setup.mjs 에 있다(generate-app.mjs 와 doctor.mjs 가 공유).
+  // ★ 예전엔 못 찾으면 t.skip() 했다 — 상수가 파일을 옮기면 가드가 조용히 사라진다.
+  //   이제 못 찾으면 실패다. 상수를 또 옮기면 이 경로도 같이 고쳐라.
+  const src = readFileSync(join(ROOT, 'scripts/lib/auth-setup.mjs'), 'utf8');
+  const block = src.match(/OAUTH_PRESET_PROVIDERS = \[([\s\S]*?)\]/);
+  assert.ok(block, 'scripts/lib/auth-setup.mjs 에서 OAUTH_PRESET_PROVIDERS 를 찾지 못했다');
   const listed = [...block[1].matchAll(/'([\w-]+)'/g)].map((m) => m[1]);
   assert.deepEqual([...listed].sort(), [...presetProviders()].sort());
 });

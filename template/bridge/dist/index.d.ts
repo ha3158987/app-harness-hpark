@@ -230,7 +230,25 @@ export interface AppBridgeSDK {
    * profile 예: { nickname, birth, consents: { tos, privacy, age14, marketing } }
    */
   completeSignup(profile: Record<string, unknown>, opts?: { endpoint?: string; reload?: boolean }):
-    Promise<{ ok: boolean; user?: unknown; backend?: unknown; reason?: string }>;
+    Promise<{
+      /** 가입 요청의 HTTP 성공 여부. **백엔드 바디의 ok 가 아니다** — BE 판정은 backend.* 로 읽어라. */
+      ok: boolean;
+      user?: unknown;
+      backend?: unknown;
+      reason?: string;
+      /** 서비스 백엔드 응답의 나머지 필드 전부 — 브릿지는 의미를 모른다.
+       *  ⚠️ 예약 이름은 **두 개뿐이다** — BE 가 같은 이름을 보내도 top-level 에서는
+       *     그대로 읽히지 않는다. 원본은 언제나 backend.* 에 남는다.
+       *       · 항상 대체됨 : ok(HTTP 상태일 뿐이다) · backend
+       *  ★ login() 보다 예약 이름이 훨씬 적다 — 이 경로는 자격증명을 펼치지 않으므로
+       *     provider · authorizationCode · idToken · session · isNew · needsProfile ·
+       *     signupRequired · token · complete · reason 은 전부 BE 값이 그대로 올라온다.
+       *     AuthResult2 의 예약 목록을 이 메서드에 그대로 적용하지 마라.
+       *  ★ user 는 예약이 아니다 — 언제나 BE 값이다(user: data.user 는 같은 값의 재기입).
+       *     단 키는 항상 존재한다 — BE 가 user 를 안 보내면 undefined 로 찍힌다.
+       *  ★ 위 명시 필드가 전부 이 타입에 대입 가능해야 한다(unknown 이므로 문제없다). */
+      [key: string]: unknown;
+    }>;
 
   /**
    * 게스트(익명) 로그인. 자격증명 없이 서버 계정 생성 → 로그인 전 지갑/진행상황 보관(IAP 면 사실상 필요).

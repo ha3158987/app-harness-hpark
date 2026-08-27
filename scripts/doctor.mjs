@@ -5,6 +5,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './lib/config.mjs';
+import { authSetup, summarizeStoreBlockers } from './lib/auth-setup.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const IS_MAC = process.platform === 'darwin';
@@ -46,10 +47,16 @@ for (const slug of slugs) {
   if (feats.length) ok(`features: ${feats.join(', ')}`);
   if (cfg.auth.providers.length) {
     ok(`auth: ${cfg.auth.providers.join(', ')}`);
-    const social = cfg.auth.providers.filter((p) => p !== 'email' && p !== 'apple');
-    if (social.length && !cfg.auth.providers.includes('apple')) w('소셜 제공 시 apple(Sign in with Apple) 권장 — iOS 4.8');
-    if (!cfg.auth.sessionEndpoint) w('auth.sessionEndpoint 없음 — 백엔드 세션 발급 자동화 불가');
-    if (!cfg.auth.deleteEndpoint) w('auth.deleteEndpoint 없음 — 회원탈퇴(스토어 필수) 백엔드 필요');
+    // 인증 규칙은 lib/auth-setup.mjs 가 정본이다 — doctor 는 다시 구현하지 않는다.
+    // platform 을 넘기지 않는다: doctor 는 플랫폼 중립이라 가장 엄격한 판정을 본다
+    // (iOS 전용 apple clientId 예외를 적용하지 않는다 → Android 릴리즈와 같은 결과).
+    const auth = authSetup(cfg);
+    auth.warnings.forEach((m) => w(m));
+    // storeBlockers 는 항목별로 찍지 않는다 — 앱당 최대 8건이라 진짜 문제를 묻어버린다.
+    // doctor 는 빌드 게이트가 아니므로 요약 한 줄로 알려만 주고, 종료코드도 올리지 않는다.
+    // 항목 전체는 `node scripts/generate-app.mjs --slug <slug> --release` 가 찍는다.
+    const summary = summarizeStoreBlockers(auth.storeBlockers);
+    if (summary) w(summary);
   }
   if (cfg.iap.products.length) {
     ok(`iap: ${cfg.iap.products.length}개 상품`);
