@@ -56,9 +56,9 @@ writeFileSync('apps/newservice/app.config.json', JSON.stringify(cfg, null, 2));
 ## 지원 기능 (요약)
 
 - **앱 기능**: 푸시 · 딥링크 · 강제업데이트 · 카메라 · 생체인증 · 시큐어스토리지 · 로컬알림 · 햅틱 · 클립보드 · 위치 · 공유 · 안전영역 · 다크모드 · **화면캡쳐 방지**(경로별) · **뷰어 밝기**
-- **인증**: 소셜(apple/google/kakao/naver/facebook/x/threads) + 이메일 — `line`·`discord` 는 추가 예정(H-1) · 회원가입 온보딩 · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인
+- **인증**: 소셜(apple/google/kakao/naver/facebook/x/threads/**line**/**discord**) + 이메일 — 총 10종 · 회원가입 온보딩 · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인
   · **기본은 외부 인증서버 위탁**([25-AUTH-DELEGATION.md](docs/25-AUTH-DELEGATION.md)) — 앱은 공급자와 직접 OAuth 를 돌고 자격증명을 서비스 BE 로 넘긴다
-  · 중앙 IdP 자체 구축(Keycloak)은 **레거시 경로**다([10-AUTH.md](docs/10-AUTH.md))
+  · 중앙 IdP 자체 구축(Keycloak)은 **코드에서 제거됐다**(#25) — `auth.idp` 가 남아 있으면 빌드가 멈춘다([10-AUTH.md](docs/10-AUTH.md) 는 배경 기록)
 - **결제**: 인앱결제(디지털 재화) · 웹앱 가격 분기 · **Google purchase token 압축**(Poptale 노하우) · 서버 지갑
 - **마케팅/분석**: Adbrix(어트리뷰션) · Amplitude(분석) — AIPIA 표준. (AppsFlyer 슬롯 유지)
 - **모니터링**: Firebase Crashlytics(크래시) · WhaTap(APM) — AIPIA 표준
@@ -108,7 +108,6 @@ Appharness/
 ├── scripts/                     # generate-app.mjs, doctor.mjs
 │   └── lib/config.mjs           #   스키마 + AIPIA_DEFAULTS + aipiaPreset()
 ├── backend/auth-reference/      # 인증+IAP 백엔드 레퍼런스 (Node, in-memory)
-├── idp/                         # 중앙 IdP(Keycloak) 로컬 데모 — 레거시. 신규 앱은 쓰지 않는다
 ├── fastlane/                    # 빌드/업로드 lane
 ├── .github/workflows/release.yml # CI 자동배포
 └── .claude/skills/              # 자동화 스킬(new-app, integrate-web, build-*, ...)
@@ -167,7 +166,7 @@ Appharness/
 - 스토어 IAP 상품 · 가격 티어 · 개인정보 라벨
 - Firebase 프로젝트 3개(`{env}-aipia-<slug>`) 생성 + google-services 파일
 - Adbrix/Amplitude/WhaTap 대시보드 앱 등록
-- IdP 배포(Keycloak) — **레거시.** 외부 인증서버 위탁이 기본이라 신규 앱은 불필요
+- ~~IdP 배포(Keycloak)~~ — **제거됐다**(#25). 인증은 외부 인증서버 위탁이 기본이다
 
 자세히: [`docs/01-AIPIA-CONVENTIONS.md §14·§15`](docs/01-AIPIA-CONVENTIONS.md), [`docs/02-GUIDE.md §5`](docs/02-GUIDE.md).
 

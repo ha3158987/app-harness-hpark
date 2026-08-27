@@ -15,7 +15,9 @@ description: 특정 앱(slug)의 Android 앱을 빌드한다. app.config.json �
 1. **프로젝트 생성/패치** — `app.config.json` 을 읽어 `build/<slug>/` 에 Capacitor 프로젝트를
    생성하거나 갱신:
    ```bash
-   node scripts/generate-app.mjs --slug <slug>   # capacitor.config + appId/appName/url/플러그인 패치
+   node scripts/generate-app.mjs --slug <slug> --release   # capacitor.config + appId/appName/url/플러그인 패치
+   # --release 는 스토어 요건(clientId · deleteEndpoint · Apple 4.8)을 빌드 실패로 승격한다.
+   # 미서명 디버그 확인(assembleDebug)만이면 --release 를 빼라.
    ```
 2. 아이콘/스플래시 미생성 시 → generate-assets 선행.
 3. **동기화 & 빌드**:

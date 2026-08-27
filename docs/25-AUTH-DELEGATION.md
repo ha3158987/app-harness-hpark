@@ -4,7 +4,7 @@ title: AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-08-25
+updated: 2026-08-27
 ---
 
 # AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
@@ -18,12 +18,13 @@ updated: 2026-08-25
 > **IdP 를 자체 구축하는 경로(Keycloak)는 레거시다.** 신규 앱은 쓰지 않는다 — [`10-AUTH.md`](10-AUTH.md).
 > 우리가 IdP 를 지으려던 이유는 "IdP 가 없어서" 였는데, 이제 운영 중인 것이 있으므로 지을 이유가 없다.
 >
-> ⚠️ **코드 반영은 별도 PR(#25)** — `aipiaPreset` 이 `oauth` 블록을 내보내지 않아 **`new-app` 으로 만든
-> 앱은 clientId 를 넣을 자리가 없다.** #25 가 머지되기 전에는 `auth.oauth` 를 손으로 추가해야 한다.
-> #25 는 자체 IdP 모드 제거도 함께 담는다 — 아래 §8 은 그 PR 을 전제로 쓰였다.
+> ✅ **코드 반영은 PR #25 로 끝났다.** `aipiaPreset` 이 소셜 provider 마다 `auth.oauth.<provider>.clientId`
+> 자리를 만들어 내보내므로 `new-app` 으로 만든 앱은 clientId 를 넣을 자리가 있다. 자체 IdP 모드
+> 제거도 같은 PR 에 담겼다 — 아래 §8 이 그 결과다.
 
-> [`10-AUTH.md`](10-AUTH.md) 는 **하네스가 IdP 를 직접 세우는 경우**(Keycloak)를 다룬다.
-> 위탁 모드에서는 그 문서의 *공급자별 토큰 교환표*와 *Keycloak 설치 가이드*가 **해당하지 않는다.**
+> [`10-AUTH.md`](10-AUTH.md) 의 IdP 관련 절은 **하네스가 IdP 를 직접 세우려던 경로**(Keycloak)를
+> 다루고, 그 경로는 코드에서 제거됐다. 위탁 모드에서는 그 문서의 *공급자별 토큰 교환표*와
+> *Keycloak 설치 가이드*가 **해당하지 않는다** — 배경 기록으로만 남아 있다.
 >
 > 설계 원본(도식·시퀀스·상태·와이어프레임 포함):
 >
@@ -95,7 +96,7 @@ config 로 고르는 `broker` 모드가 필요해진다. **길 B 가 막혔다�
 ## 4. 웹과의 계약 — 이 네 개가 전부다
 
 ```js
-AppBridge.login(provider)      // → { ok, reason?, ...서비스 BE 응답 전부 }
+AppBridge.login(provider)      // → { ok, reason?, ...BE 응답 — 단 예약 이름은 브릿지가 이긴다 }
 AppBridge.completeSignup(body) // body 를 해석 없이 signupEndpoint 로 POST
 AppBridge.getLastLogin()       // → { provider } | null
 AppBridge.logout() / deleteAccount()
@@ -110,6 +111,38 @@ AppBridge.logout() / deleteAccount()
 | 브릿지 소스에 **서비스 고유 이름이 등장하지 않는다** | 하네스가 그 서비스 전용이 된다 |
 | 인증 UI 를 그리지 않는다 | 문구 수정 하나에 스토어 재심사 |
 
+
+### pass-through 는 "전부"가 아니다 — 예약 이름이 있다 (실측)
+
+`_finishLogin` 이 `{ ...data, ...credential, session, user, isNew, needsProfile, backend }` 순서로
+합치기 때문에(`template/bridge/dist/index.js:1369-1375`) **`...data` 를 먼저 펼치고 뒤에서
+덮어쓴다.** 그래서 다음 이름들은 BE 가 보내도 웹에 그 값으로 도착하지 않는다.
+
+| 티어 | 이름 | 조건 |
+|---|---|---|
+| 항상 대체됨 | `session` · `backend` | 무조건. `session` 은 HTTP 상태(`res.ok`)일 뿐이다 |
+| 자격증명이 이김 | `ok` · `provider` · `authorizationCode` | 양쪽 경로 |
+| 자격증명이 이김 | `codeVerifier` · `redirectUri` · `state` | **OAuth 경로에서만** |
+| 자격증명이 이김 | `native` · `idToken` | **iOS Apple 네이티브에서만** |
+| 이름은 남고 boolean 강제 | `isNew` · `needsProfile` | `!!` 강제. `needsConsent:true` 도 `needsProfile` 을 true 로 만든다 |
+| 예약 아님 | `user` | BE 값이 truthy 면 BE 가 이김, falsy 면 자격증명 값 |
+| 예약 아님 | `token` · `reason` · `error` · `complete` · `needsConsent` · `signupRequired` | 그대로 통과 |
+
+> ⚠️ **가장 위험한 것은 `idToken` 이다.** BE 가 자기 `idToken` 을 내려주면 **Android 와
+> iOS 의 비-Apple 로그인에서는 웹까지 도달하는데, iOS Apple 로그인에서만 Apple 의
+> `identityToken` 으로 조용히 대체된다.** 같은 타입, 같은 모양의 JWT, 다른 발급자다 —
+> **한 공급자 × 한 플랫폼 조합에서만 깨지므로 테스트를 거의 다 통과한다.** BE 는 이 이름을
+> 쓰지 마라.
+
+**`reason` 은 이제 BE 와 공유하는 이름이다.** 브릿지가 쓴 `reason` 은 항상 `ok===false` 또는
+`session===false` 와 함께 온다. 따라서 **`ok`·`session` 이 모두 true 인데 `reason` 이 있으면 BE 값**이다.
+**역은 성립하지 않는다** — HTTP 4xx/5xx 면 `...data` 가 그대로 펼쳐지므로 `session===false` 에
+BE 의 `reason` 이 실릴 수도 있다.
+
+**바디 수준 BE 거절을 알리는 top-level 필드가 없다.** HTTP 200 + `{ok:false, error:'…'}` 는
+웹에 `{ok:true, session:true, error:'…'}` 로 도착한다(`ok` 는 자격증명 쪽이 이기고 `session` 은
+`res.ok`). 웹은 **`backend.ok` 를 읽어야 한다.** `result.ok` 는 "자격증명 회수 성공" 이지
+BE 판정이 아니다.
 
 ### pass-through 의 트레이드오프 — 미결
 
@@ -143,18 +176,19 @@ AppBridge.logout() / deleteAccount()
 
 ## 6. provider — 같은 누락이 세 곳에 흩어져 있다
 
-하네스가 아는 것은 `email · apple · google · naver · kakao · facebook · x · threads` 8종이다.
+하네스가 아는 것은 `email · apple · google · naver · kakao · facebook · x · threads · line · discord`
+**10종**이다(`line` · `discord` 는 `H-1` 에서 추가됐다).
 provider 를 추가하려면 **세 곳을 동시에** 고쳐야 한다. 하나만 고치면 다른 데서 막힌다.
 
 | 위치 | 무엇 |
 |---|---|
 | `template/bridge/dist/index.js:40` | `OAUTH_PRESETS` (authorizeUrl · scopes) |
 | `template/bridge/dist/index.d.ts:53` | `AuthProvider` union 타입 |
-| `scripts/lib/config.mjs:80` | `KNOWN_AUTH_PROVIDERS` |
+| `scripts/lib/config.mjs:76` | `KNOWN_AUTH_PROVIDERS` |
 
 > **`.d.ts` 를 빼먹으면 웹(TypeScript)에서 `login('line')` 이 컴파일 에러**가 난다. 런타임보다 먼저 막힌다.
 >
-> **`config.mjs:300` 의 미지 provider 검증은 경고가 아니라 `throw`** 다. 허용목록을 넓히기 전에
+> **`config.mjs:302` 의 미지 provider 검증은 경고가 아니라 `throw`** 다. 허용목록을 넓히기 전에
 > `app.config.json` 의 `providers` 에 새 값을 넣으면 **config 파싱 자체가 예외로 죽는다.**
 
 브릿지에 **빌드 스텝이 없다.** `dist/index.js` 가 곧 편집 대상 소스이고(`src` 디렉터리 없음),
@@ -167,7 +201,7 @@ provider 를 추가하려면 **세 곳을 동시에** 고쳐야 한다. 하나�
 
 ```jsonc
 "auth": {
-  // 아래는 팝챗 기준. line·discord 는 H-1 완료 후에만 넣을 수 있다(§6 의 throw).
+  // 아래는 팝챗 기준. line·discord 는 H-1(완료)로 허용목록에 들어가 지금은 그냥 넣으면 된다.
   "providers": ["email","kakao","naver","line","google","apple","facebook","discord"],
 
   // 길 B — 공급자 OAuth 를 앱이 직접 돈다. secret 은 넣지 않는다(인증서버가 보유).
@@ -204,18 +238,23 @@ provider 를 추가하려면 **세 곳을 동시에** 고쳐야 한다. 하나�
 
 **"외부 IdP 에 위탁한다"와 "하네스의 `auth.idp` 블록을 쓴다"는 다른 얘기다.**
 
-하네스의 idp 모드는 **표준 OIDC IdP 전용**이다. `dist/index.js:1267` 에
-`{issuer}/protocol/openid-connect/auth` 라는 **Keycloak 경로가 하드코딩**돼 있다.
+하네스의 idp 모드는 **표준 OIDC IdP 전용**이었다 — `_oauth2` 에
+`{issuer}/protocol/openid-connect/auth` 라는 **Keycloak 경로가 하드코딩**돼 있었다(#25 에서 제거).
 poptale-auth 는 그 규약이 아니다(`/oauth/v1/authorize/{provider}`, `client=`, `returnUrl=`).
 
 따라서 위탁 모드에서는 **`idp` 속성을 아예 넣지 않고 `oauth` 직접 모드를 쓴다.**
-**"비운다"가 아니라 "속성을 삭제한다"** 다 — 이 구분이 실제로 사고를 만든다.
 
-> ⚠️ **`idp: {}` 빈 객체는 "미설정" 이 아니다.** `_oauth2` 는 `idp.issuer || idp.authorizeUrl` 로 모드를 판정하므로
-> 빈 객체는 조용히 직접 모드로 떨어지고, clientId 가 없으면 런타임에 실패한다 — **빌드는 성공한다.**
-> `apps/poptale/app.config.json` 이 지금 그 상태다.
+> ⚠️ **`idp` 는 이제 빈 객체까지 포함해 "있으면 빌드가 멈춘다".**
+> `scripts/lib/config.mjs:296-299` 가 `'idp' in raw.auth` 로 **키의 존재만** 보고
+> `err()` 를 던지므로, `idp: {}` 도 `idp: { issuer: … }` 도 똑같이 config 로딩에서 실패한다.
+> **릴리즈 빌드 한정이 아니라 모든 빌드**이고, 통과시킬 플래그가 없다.
 >
-> `H-4` 에서 **빈 객체를 명시적 invalid 로 처리**해 릴리즈 빌드에서 `exit 1` 로 막는다.
+> 예전(#25 이전)에는 `_oauth2` 가 `idp.issuer || idp.authorizeUrl` 로 모드를 판정해서
+> **빈 객체가 조용히 직접 모드로 떨어지고 빌드는 성공**했다 — 그게 위험했던 지점이다.
+> 지금은 그 누수가 원천적으로 없다.
+>
+> 즉 `H-4` 가 "빈 객체를 명시적 invalid 로 처리"한 게 아니다. **#25 가 IdP 모드를 통째로
+> 제거하면서 `auth.idp` 자체를 금지 키로 만든 것**이다 — `H-4` 는 그 일을 하지 않았다.
 
 ### 자체 IdP 모드는 제거됐다 (#25)
 
@@ -242,7 +281,7 @@ provider 가 0개이고 `admin/admin` 하드코딩이라 **데모 수준**이었
 사용자 식별자가 나온다.
 
 **다만 재로그인 마찰은 크지 않다.** `openExternal({ system: true })` 가 `@capacitor/app-launcher`
-로 **실제 Safari·Chrome** 을 열기 때문에(브릿지 `dist/index.js:191`) 공급자 세션이 브라우저에
+로 **실제 Safari·Chrome** 을 열기 때문에(브릿지 `dist/index.js:195-198`) 공급자 세션이 브라우저에
 남고, 다른 패밀리 앱이 같은 공급자로 가면 로그인·동의 화면을 건너뛰고 곧장 code 를 받는다.
 
 | | 앱 간 공유 |
@@ -268,8 +307,9 @@ provider 가 0개이고 `admin/admin` 하드코딩이라 **데모 수준**이었
 >   아니면 인증서버 authorize 로 302 하는지는 팝테일 FE 코드만으로 알 수 없다.
 >
 > **질문: "브라우저가 인증서버 authorize 를 직접 지나는가, 그때 인증서버 세션 쿠키가 설정되는가."**
-> 지난다면 SSO 는 길 A 전환으로 얻을 수 있고, 아니라면 IdP 신설이 유일한 답이며 그때가 §8 의
-> `idp/` 자산이 의미를 갖는 유일한 경우다.
+> 지난다면 SSO 는 길 A 전환으로 얻을 수 있고, 아니라면 IdP 신설이 유일한 답이다.
+> 다만 **되돌릴 자산은 남아 있지 않다** — `idp/` 디렉터리와 브릿지 IdP 분기는 #25 에서 삭제됐으므로
+> 그 경우엔 처음부터 다시 짜야 한다(그리고 지금 그럴 계획은 없다).
 >
 > **어느 쪽이든 길 B(현재 주경로)에서 IdP 수준 SSO 가 없다는 것은 확정이다.** 위 표가 그 범위다.
 
@@ -279,15 +319,42 @@ provider 가 0개이고 `admin/admin` 하드코딩이라 **데모 수준**이었
 
 `H-1` 을 반드시 `H-5` 보다 먼저 한다(§6 의 `throw` 때문).
 
-| # | 항목 |
-|---|---|
-| `H-1` | `line` · `discord` 추가 — **프리셋 · `.d.ts` 타입 · 허용목록 세 곳 동시에** |
-| `H-2` | 미완료 신호에 서비스가 쓰는 필드명 추가(`_finishLogin`) |
-| `H-3` | 응답 pass-through — 미지 필드를 버리지 않는다 |
-| `H-4` | config 검증 강화 — **`idp: {}` 를 명시적 invalid 로**(빈 객체 모드 누수 차단), 프리셋·`authorizeUrl` 둘 다 없는 provider 탐지, 스토어 요건을 릴리즈 빌드에서 `exit 1` 로 |
-| `H-5` | `apps/characterchat*/app.config.json` — `auth` 블록 신설 + features 3개 활성. **dev 슬러그 먼저** |
-| `H-6` | `broker` 모드 — **조건부. 지금 하지 않는다**(§3) |
-| `H-7` | 문서 갱신 — [`10-AUTH.md`](10-AUTH.md) 에 세 모드 병렬 기술 |
+| # | 상태 | 항목 |
+|---|---|---|
+| `H-1` | ✅ | `line` · `discord` 추가 — **프리셋 · `.d.ts` 타입 · 허용목록 세 곳 동시에** |
+| `H-2` | ✅ | 미완료 신호에 서비스가 쓰는 필드명 추가(`_finishLogin`) |
+| `H-3` | ✅ | 응답 pass-through — 미지 필드를 버리지 않는다 |
+| `H-4` | ✅ | config 검증 강화 — 프리셋·`authorizeUrl` 둘 다 없는 provider 탐지, 스토어 요건을 릴리즈 빌드에서 `exit 1` 로 |
+| `H-5` | ✅ | `apps/characterchat*/app.config.json` — `auth` 블록 신설 + features 3개 활성. **dev 슬러그 먼저** |
+| `H-6` | — | `broker` 모드 — **조건부. 지금 하지 않는다**(§3) |
+| `H-7` | ✅ | 문서 갱신 — [`10-AUTH.md`](10-AUTH.md) 에 세 경로 병렬 기술 |
+
+### 구현이 설계와 달라진 점 — 실제로 들어간 것
+
+- **`H-3` pass-through 는 `backend: data` 를 유지한 채** top-level 스프레드를 추가한 형태다.
+  기존 소비자가 `result.backend` 를 읽고 있어 하위호환을 깼을 수 없다. 두 자리에 같은 값이 있다.
+  예약 이름 때문에 "전부"가 아니라는 점은 **§4 를 반드시 함께 읽어라.**
+- **`H-4` 스토어 요건 게이트는 `--release` 플래그로만 발동한다.** 플래그가 없으면 같은 항목이
+  경고로만 나온다(§10).
+- **`H-4` 에서 `idp: {}` 처리는 하지 않았다.** #25 가 IdP 모드를 제거하면서 `auth.idp` 키 자체를
+  모든 빌드에서 금지했기 때문에 할 일이 남아 있지 않았다 — §8 참조.
+- **`H-4` 가 설계에 없던 검사 두 개를 더 얻었다.** ① `--local` 과 `--release` 동시 사용 거부
+  (`--local` 은 cleartext+ATS 예외라 스토어 제출 금지) ② Android 빌드의 `apple` clientId 검사
+  (Android 는 `apple` 을 web OAuth 로 타므로 Services ID 가 필요하다).
+- **`H-4` 의 `authorizeUrl` 부재 검사는 현재 도달 불가다.** `KNOWN_AUTH_PROVIDERS` 가 프리셋 밖
+  provider 를 config 로딩 단계에서 먼저 거부하므로, 그 상태의 config 를 애초에 만들 수 없다.
+  허용목록을 넓힐 때 바로 동작하는 **선제 방어**로 남겨 뒀다.
+- ⚠️ **`H-1` 의 `line` · `discord` `authorizeUrl` · `scopes` 는 각 사 공개 문서 기준값이고
+  auth 콘솔과 대조하지 않았다 — 미확인.** `template/bridge/dist/index.js` 에 `TODO(G0-4)` 로
+  표시돼 있다. 콘솔 등록값과 다르면 런타임에 공급자가 거절한다.
+- ⚠️ **`H-5` 의 `apps/characterchat*` prod API 호스트(`api.chat.poptale.ai`)와 엔드포인트 경로는
+  미확인 추정치다.** 레포에 근거가 없고, 형제 앱 `poptale` 은 다른 형태
+  (`dev.api.poptale.ai` → `api.poptale.ai`)를 쓴다. **사람이 확인해야 한다.**
+- **`H-5` dev 슬러그의 `deviceEndpoint` 는 기존 `/api/push/register` 를 유지했다** — 계획 샘플의
+  `/auth/device` 는 오기였다. §7 의 샘플은 일반형이므로 실제 앱 config 와 다르다.
+- ⚠️ **`H-5` 이후 `characterchat` 태그 릴리즈는 CI 에서 실패한다** — 소셜 8종의 `clientId` 가
+  전부 `null` 이라 `--release` 게이트가 막는다. **게이트 의도대로다.** 콘솔에서 발급받아
+  채우기 전에는 릴리즈가 나가지 않는다.
 
 ### 인증서버 팀에 확인할 것
 
@@ -297,13 +364,35 @@ provider 가 0개이고 `admin/admin` 하드코딩이라 **데모 수준**이었
 3. 각 공급자 콘솔에 **커스텀 스킴 redirect URI** 를 등록해줄 수 있는가
 4. 새로 추가할 provider 의 **등록된 scope 값**
 5. 상환 응답의 provider 식별자 **대소문자** — 서비스 DB 의 unique 제약과 어긋나면 계정이 갈린다
+6. **세션 응답이 §4 의 예약 이름을 쓰지 않는지** — 특히 `idToken` · `session` · `backend` ·
+   `ok` · `provider` · `authorizationCode` · `codeVerifier` · `redirectUri` · `state` · `native`.
+   쓰면 웹에 그 값이 도착하지 않는다(플랫폼·공급자별로 다르게 깨져서 더 찾기 어렵다).
+   그리고 `isNew` · `needsProfile` 은 **문자열·숫자가 아니라 진짜 boolean** 으로 보내야 한다 —
+   브릿지가 `!!` 로 강제하므로 `"false"` 는 true 가 된다
 
 ---
 
-## 10. 스토어 요건 — 경고만 하고 막지 못한다
+## 10. 스토어 요건 — 릴리즈 빌드에서는 막는다
 
-`generate-app.mjs` 와 `doctor.mjs` 가 Apple 4.8(소셜 제공 시 Sign in with Apple 의무)과
-계정 삭제 경로를 검사하지만 **둘 다 경고이고 `process.exit` 가 없다.** 빌드는 그대로 진행된다.
+`generate-app.mjs` 의 `authSetup()` 이 규칙을 판정하고, **경고로 낼지 중단으로 낼지는 `main()`
+이 `--release` 플래그로 정한다.** 규칙은 한 곳(`storeBlockers`)에만 있고 정책만 갈린다.
 
-`H-4` 에서 **릴리즈 빌드에 한해 `exit 1`** 로 승격한다. dev 빌드는 경고로 통과시키는 예외 규칙을
-둔다 — 기존 앱들이 즉시 빨간불이 되면 안 된다.
+| 검사 | 내용 | dev 빌드 | `--release` |
+|---|---|---|---|
+| Apple 4.8 | 제3자 소셜을 제공하면 `apple` 도 `providers` 에 있어야 한다 | 경고 | **`exit 1`** |
+| 계정 삭제 | `providers` 가 있으면 `auth.deleteEndpoint` 필수 | 경고 | **`exit 1`** |
+| clientId | 소셜 provider 마다 `auth.oauth.<p>.clientId` 필수 | 경고 | **`exit 1`** |
+
+- **게이트는 `--release` 없이는 발동하지 않는다.** dev 빌드는 예전처럼 경고로 통과한다 —
+  기존 앱들이 즉시 빨간불이 되면 안 되기 때문이다.
+- `.github/workflows/release.yml` 이 **Android · iOS generate 스텝 양쪽에 `--release` 를 넘긴다.**
+  이게 없으면 게이트가 CI 에서 한 번도 동작하지 않는다.
+- **`--local` 과 `--release` 는 함께 쓸 수 없다** — `--local` 은 cleartext+ATS 예외를 넣는
+  dev 전용 모드라 스토어 제출용 빌드가 될 수 없다. 동시 지정 시 즉시 실패한다.
+- **`apple` 도 clientId 검사 대상이다** — 단 `--platform ios` 일 때만 면제된다.
+  iOS 는 네이티브 Sign in with Apple 에 appId 폴백이 있지만 **Android 는 `apple` 을 web OAuth 로
+  타므로 Services ID(clientId)가 없으면 런타임 `oauth-misconfigured`** 다.
+- `auth.providers` 가 비어 있는 앱(웹 레이어에서만 로그인)은 계정 삭제·clientId 게이트를
+  **그냥 통과한다.** 스토어 요건은 그래도 적용되므로 게이트가 완전하다고 오해하지 마라.
+- `doctor.mjs` 는 여전히 **경고만** 낸다(읽기 전용 점검이므로 의도된 것이다). 막는 쪽은
+  `generate-app.mjs` 다.

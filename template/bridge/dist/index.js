@@ -40,6 +40,10 @@ function deriveCapabilities(features) {
 const OAUTH_PRESETS = {
   google:   { authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth', scopes: ['openid', 'email', 'profile'] },
   naver:    { authorizeUrl: 'https://nid.naver.com/oauth2.0/authorize', scopes: [] },
+  // TODO(G0-4): line · discord 의 authorizeUrl · scopes 는 auth 팀이 콘솔 등록값과 대조해 확정한다.
+  //   지금 값은 각 사 공개 문서 기준 — 콘솔 확인 전까지 임의 확정하지 마라.
+  line:     { authorizeUrl: 'https://access.line.me/oauth2/v2.1/authorize', scopes: ['profile', 'openid'] },
+  discord:  { authorizeUrl: 'https://discord.com/oauth2/authorize', scopes: ['identify', 'email'] },
   kakao:    { authorizeUrl: 'https://kauth.kakao.com/oauth/authorize', scopes: [] },
   facebook: { authorizeUrl: 'https://www.facebook.com/v19.0/dialog/oauth', scopes: ['public_profile', 'email'] },
   x:        { authorizeUrl: 'https://twitter.com/i/oauth2/authorize', scopes: ['tweet.read', 'users.read', 'offline.access'] },
@@ -854,7 +858,7 @@ class AppBridgeImpl {
    *
    * 반환(웹이 백엔드로 보내거나, sessionEndpoint 설정 시 브릿지가 자동 전송):
    *   { ok, provider, authorizationCode?, codeVerifier?, redirectUri?, idToken?, user?, session? }
-   * @param provider 'email'|'apple'|'google'|'naver'|'kakao'|'facebook'|'x'|'threads'
+   * @param provider 'email'|'apple'|'google'|'naver'|'kakao'|'facebook'|'x'|'threads'|'line'|'discord'
    */
   async login(provider, opts = {}) {
     await this.ready();
@@ -1333,7 +1337,8 @@ class AppBridgeImpl {
   // 로그인 마무리: sessionEndpoint 가 있으면 자격증명을 백엔드로 보내 세션쿠키 발급받음.
   // 백엔드가 신규 회원이라 추가정보/약관동의가 필요하다고 알리면(아래 플래그) 새로고침하지 않고
   // 그대로 반환 → 웹이 온보딩(약관+추가정보) 화면을 띄운다.
-  //   백엔드 응답 플래그: { isNew, needsProfile, needsConsent, complete:false } 중 하나면 "미완료"
+  //   백엔드 응답 플래그: { isNew, needsProfile, needsConsent, signupRequired, complete:false }
+  //   중 하나면 "미완료"
   async _finishLogin(credential, opts) {
     if (!credential || !credential.ok) return credential;
     const endpoint = (this.config.auth && this.config.auth.sessionEndpoint) || opts.sessionEndpoint;
@@ -1349,17 +1354,25 @@ class AppBridgeImpl {
         }),
       });
       const data = (await res.json().catch(() => ({}))) || {};
-      const incomplete = data.complete === false || !!data.isNew || !!data.needsProfile || !!data.needsConsent;
+      // 미완료 신호는 백엔드마다 이름이 다르다 — 하나라도 서면 "가입 안 끝남"으로 본다.
+      // 브릿지는 이 플래그들의 의미를 해석하지 않는다. 새로고침 여부만 가른다.
+      const incomplete = data.complete === false
+        || !!data.isNew || !!data.needsProfile || !!data.needsConsent || !!data.signupRequired;
       if (res.ok && data.token) { try { await this.secureSet('auth_token', data.token); } catch { /* noop */ } }
       // 가입이 끝난 기존 회원만 새로고침. 신규(온보딩 필요)면 웹이 화면을 띄우게 둔다.
       if (res.ok && !incomplete && opts.reload !== false) location.reload();
+      // 미지 필드 pass-through — 브릿지는 백엔드 응답에서 아는 필드만 골라내지 않는다.
+      // 서비스마다 필요한 필드가 다르고(가입 토큰 등) 브릿지는 그 의미를 몰라야 하므로,
+      // 통째로 올리고 해석은 웹에 맡긴다.
+      // ★ ...data 를 먼저 펼친다 — 뒤의 필드가 이겨야 백엔드가 브릿지 판정을 덮어쓰지 못한다.
       return {
+        ...data,
         ...credential,
         session: res.ok,
         user: data.user || credential.user,
         isNew: !!data.isNew,
         needsProfile: !!(data.needsProfile || data.needsConsent),
-        backend: data,
+        backend: data, // 하위호환 — 기존 소비자가 쓴다. 지우지 마라.
       };
     } catch {
       return { ...credential, session: false, reason: 'session-endpoint-failed' };

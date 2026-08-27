@@ -83,7 +83,7 @@ jobs:
           ADBRIX_SECRET_KEY: ${{ secrets[format('ADBRIX_SECRET_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.ADBRIX_SECRET_KEY }}
           APPSFLYER_DEV_KEY: ${{ secrets[format('APPSFLYER_DEV_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.APPSFLYER_DEV_KEY }}
           APPSFLYER_IOS_APP_ID: ${{ secrets[format('APPSFLYER_IOS_APP_ID_{0}', needs.resolve.outputs.slug_env)] || secrets.APPSFLYER_IOS_APP_ID }}
-        run: node scripts/generate-app.mjs --slug "$SLUG" --platform android
+        run: node scripts/generate-app.mjs --slug "$SLUG" --platform android --release
 
       - name: 아이콘/스플래시 (소스 있을 때만)
         run: |
@@ -166,7 +166,7 @@ jobs:
           ADBRIX_SECRET_KEY: ${{ secrets[format('ADBRIX_SECRET_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.ADBRIX_SECRET_KEY }}
           APPSFLYER_DEV_KEY: ${{ secrets[format('APPSFLYER_DEV_KEY_{0}', needs.resolve.outputs.slug_env)] || secrets.APPSFLYER_DEV_KEY }}
           APPSFLYER_IOS_APP_ID: ${{ secrets[format('APPSFLYER_IOS_APP_ID_{0}', needs.resolve.outputs.slug_env)] || secrets.APPSFLYER_IOS_APP_ID }}
-        run: node scripts/generate-app.mjs --slug "$SLUG" --platform ios
+        run: node scripts/generate-app.mjs --slug "$SLUG" --platform ios --release
 
       - name: 아이콘/스플래시 (소스 있을 때만)
         run: |

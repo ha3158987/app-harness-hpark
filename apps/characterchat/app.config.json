@@ -16,12 +16,12 @@
   },
   "features": {
     "push": false,
-    "deepLink": false,
+    "deepLink": true,
     "biometric": false,
     "share": true,
     "camera": false,
     "forceUpdate": false,
-    "secureStorage": false,
+    "secureStorage": true,
     "localNotification": false,
     "haptics": true,
     "clipboard": false,
@@ -56,6 +56,24 @@
     "termsUrl": "https://poptale.ai/info/terms"
   },
   "permissions": {},
+  "auth": {
+    "providers": ["email", "kakao", "naver", "line", "google", "apple", "facebook", "x", "discord"],
+    "sessionEndpoint": "https://api.chat.poptale.ai/auth/social/native",
+    "signupEndpoint": "https://api.chat.poptale.ai/auth/signup",
+    "logoutEndpoint": "https://api.chat.poptale.ai/auth/logout",
+    "deleteEndpoint": "https://api.chat.poptale.ai/auth/withdraw",
+    "deviceEndpoint": "https://api.chat.poptale.ai/api/push/register",
+    "oauth": {
+      "kakao":    { "clientId": null },
+      "naver":    { "clientId": null },
+      "line":     { "clientId": null },
+      "google":   { "clientId": null },
+      "apple":    { "clientId": null },
+      "facebook": { "clientId": null },
+      "x":        { "clientId": null },
+      "discord":  { "clientId": null }
+    }
+  },
   "ios": {
     "teamId": "3W889GYPRK"
   },

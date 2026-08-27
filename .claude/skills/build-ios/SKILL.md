@@ -11,7 +11,9 @@ description: 특정 앱(slug)의 iOS 앱을 빌드한다. app.config.json → Ca
 ## 절차
 1. **프로젝트 생성/패치**:
    ```bash
-   node scripts/generate-app.mjs --slug <slug>
+   node scripts/generate-app.mjs --slug <slug> --release
+   # --release 는 스토어 요건(clientId · deleteEndpoint · Apple 4.8)을 빌드 실패로 승격한다.
+   # 스토어에 올리지 않는 로컬 확인이면 --release 를 빼라.
    ```
 2. 아이콘/스플래시 미생성 시 → generate-assets 선행.
 3. **동기화 & CocoaPods**:

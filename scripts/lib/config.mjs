@@ -64,7 +64,7 @@ const DEFAULT_MARKETING = {
 // 인증/SSO 슬롯. providers 에 켤 공급자만 나열. client secret 은 절대 여기 두지 않는다(백엔드 전용).
 // clientId 는 공개값이라 oauth.<provider>.clientId 로 둘 수 있다(또는 빌드 시 환경변수 베이크).
 const DEFAULT_AUTH = {
-  providers: [],            // ['email','apple','google','naver','kakao','facebook','x','threads']
+  providers: [],            // ['email','apple','google','naver','kakao','facebook','x','threads','line','discord']
   sessionEndpoint: null,    // 네이티브 자격증명을 받아 세션쿠키를 발급하는 백엔드 URL (선택)
   signupEndpoint: null,     // 신규 회원의 약관동의+추가정보를 받아 가입 확정하는 백엔드 URL (선택)
   logoutEndpoint: null,
@@ -73,7 +73,7 @@ const DEFAULT_AUTH = {
   deviceEndpoint: null,     // 푸시토큰/기기를 계정에 등록하는 백엔드 URL (기기↔계정 바인딩)
   oauth: {},                // 직접 모드: { google: { clientId, scopes?, redirectUri?, authorizeUrl?, extraQuery? }, ... }
 };
-const KNOWN_AUTH_PROVIDERS = ['email', 'apple', 'google', 'naver', 'kakao', 'facebook', 'x', 'threads'];
+const KNOWN_AUTH_PROVIDERS = ['email', 'apple', 'google', 'naver', 'kakao', 'facebook', 'x', 'threads', 'line', 'discord'];
 
 // 인앱결제 슬롯. 디지털 재화는 스토어 IAP 강제. 영수증 검증은 백엔드(verifyEndpoint).
 // products: [{ id(웹SKU), storeId(스토어 상품ID), type: 'consumable' }]  — 가격은 스토어 콘솔에서.

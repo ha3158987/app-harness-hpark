@@ -4,7 +4,7 @@ title: GUIDE — Appharness 마스터 가이드
 category: 시작
 audience: 전체
 status: active
-updated: 2026-08-20
+updated: 2026-08-27
 ---
 
 # GUIDE — Appharness 마스터 가이드
@@ -125,8 +125,8 @@ flowchart LR
 
 **capabilities 플래그**: `push, deepLink, deferredDeepLink, biometric, share, camera, forceUpdate, secureStorage, localNotification, haptics, clipboard, geolocation, auth, iap`
 
-**인증/계정 지원 범위**: 이메일 + 소셜(apple/google/naver/kakao/facebook/x/threads) — `line`·`discord` 추가 예정(H-1) · 회원가입 온보딩(약관/추가정보) · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인 · 기기 등록.
-**기본 경로는 외부 인증서버 위탁**이다 — [25-AUTH-DELEGATION.md](25-AUTH-DELEGATION.md). 중앙 IdP 자체 구축은 레거시.
+**인증/계정 지원 범위**: 이메일 + 소셜(apple/google/naver/kakao/facebook/x/threads/**line**/**discord**) — 총 10종 · 회원가입 온보딩(약관/추가정보) · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인 · 기기 등록.
+**기본 경로는 외부 인증서버 위탁**이다 — [25-AUTH-DELEGATION.md](25-AUTH-DELEGATION.md). 중앙 IdP 자체 구축(Keycloak)은 **코드에서 제거됐다**(#25) — `auth.idp` 가 남아 있는 config 는 빌드가 멈춘다.
 
 ---
 
@@ -187,7 +187,8 @@ flowchart TB
 | `POST /webhooks/apple` `/webhooks/google` | 환불 회수 | IAP §5 |
 | (성인) 본인확인 콜백 + 상태 | 성인 검증 저장/게이팅 | COMPLIANCE §3 |
 
-중앙 IdP(Keycloak)는 `idp/` 로 자기 서버에 배포(소셜 한 곳 등록 → 패밀리 앱 공유).
+중앙 IdP(Keycloak)를 세우는 경로는 **없다** — 코드·`idp/` 디렉터리 모두 #25 에서 제거됐다.
+공급자 토큰 교환은 외부 인증서버가 한다([25-AUTH-DELEGATION.md](25-AUTH-DELEGATION.md)).
 </details>
 
 <details><summary><b>5-4. 스토어 콘솔 (사람)</b></summary>
@@ -227,9 +228,11 @@ flowchart TB
                 "brightness": { "enabled": false } } },
   "navigation": { "allowedDomains": ["aipia.co.kr", "*.aipia.co.kr"], "externalInBrowser": true },
   "marketing": { "attribution": { "provider": "appsflyer", "deferredDeepLink": true } },
-  "auth": { "providers": ["email","apple","google","naver","kakao","facebook","x","threads"],
-    "idp": { "issuer": "https://auth.aipia.co.kr/realms/aipia", "clientId": "aipia-app",
-      "hintParam": "kc_idp_hint", "hints": { "x": "twitter" } },
+  "auth": { "providers": ["email","apple","google","naver","kakao","facebook","x","threads","line","discord"],
+    // 공급자 OAuth 를 앱이 직접 돈다. secret 은 넣지 않는다(백엔드/인증서버 전용).
+    // "idp" 키는 넣지 마라 — 빈 객체라도 빌드가 멈춘다(#25 에서 제거).
+    "oauth": { "google": { "clientId": "xxxx.apps.googleusercontent.com" },
+               "apple":  { "clientId": "<APPLE_SERVICE_ID>" } },
     "sessionEndpoint": "...", "signupEndpoint": "...", "logoutEndpoint": "...",
     "deleteEndpoint": "...", "guestEndpoint": "...", "deviceEndpoint": "..." },
   "iap": { "verifyEndpoint": "...", "googleTokenCompression": false, "products": [
@@ -254,7 +257,11 @@ flowchart TB
   배열이면 prefix 매칭(예: `['/recommend','/detail/','/viewer']`).
 - `features.viewer.captureBlock`: 지정 경로 prefix 에서만 화면 캡쳐 차단. SPA 라우팅 자동 감지는
   `harness-adapter.autoBlockCaptureOnPaths()` 로.
-- `auth.idp` 있으면 중앙 IdP 모드(없으면 `auth.oauth.<provider>` 직접 모드). 둘 중 하나.
+- `auth.oauth.<provider>.clientId` 가 유일한 경로다. **`auth.idp` 는 금지 키** — 빈 객체(`{}`)라도
+  `loadConfig` 가 모든 빌드에서 멈춘다(`scripts/lib/config.mjs:296-299`). 자체 IdP 모드는 #25 에서
+  제거됐다 — [25-AUTH-DELEGATION.md §8](25-AUTH-DELEGATION.md).
+- `auth.providers` 허용값 10종: `email · apple · google · naver · kakao · facebook · x · threads ·
+  line · discord` (`scripts/lib/config.mjs:76`). 목록 밖 값은 경고가 아니라 `throw` 다.
 - `iap.googleTokenCompression`: Google purchase token 이 길어 페이로드 한계에 걸릴 때 gzip+base64.
   활성 시 `verifyEndpoint` 백엔드도 같은 포맷을 수용해야 함.
 - `monitoring.apm`: APM/RUM 벤더 (`whatap` | `datadog` | null). 크래시와 별개.

@@ -105,11 +105,27 @@ const AUTH_NATIVE_PLUGINS = {
   apple: ['@capacitor-community/apple-sign-in'], // iOS 네이티브 Sign in with Apple
 };
 
-// 인증 플러그인 + 경고(Apple 4.8 / clientId 누락) 수집
-function authSetup(cfg) {
+// 브릿지 OAUTH_PRESETS 와 같은 집합이어야 한다 — 여기 없고 config 에 authorizeUrl 도
+// 없으면 앱은 OAuth 를 시작할 URL 자체를 모른다(런타임 oauth-misconfigured).
+// test/providers.test.mjs 가 브릿지 쪽과의 동기화를 지킨다.
+//
+// 아래 authSetup 의 authorizeUrl 분기는 **현재 도달 불가**다: scripts/lib/config.mjs 의
+// KNOWN_AUTH_PROVIDERS 가 프리셋 밖 provider 를 config 로딩 단계에서 먼저 거부하므로,
+// "프리셋에 없는 provider" 를 담은 config 자체를 만들 수 없다. 그래도 남겨 둔다 —
+// 프리셋 밖 provider 를 허용하게 될 때(KNOWN_AUTH_PROVIDERS 확장) 바로 동작하는 선제 방어다.
+const OAUTH_PRESET_PROVIDERS = [
+  'google', 'naver', 'kakao', 'apple', 'facebook', 'x', 'threads', 'line', 'discord',
+];
+
+// 인증 플러그인 + 규칙 판정. 규칙은 여기가 정본이고, 그걸 경고로 낼지 중단으로 낼지(정책)는
+// main() 이 정한다 — 같은 문제를 경고와 치명 양쪽에 중복 인코딩하지 않기 위해.
+//   warnings     — dev 조언. 릴리즈에서도 경고로만 낸다.
+//   storeBlockers — 스토어 요건. dev 는 경고, --release 는 중단.
+function authSetup(cfg, platform) {
   const providers = cfg.auth?.providers || [];
   const plugins = [];
   const warnings = [];
+  const storeBlockers = [];
   const social = providers.filter((p) => p !== 'email');
 
   for (const p of providers) {
@@ -119,19 +135,34 @@ function authSetup(cfg) {
   // Apple App Store 4.8: 제3자 소셜 로그인을 제공하면 Sign in with Apple 도 제공해야 한다(iOS).
   const hasOtherSocial = social.some((p) => p !== 'apple');
   if (hasOtherSocial && !providers.includes('apple')) {
-    warnings.push('소셜 로그인 제공 시 Apple 가이드라인 4.8 에 따라 "apple"(Sign in with Apple) 도 ' +
-      'providers 에 추가해야 합니다 — 없으면 iOS 심사에서 리젝될 수 있음.');
+    storeBlockers.push('소셜 로그인 제공 시 Apple 가이드라인 4.8 에 따라 "apple"(Sign in with Apple) 도 ' +
+      'providers 에 추가해야 합니다 (하네스는 한 config 로 양 스토어를 낸다 — iOS 심사에서 리젝된다).');
+  }
+
+  // 회원탈퇴는 App Store · Play 양쪽 필수. providers 가 있을 때만 본다 —
+  // 즉 auth.providers 없이 웹 레이어에서만 로그인하는 앱(현재 characterchat)은 이 게이트를
+  // 그냥 통과한다. 스토어 요건은 그래도 적용되므로 게이트가 완전하다고 오해하지 마라.
+  if (providers.length && !cfg.auth?.deleteEndpoint) {
+    storeBlockers.push('auth.deleteEndpoint 누락 — 회원탈퇴는 App Store · Play 양쪽의 필수 요건입니다. ' +
+      '백엔드 탈퇴 API URL 을 auth.deleteEndpoint 에 넣으세요(docs/10-AUTH.md).');
   }
 
   // 시스템 브라우저 OAuth 공급자는 공개 clientId 가 필요하다.
   for (const p of social) {
-    if (p === 'apple') continue;
+    // iOS 네이티브 Apple 로그인은 appId 폴백이 있지만, Android 는 web OAuth 를 타므로
+    // Services ID(clientId)가 없으면 런타임에 oauth-misconfigured 다.
+    if (p === 'apple' && platform === 'ios') continue;
     if (!cfg.auth?.oauth?.[p]?.clientId) {
-      warnings.push(`auth.oauth.${p}.clientId 누락 — OAuth 가 런타임에 동작하지 않음(빌드는 됨). ` +
+      storeBlockers.push(`auth.oauth.${p}.clientId 누락 — OAuth 가 런타임에 동작하지 않음(빌드는 됨). ` +
         '공개 clientId 를 config 에 넣거나 빌드 시 주입하세요(client secret 은 백엔드 전용).');
     }
+    // 프리셋도 authorizeUrl 도 없으면 시작할 URL 이 없다. (도달 불가 — 위 주석 참고)
+    if (!OAUTH_PRESET_PROVIDERS.includes(p) && !cfg.auth?.oauth?.[p]?.authorizeUrl) {
+      warnings.push(`auth.oauth.${p}.authorizeUrl 누락 — "${p}" 는 브릿지 프리셋에 없어 ` +
+        'authorize URL 을 config 에서 받아야 합니다.');
+    }
   }
-  return { plugins, warnings, hasOAuth: social.length > 0 };
+  return { plugins, warnings, storeBlockers, hasOAuth: social.length > 0 };
 }
 
 // 인앱결제: 상품이 있으면 IAP 플러그인 설치. 디지털 재화 결제는 스토어 IAP 강제.
@@ -220,9 +251,11 @@ function parseArgs(argv) {
     else if (v === '--skip-install') a.skipInstall = true;
     else if (v === '--skip-sync') a.skipSync = true;
     else if (v === '--local') a.local = argv[++i]; // 로컬 dev 서버 URL(예: http://192.168.1.37:3001). cleartext+ATS 자동 허용.
+    else if (v === '--release') a.release = true; // 릴리즈 빌드 — 스토어 요건 검증을 치명적으로 승격
   }
   if (!a.slug) fail('--slug <slug> 필요');
   if (a.local && !/^https?:\/\//.test(a.local)) fail('--local 은 http(s):// 로 시작하는 전체 URL 이어야 함');
+  if (a.local && a.release) fail('--local 과 --release 는 함께 쓸 수 없다 — --local 은 dev 전용(cleartext+ATS)이라 스토어 제출 금지');
   if (!['android', 'ios', 'both'].includes(a.platform)) fail(`--platform 은 android|ios|both`);
   return a;
 }
@@ -313,6 +346,8 @@ function pluginsFor(cfg) {
     if (cfg.features[feat]) pkgs.forEach((p) => set.add(p));
   }
   marketingSetup(cfg).plugins.forEach((p) => set.add(p));
+  // platform 없이 호출한다 — plugins 는 provider 로만 결정되고(AUTH_NATIVE_PLUGINS),
+  // platform 은 storeBlockers 판정에만 쓰이는데 여기선 쓰지 않는다.
   authSetup(cfg).plugins.forEach((p) => set.add(p));
   iapSetup(cfg).plugins.forEach((p) => set.add(p));
   // iOS ATT(추적동의) 플러그인. tracking.att 로 독립 제어하되, 어트리뷰션 벤더가 켜져 있으면
@@ -1431,9 +1466,20 @@ function main() {
   if (activeMkt.length) log.info(`마케팅: ${activeMkt.join(', ')}`);
   mkt.warnings.forEach((w) => log.warn(w));
   // 인증/SSO 안내
-  const authConf = authSetup(cfg);
+  const authConf = authSetup(cfg, args.platform);
   if ((cfg.auth?.providers || []).length) log.info(`인증: ${cfg.auth.providers.join(', ')}`);
   authConf.warnings.forEach((w) => log.warn(w));
+  // 스토어 요건은 릴리즈에서만 치명적이다 — dev 빌드는 경고로 통과시킨다.
+  if (args.release) {
+    if (authConf.storeBlockers.length) {
+      authConf.storeBlockers.forEach((m) => console.error(`  ✗ ${m}`));
+      console.error(`\n릴리즈 빌드 중단 — 위 ${authConf.storeBlockers.length}건을 먼저 해결하세요. ` +
+        '(dev 빌드는 --release 없이 실행하면 경고로 통과합니다)');
+      process.exit(1);
+    }
+  } else {
+    authConf.storeBlockers.forEach((w) => log.warn(w));
+  }
   // 인앱결제 안내
   const iapConf = iapSetup(cfg);
   if ((cfg.iap?.products || []).length) log.info(`인앱결제: ${cfg.iap.products.length}개 상품(${cfg.iap.products.map((p) => p.id).join(', ')})`);

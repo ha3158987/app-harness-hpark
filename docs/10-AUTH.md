@@ -4,7 +4,7 @@ title: AUTH — 인증 / SSO 가이드
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-05-30
+updated: 2026-08-27
 ---
 
 # AUTH — 인증 / SSO 가이드
@@ -25,6 +25,27 @@ updated: 2026-05-30
 이 하네스의 로그인은 **"인증은 WebView 밖에서, 복귀는 딥링크로, 토큰 교환은 백엔드에서"** 라는
 네이티브 앱 표준 패턴을 따른다. 임베디드 WebView 안에서 OAuth 를 돌리면 Google 등이 차단하기
 때문이다(`disallowed_useragent`). 이 문서는 config 스키마와 **백엔드가 구현해야 할 규약**을 정리한다.
+
+---
+
+## 0. 앱이 자격증명을 얻는 세 가지 경로
+
+| | 경로 | 누가 쓰나 | 브라우저에 남는 세션 |
+|---|---|---|---|
+| **A** | 웹 리다이렉트 — 브라우저가 BE 를 거쳐 공급자로 | 웹 | 공급자 세션(+ 서비스 쿠키) |
+| **B** | **앱 직접 OAuth** — 앱이 시스템 브라우저로 공급자와 직접 | **팝챗 앱(주경로)** | 공급자 세션 |
+| **C** | 네이티브 SDK — 카카오톡 앱 등으로 점프 | 팝테일 앱 | 없음 |
+
+**팝챗 앱은 길 B 를 쓴다.** `openExternal({ system: true })` 가 `@capacitor/app-launcher` 로
+실제 Safari·Chrome 을 열므로(`template/bridge/dist/index.js:195-198`) 공급자 세션이 브라우저에
+남아 다른 패밀리 앱의 재로그인이 무마찰이다.
+자세한 규약은 [`25-AUTH-DELEGATION.md`](25-AUTH-DELEGATION.md) 에 있다.
+
+> ⚠️ **길 C 는 이 하네스에 구현이 없다.** iOS 네이티브 Sign in with Apple 만 구현돼 있고,
+> `template/plugins/kakao/` · `template/plugins/naver/` 에는 **`SPEC.md` 만 있고 코드가 없다.**
+> 지금 하네스로 만든 앱에서 **"카카오톡 앱으로 점프"는 불가**하고, 카카오·네이버도 시스템
+> 브라우저 OAuth(길 B)로 돈다. 위 표의 C 행은 팝테일(Flutter)의 현행 UX 이지 하네스가 이미
+> 할 수 있는 일이 아니다 — UX 기대치를 여기 맞춰라.
 
 ---
 

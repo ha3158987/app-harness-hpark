@@ -50,9 +50,11 @@ export interface PurchaseResult {
   reason?: string;
 }
 
-export type AuthProvider = 'email' | 'apple' | 'google' | 'naver' | 'kakao' | 'facebook' | 'x' | 'threads';
+export type AuthProvider = 'email' | 'apple' | 'google' | 'naver' | 'kakao' | 'facebook' | 'x' | 'threads' | 'line' | 'discord';
 
 export interface AuthResult2 {
+  /** 자격증명 회수 성공 여부. **백엔드 판정이 아니다** — BE 가 바디에 ok:false 를 보내도
+   *  이 값은 true 다(HTTP 상태는 session, BE 판정은 backend.* 로 읽어라). */
   ok: boolean;
   provider?: AuthProvider;
   /** 백엔드가 secret 으로 교환할 OAuth authorization code (PKCE) */
@@ -70,7 +72,26 @@ export interface AuthResult2 {
   /** 추가정보/약관동의가 더 필요함 (이 경우 브릿지는 새로고침하지 않음) */
   needsProfile?: boolean;
   backend?: unknown;
+  /** 실패 사유. **브릿지가 쓴 값은 항상 ok===false 또는 session===false 와 함께 온다.**
+   *  따라서 ok · session 이 모두 true 인데 reason 이 있으면 백엔드가 보낸 값이다.
+   *  역은 성립하지 않는다 — session===false 에 BE 가 보낸 reason 이 실릴 수도 있다. */
   reason?: string;
+  /** 백엔드가 돌려준 가입 미완료 신호. 브릿지는 해석하지 않고 그대로 올린다. */
+  signupRequired?: boolean;
+  /** 서비스 백엔드 응답의 나머지 필드 전부 — 브릿지는 의미를 모른다.
+   *  ⚠️ 아래 이름은 브릿지가 소유한다 — BE 가 같은 이름을 보내도 top-level 에서는
+   *     그대로 읽히지 않는다. 원본은 언제나 backend.* 에 남는다.
+   *       · 항상 대체됨 : session(HTTP 상태일 뿐이다) · backend
+   *       · 자격증명이 이김 : ok · provider · authorizationCode (언제나)
+   *           codeVerifier · redirectUri · state  ← OAuth 경로에서만
+   *           native · idToken                    ← iOS Apple 네이티브에서만
+   *       · 이름은 남고 boolean 으로 강제됨 : isNew · needsProfile
+   *           (needsConsent:true 도 needsProfile 을 true 로 만든다)
+   *  ★ 예약 이름이 플랫폼마다 다르다 — BE 계약에서 이 이름들을 아예 피해라.
+   *     특히 BE 가 자체 idToken 을 내리면 iOS Apple 로그인에서만 Apple 것으로 바뀐다.
+   *  ★ user 는 예약이 아니다 — BE 값이 truthy 면 BE 가 이긴다(falsy 면 자격증명 값).
+   *  ★ 위 명시 필드가 전부 이 타입에 대입 가능해야 한다(unknown 이므로 문제없다). */
+  [key: string]: unknown;
 }
 
 export interface AppRuntimeConfig {
