@@ -1,11 +1,18 @@
 {
   "slug": "characterchat",
-  "appName": "캐릭터챗",
+  "appName": {
+    "en": "Popchat",
+    "ko-KR": "캐릭터챗"
+  },
   "appId": "com.aipia.characterchat",
   "startUrl": "https://chat.poptale.ai",
   "version": {
     "name": "1.0.0",
     "code": 1
+  },
+  "locales": {
+    "default": "en",
+    "supported": ["en", "ko-KR", "ja-JP", "zh-Hant", "th-TH", "id-ID", "es-419", "pt-BR"]
   },
   "theme": {
     "primary": "#000000",
@@ -47,7 +54,16 @@
   "tracking": {
     "att": {
       "enabled": false,
-      "usageDescription": "관심에 더 맞는 광고를 제공하고 마케팅 성과를 측정하기 위해 활동 데이터를 사용합니다.",
+      "usageDescription": {
+        "en": "Your activity data is used to show ads that better match your interests and to measure marketing performance.",
+        "ko-KR": "관심에 더 맞는 광고를 제공하고 마케팅 성과를 측정하기 위해 활동 데이터를 사용합니다.",
+        "ja-JP": "ご興味により合った広告を表示し、マーケティング成果を測定するために利用状況データを使用します。",
+        "zh-Hant": "我們會使用您的活動資料，以提供更符合您興趣的廣告並衡量行銷成效。",
+        "th-TH": "เราใช้ข้อมูลกิจกรรมของคุณเพื่อแสดงโฆษณาที่ตรงกับความสนใจของคุณมากขึ้น และเพื่อวัดผลทางการตลาด",
+        "id-ID": "Data aktivitas Anda digunakan untuk menampilkan iklan yang lebih sesuai dengan minat Anda dan mengukur performa pemasaran.",
+        "es-419": "Usamos tus datos de actividad para mostrarte anuncios más acordes con tus intereses y medir el rendimiento de marketing.",
+        "pt-BR": "Usamos seus dados de atividade para exibir anúncios mais relevantes aos seus interesses e medir o desempenho de marketing."
+      },
       "prePermission": true
     }
   },

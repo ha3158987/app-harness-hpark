@@ -16,7 +16,7 @@
 |---|---|
 | Android | JDK 21(`JAVA_HOME`), Android SDK(`ANDROID_HOME`, platform 35, build-tools 35) |
 | iOS | macOS + Xcode 26 + CocoaPods (또는 CI macOS 러너 — 맥 없이) |
-| 공통 | Node 20+ |
+| 공통 | Node 24 (`.nvmrc` — `nvm use`). 최소 22 |
 > 점검: `node scripts/doctor.mjs` (환경/모든 앱 config 검사)
 
 ## 2. 새 앱 추가 (단계)

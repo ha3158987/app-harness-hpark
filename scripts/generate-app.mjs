@@ -18,6 +18,8 @@ import {
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, runtimeConfig, WIRED_PROVIDERS } from './lib/config.mjs';
+import { LOCALES, resolveLocalized, baseLocaleOf } from './lib/i18n.mjs';
+import { appResourcesFilesAnchor, stripLprojRefs, rewriteKnownRegions } from './lib/pbxproj.mjs';
 import { authSetup } from './lib/auth-setup.mjs';
 import { log, fail } from './lib/log.mjs';
 
@@ -76,13 +78,117 @@ function versionFor(pkg) {
 }
 
 // iOS Info.plist 권한 사용 설명 문구 (기능 켜질 때만 주입). 누락 시 iOS 가 권한 요청 즉시 크래시.
+// 값은 문자열(모든 언어 공통) 또는 로케일 맵({ 'en': '…', 'ko-KR': '…' }) 둘 다 가능하다.
+// 앱별로 다르게 써야 하면 config 의 ios.usageDescriptions 로 plist 키 단위 덮어쓴다.
+// 번역 원칙: 한국어 원문의 의미를 바꾸지 않는다(용도 + 왜 필요한지). 각 스토어의 심사 기준상
+// "무엇에 쓰는지"가 문장에 남아야 한다 — 짧게 줄이려고 용도를 지우지 마라.
 const IOS_USAGE = {
-  camera: { NSCameraUsageDescription: '사진 촬영을 위해 카메라 접근이 필요합니다.',
-            NSPhotoLibraryUsageDescription: '사진 선택을 위해 사진 보관함 접근이 필요합니다.',
-            NSPhotoLibraryAddUsageDescription: '사진 저장을 위해 사진 보관함 접근이 필요합니다.' },
-  geolocation: { NSLocationWhenInUseUsageDescription: '위치 기반 기능을 위해 위치 접근이 필요합니다.' },
-  biometric: { NSFaceIDUsageDescription: '본인 확인을 위해 Face ID 를 사용합니다.' },
+  camera: {
+    NSCameraUsageDescription: {
+      'en': 'Camera access is required to take photos.',
+      'ko-KR': '사진 촬영을 위해 카메라 접근이 필요합니다.',
+      'ja-JP': '写真を撮影するためにカメラへのアクセスが必要です。',
+      'zh-Hant': '拍攝照片需要使用相機權限。',
+      'th-TH': 'ต้องเข้าถึงกล้องเพื่อถ่ายภาพ',
+      'id-ID': 'Akses kamera diperlukan untuk mengambil foto.',
+      'es-419': 'Se necesita acceso a la cámara para tomar fotos.',
+      'pt-BR': 'O acesso à câmera é necessário para tirar fotos.',
+    },
+    NSPhotoLibraryUsageDescription: {
+      'en': 'Photo library access is required to select photos.',
+      'ko-KR': '사진 선택을 위해 사진 보관함 접근이 필요합니다.',
+      'ja-JP': '写真を選択するために写真ライブラリへのアクセスが必要です。',
+      'zh-Hant': '選擇照片需要使用照片圖庫權限。',
+      'th-TH': 'ต้องเข้าถึงคลังรูปภาพเพื่อเลือกรูปภาพ',
+      'id-ID': 'Akses galeri foto diperlukan untuk memilih foto.',
+      'es-419': 'Se necesita acceso a la fototeca para seleccionar fotos.',
+      'pt-BR': 'O acesso à biblioteca de fotos é necessário para selecionar fotos.',
+    },
+    NSPhotoLibraryAddUsageDescription: {
+      'en': 'Photo library access is required to save photos.',
+      'ko-KR': '사진 저장을 위해 사진 보관함 접근이 필요합니다.',
+      'ja-JP': '写真を保存するために写真ライブラリへのアクセスが必要です。',
+      'zh-Hant': '儲存照片需要使用照片圖庫權限。',
+      'th-TH': 'ต้องเข้าถึงคลังรูปภาพเพื่อบันทึกรูปภาพ',
+      'id-ID': 'Akses galeri foto diperlukan untuk menyimpan foto.',
+      'es-419': 'Se necesita acceso a la fototeca para guardar fotos.',
+      'pt-BR': 'O acesso à biblioteca de fotos é necessário para salvar fotos.',
+    },
+  },
+  geolocation: {
+    NSLocationWhenInUseUsageDescription: {
+      'en': 'Location access is required to provide location-based features.',
+      'ko-KR': '위치 기반 기능을 위해 위치 접근이 필요합니다.',
+      'ja-JP': '位置情報を利用した機能のために位置情報へのアクセスが必要です。',
+      'zh-Hant': '提供以位置為基礎的功能需要使用位置權限。',
+      'th-TH': 'ต้องเข้าถึงตำแหน่งที่ตั้งเพื่อให้บริการฟีเจอร์ที่อิงตำแหน่ง',
+      'id-ID': 'Akses lokasi diperlukan untuk menyediakan fitur berbasis lokasi.',
+      'es-419': 'Se necesita acceso a la ubicación para ofrecer funciones basadas en la ubicación.',
+      'pt-BR': 'O acesso à localização é necessário para oferecer recursos baseados em localização.',
+    },
+  },
+  biometric: {
+    NSFaceIDUsageDescription: {
+      'en': 'Face ID is used to verify your identity.',
+      'ko-KR': '본인 확인을 위해 Face ID 를 사용합니다.',
+      'ja-JP': '本人確認のために Face ID を使用します。',
+      'zh-Hant': '使用 Face ID 驗證您的身分。',
+      'th-TH': 'ใช้ Face ID เพื่อยืนยันตัวตนของคุณ',
+      'id-ID': 'Face ID digunakan untuk memverifikasi identitas Anda.',
+      'es-419': 'Se usa Face ID para verificar tu identidad.',
+      'pt-BR': 'O Face ID é usado para verificar sua identidade.',
+    },
+  },
 };
+// 갤러리 저장(AppBridge.saveImageToGallery)은 기능 플래그와 무관하게 항상 제공되므로 기본 주입한다.
+const IOS_USAGE_ALWAYS = {
+  NSPhotoLibraryAddUsageDescription: {
+    'en': 'Photo library access is required to save captured images.',
+    'ko-KR': '캡쳐 이미지 저장을 위해 사진 보관함 접근이 필요합니다.',
+    'ja-JP': 'キャプチャした画像を保存するために写真ライブラリへのアクセスが必要です。',
+    'zh-Hant': '儲存擷取的圖片需要使用照片圖庫權限。',
+    'th-TH': 'ต้องเข้าถึงคลังรูปภาพเพื่อบันทึกรูปภาพที่จับภาพไว้',
+    'id-ID': 'Akses galeri foto diperlukan untuk menyimpan gambar hasil tangkapan.',
+    'es-419': 'Se necesita acceso a la fototeca para guardar las imágenes capturadas.',
+    'pt-BR': 'O acesso à biblioteca de fotos é necessário para salvar as imagens capturadas.',
+  },
+};
+
+/** 문자열 | 로케일 맵 → { base, map } (base = 이 앱의 기본 문구 언어 값) */
+function asLocalized(value, baseLocale) {
+  if (value == null) return null;
+  if (typeof value === 'string') return { base: value, map: null };
+  return { base: value[baseLocale] ?? value.en ?? Object.values(value)[0], map: { ...value } };
+}
+
+/**
+ * 이 앱에 실제로 들어갈 iOS 권한 문구 전체 → { <plist 키>: { base, map } }.
+ * 기본 Info.plist(patchIosUsageStrings)와 로케일 리소스(patchIosLocalizations)가 **같은 목록**을
+ * 쓰도록 한 곳에 모은다. 갈라두면 로케일 파일에만 있고 기본에는 없는 키가 생긴다.
+ */
+function collectIosUsage(cfg) {
+  const baseLocale = baseLocaleOf(cfg);
+  const out = {};
+  for (const feat of Object.keys(IOS_USAGE)) {
+    if (cfg.features[feat] === true || cfg.features[feat]?.enabled) {
+      for (const [k, v] of Object.entries(IOS_USAGE[feat])) out[k] = asLocalized(v, baseLocale);
+    }
+  }
+  for (const [k, v] of Object.entries(IOS_USAGE_ALWAYS)) {
+    if (!out[k]) out[k] = asLocalized(v, baseLocale);
+  }
+  // ATT: 하네스가 기본 문구를 주지 않는다(실제 용도와 다른 문구 출시 방지) — config 값만 쓴다.
+  if (attEnabled(cfg)) {
+    const att = cfg.localized?.attUsageDescription
+      ?? asLocalized(cfg.tracking?.att?.usageDescription, baseLocale);
+    if (att && typeof att.base === 'string' && att.base.trim() !== '') {
+      out.NSUserTrackingUsageDescription = { base: att.base.trim(), map: att.map };
+    }
+  }
+  // 앱별 오버라이드(config ios.usageDescriptions)가 최우선.
+  for (const [k, v] of Object.entries(cfg.localized?.iosUsage ?? {})) out[k] = v;
+  return out;
+}
 
 // ATT 활성 여부. tracking.att.enabled 가 정본이고, 어트리뷰션 벤더만 켜둔 예전 config 는
 // 하위호환으로 함께 인정한다(그 경우 문구는 usageDescription 이 없으면 주입되지 않는다).
@@ -600,40 +706,338 @@ function patchIosUsageStrings(buildDir, cfg) {
   const plistFile = join(buildDir, 'ios', 'App', 'App', 'Info.plist');
   if (!existsSync(plistFile)) return;
   let xml = readFileSync(plistFile, 'utf8');
-  const add = {};
-  for (const feat of Object.keys(IOS_USAGE)) {
-    if (cfg.features[feat] === true || cfg.features[feat]?.enabled) Object.assign(add, IOS_USAGE[feat]);
-  }
-  // 갤러리 저장(AppBridge.saveImageToGallery)은 기능 플래그와 무관하게 항상 제공되므로,
-  // 추가 전용(addOnly) 사진 권한 설명을 기본 주입(camera 로 이미 채워졌으면 생략).
-  if (!add.NSPhotoLibraryAddUsageDescription) {
-    add.NSPhotoLibraryAddUsageDescription = '캡쳐 이미지 저장을 위해 사진 보관함 접근이 필요합니다.';
-  }
   // ATT: 추적 사용 설명 문구. 없으면 ATT 호출 시 iOS 가 크래시한다.
   // 기본 문구를 하네스가 제공하지 않는 이유 — 앱마다 실제 용도가 다른데 기본값이 그대로 출시되면
   // "표기한 목적과 실제 용도가 다른" 상태가 된다(Poptale 사례). config 로 강제한다.
   if (attEnabled(cfg)) {
     const desc = cfg.tracking?.att?.usageDescription;
-    if (typeof desc === 'string' && desc.trim() !== '') {
-      add.NSUserTrackingUsageDescription = desc.trim();
-    } else if (cfg.tracking?.att?.enabled) {
-      // loadConfig 가 이미 막지만, tracking 블록을 우회해 들어온 경우의 최종 방어선.
-      fail('tracking.att.enabled=true 인데 tracking.att.usageDescription 이 비어 있음 — ' +
-        'Info.plist 문구 없이 ATT 를 켜면 권한 요청 시점에 iOS 가 크래시한다.');
-    } else {
-      // 하위호환 경로(어트리뷰션 벤더만 켜둔 예전 config): 문구를 임의로 만들지 않고 경고만.
-      log.warn('ATT 플러그인은 설치되지만 NSUserTrackingUsageDescription 이 없다 — ' +
-        'tracking.att.usageDescription 을 채워라. 없으면 ATT 호출 시 크래시한다.');
+    if (!(typeof desc === 'string' && desc.trim() !== '')) {
+      if (cfg.tracking?.att?.enabled) {
+        // loadConfig 가 이미 막지만, tracking 블록을 우회해 들어온 경우의 최종 방어선.
+        fail('tracking.att.enabled=true 인데 tracking.att.usageDescription 이 비어 있음 — ' +
+          'Info.plist 문구 없이 ATT 를 켜면 권한 요청 시점에 iOS 가 크래시한다.');
+      } else {
+        // 하위호환 경로(어트리뷰션 벤더만 켜둔 예전 config): 문구를 임의로 만들지 않고 경고만.
+        log.warn('ATT 플러그인은 설치되지만 NSUserTrackingUsageDescription 이 없다 — ' +
+          'tracking.att.usageDescription 을 채워라. 없으면 ATT 호출 시 크래시한다.');
+      }
     }
   }
+  // 기본 Info.plist 에는 **기본 로케일 값**만 넣는다. 언어별 값은 <code>.lproj/InfoPlist.strings
+  // 가 덮어쓴다(patchIosLocalizations). 로케일 미선언 앱은 기본 로케일이 ko-KR 이라 지금과 동일.
+  const add = Object.fromEntries(
+    Object.entries(collectIosUsage(cfg)).map(([k, v]) => [k, v.base]));
   const entries = Object.entries(add).filter(([k]) => !xml.includes(`<key>${k}</key>`));
   if (!entries.length) return;
-  const block = entries.map(([k, v]) => `\t<key>${k}</key>\n\t<string>${v}</string>`).join('\n');
+  const block = entries.map(([k, v]) => `\t<key>${k}</key>\n\t<string>${escXml(v)}</string>`).join('\n');
   const close = xml.lastIndexOf('</dict>');
   if (close === -1) return;
   xml = xml.slice(0, close) + block + '\n' + xml.slice(close);
   writeFileSync(plistFile, xml);
   log.ok(`iOS Info.plist: 권한 사용 설명 ${entries.length}개 주입`);
+}
+
+// ── 다국어(로케일) 리소스 ───────────────────────────────────────────────────
+// 여기서 만드는 파일들은 **하네스 100% 소유 생성물**이라 재실행 때마다 통째로 덮어쓴다.
+// (Info.plist 본문의 "없으면 추가, 있으면 안 고침" 규칙과 다르다 — 로케일을 늘렸는데 반영이
+//  안 되면 곧바로 심사 사고이고, 사람이 손댈 이유가 없는 파일이라 덮어쓰기가 안전하다.)
+
+/** Info.plist(XML) 값 이스케이프. 번역 문구에 &, <, > 가 들어오면 plist 가 깨진다. */
+function escXml(v) {
+  return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+/** .strings 값 이스케이프 (백슬래시·따옴표·개행) */
+function escStrings(v) {
+  return String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+}
+/** Android string 리소스 이스케이프 (XML 엔티티 + 아포스트로피/따옴표) */
+function escAndroid(v) {
+  return String(v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+}
+/**
+ * strings.xml 의 app_name / title_activity_main 만 값으로 갱신한다(없으면 추가).
+ * 치환자를 **함수**로 넘긴다 — 문자열이면 앱 이름 속 `$1` `$&` 가 캡처 그룹으로 해석돼 깨진다.
+ */
+function setAndroidStrings(xml, value) {
+  let out = xml;
+  for (const key of ['app_name', 'title_activity_main']) {
+    const re = new RegExp(`(<string name="${key}">)[\\s\\S]*?(</string>)`);
+    if (re.test(out)) out = out.replace(re, (m, open, close) => `${open}${value}${close}`);
+    else out = out.replace('</resources>', `    <string name="${key}">${value}</string>\n</resources>`);
+  }
+  return out;
+}
+
+const GENERATED_NOTE = 'generate-app 생성물 — 직접 고치지 마라(재생성 시 덮어씀). 원본: apps/<slug>/app.config.json';
+
+/**
+ * 지원 목록에서 빠진 로케일 디렉터리를 지운다. **아는 로케일 이름만** 지운다 —
+ * values-night / values-v26 / Base.lproj 처럼 우리가 만들지 않은 디렉터리는 건드리지 않는다.
+ */
+function pruneStaleLocaleDirs(parent, supported, dirNameOf, fileName) {
+  const keep = new Set(supported.map(dirNameOf));
+  const removed = [];
+  const kept = [];
+  for (const loc of Object.keys(LOCALES)) {
+    const name = dirNameOf(loc);
+    if (keep.has(name)) continue;
+    const dir = join(parent, name);
+    const file = join(dir, fileName);
+    if (!existsSync(file)) continue;
+    // **우리가 쓴 파일만** 지운다 — 판정은 생성물 주석(GENERATED_NOTE). 사람이 만든 로케일
+    // 리소스를 지원 목록에서 뺐다고 지워버리면 복구가 안 된다.
+    if (!readFileSync(file, 'utf8').includes(GENERATED_NOTE)) { kept.push(name); continue; }
+    rmSync(file, { force: true });
+    // 디렉터리는 비었을 때만 지운다(같은 폴더의 다른 리소스 보존).
+    if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true });
+    else kept.push(name);
+    removed.push(name);
+  }
+  if (removed.length) log.warn(`지원 목록에서 빠진 로케일 리소스 제거: ${removed.join(', ')}`);
+  if (kept.length) {
+    // 안드로이드는 res/ 아래를 전부 자동 컴파일하고, iOS 도 사람이 pbxproj 에 걸어 뒀을 수 있다.
+    // 우리가 안 지운 게 남아 있다는 사실은 조용히 넘기면 안 된다 — 지원 목록과 실제 앱이 어긋난다.
+    log.warn(`지원 목록에 없지만 하네스 생성물이 아니라 남겨 둔 로케일 리소스: ${[...new Set(kept)].join(', ')} — ` +
+      '앱에는 계속 포함된다. 필요 없으면 직접 지워라.');
+  }
+}
+
+// 로케일 비활성(supported: []) 정리.
+// ⚠️ **하네스가 만든 흔적이 있을 때만 지운다.** locales 를 한 번도 안 쓴 앱(기존 5개 중 다수)에서
+// 무조건 돌면, 사람이 손으로 넣은 로케일 설정을 generate-app 한 번에 날려버린다.
+// 판정 근거: pbxproj 는 하네스 고정 ID, locales_config.xml 은 생성물 주석(GENERATED_NOTE).
+function disableIosLocalizations(buildDir, plistFile) {
+  const pbx = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+  if (!existsSync(pbx)) return;
+  const before = readFileSync(pbx, 'utf8');
+  if (!/FC0{18}C0[0-9A-F]{2} \/\* InfoPlist\.strings/.test(before)) return; // 하네스 배선 없음 → 남의 것
+  let txt = stripLprojRefs(before);
+  txt = rewriteKnownRegions(txt, { drop: Object.values(LOCALES).map((v) => v.ios), ensure: ['en'] });
+  if (txt !== before) { writeFileSync(pbx, txt); log.warn('iOS project.pbxproj: 로케일 배선 제거(locales 비활성)'); }
+  const plist = readFileSync(plistFile, 'utf8');
+  const after = plist.replace(/\t<key>CFBundleLocalizations<\/key>\s*\n\t<array>[\s\S]*?<\/array>\n/, '');
+  if (after !== plist) { writeFileSync(plistFile, after); log.warn('iOS Info.plist: CFBundleLocalizations 제거(locales 비활성)'); }
+}
+
+function disableAndroidLocalesConfig(buildDir, resDir) {
+  const cfgFile = join(resDir, 'xml', 'locales_config.xml');
+  if (!existsSync(cfgFile)) return;
+  if (!readFileSync(cfgFile, 'utf8').includes(GENERATED_NOTE)) return; // 사람이 만든 파일 → 안 건드린다
+  rmSync(cfgFile, { force: true });
+  log.warn('android locales_config.xml 제거(locales 비활성)');
+  const manifest = join(buildDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+  if (!existsSync(manifest)) return;
+  const before = readFileSync(manifest, 'utf8');
+  const after = before.replace(/\n\s*android:localeConfig="@xml\/locales_config"/, '');
+  if (after !== before) { writeFileSync(manifest, after); log.warn('AndroidManifest: android:localeConfig 제거(locales 비활성)'); }
+}
+
+/**
+ * iOS 다국어: <code>.lproj/InfoPlist.strings + Info.plist CFBundleLocalizations + pbxproj 등록.
+ * pbxproj 등록을 빼먹으면 .lproj 가 번들에 안 들어가 **조용히 무시된다**(빌드는 성공한다).
+ */
+function patchIosLocalizations(buildDir, cfg) {
+  const supported = cfg.locales?.supported ?? [];
+  const appDir = join(buildDir, 'ios', 'App', 'App');
+  const plistFile = join(appDir, 'Info.plist');
+  if (!existsSync(plistFile)) return;
+
+  // 0) 지원 목록에서 빠진 로케일 리소스 제거. Base.lproj 는 우리 것이 아니라 건드리지 않는다.
+  pruneStaleLocaleDirs(appDir, supported, (l) => `${LOCALES[l].ios}.lproj`, 'InfoPlist.strings');
+  // 로케일을 통째로 껐다면 pbxproj 참조와 CFBundleLocalizations 도 걷어낸다.
+  // **참조만 남으면 삭제된 파일을 가리켜 iOS 빌드가 실패한다** (켤 때보다 끌 때가 더 위험하다).
+  if (!supported.length) { disableIosLocalizations(buildDir, plistFile); return; }
+
+  const appName = cfg.localized?.appName ?? { base: cfg.appName, map: null };
+  const usage = collectIosUsage(cfg);
+
+  // 1) <code>.lproj/InfoPlist.strings
+  for (const loc of supported) {
+    const code = LOCALES[loc].ios;
+    const dir = join(appDir, `${code}.lproj`);
+    mkdirSync(dir, { recursive: true });
+    const kv = {
+      CFBundleDisplayName: resolveLocalized(appName, loc),
+      CFBundleName: resolveLocalized(appName, loc),
+      ...Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, resolveLocalized(v, loc)])),
+    };
+    const body = Object.entries(kv)
+      .map(([k, v]) => `"${k}" = "${escStrings(v)}";`).join('\n');
+    writeFileSync(join(dir, 'InfoPlist.strings'), `/* ${GENERATED_NOTE} */\n${body}\n`, 'utf8');
+  }
+
+  // 2) Info.plist CFBundleLocalizations — 매번 갱신(로케일을 늘리면 즉시 반영돼야 한다)
+  let xml = readFileSync(plistFile, 'utf8');
+  const arr = supported.map((l) => `\t\t<string>${LOCALES[l].ios}</string>`).join('\n');
+  const block = `\t<key>CFBundleLocalizations</key>\n\t<array>\n${arr}\n\t</array>\n`;
+  const re = /\t<key>CFBundleLocalizations<\/key>\s*\n\t<array>[\s\S]*?<\/array>\n/;
+  if (re.test(xml)) {
+    xml = xml.replace(re, block);
+  } else {
+    const close = xml.lastIndexOf('</dict>');
+    if (close === -1) return;
+    xml = xml.slice(0, close) + block + xml.slice(close);
+  }
+  writeFileSync(plistFile, xml);
+  log.ok(`iOS Info.plist: CFBundleLocalizations ${supported.length}종 (${supported.map((l) => LOCALES[l].ios).join(', ')})`);
+
+  patchIosLprojPbxproj(buildDir, supported);
+}
+
+/** .lproj/InfoPlist.strings 를 App 타깃 리소스로 등록 (PBXVariantGroup + knownRegions) */
+function patchIosLprojPbxproj(buildDir, supported) {
+  const pbx = join(buildDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+  if (!existsSync(pbx)) return;
+  let txt = readFileSync(pbx, 'utf8');
+  // **스킵이 아니라 지우고 다시 넣는다.** 예전엔 이미 있으면 건너뛰었는데, 그러면 로케일을
+  // 추가/삭제해도 기존 build 의 pbxproj 가 옛 목록에 머문다 — 빌드는 통과하는데 새 언어만
+  // 번들에 없는(또는 지운 언어가 남는) 상태가 된다. 하네스 소유 항목이라 매번 재구성한다.
+  txt = stripLprojRefs(txt);
+  // 고정 24-hex ID (재실행 안전). GoogleService-Info.plist 등록과 같은 방식.
+  const id = (sfx) => 'FC' + '0'.repeat(22 - sfx.length) + sfx;
+  const VG = id('C0FF');        // PBXVariantGroup
+  const BF = id('C0FE');        // PBXBuildFile
+  const refs = supported.map((l, i) => ({ code: LOCALES[l].ios, ref: id('C0' + String(i + 1).padStart(2, '0')) }));
+
+  let ok = true;
+  const need = (cond) => { if (!cond) ok = false; };
+
+  need(txt.includes('/* Begin PBXBuildFile section */'));
+  txt = txt.replace('/* Begin PBXBuildFile section */\n',
+    `/* Begin PBXBuildFile section */\n\t\t${BF} /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = ${VG} /* InfoPlist.strings */; };\n`);
+
+  need(txt.includes('/* Begin PBXFileReference section */'));
+  const fileRefs = refs.map(({ code, ref }) =>
+    `\t\t${ref} /* ${code} */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "${code}"; path = "${code}.lproj/InfoPlist.strings"; sourceTree = "<group>"; };`).join('\n');
+  txt = txt.replace('/* Begin PBXFileReference section */\n',
+    `/* Begin PBXFileReference section */\n${fileRefs}\n`);
+
+  // PBXVariantGroup — 없으면 섹션째 만든다(Capacitor 템플릿엔 storyboard 용으로 이미 있다).
+  const group = `\t\t${VG} /* InfoPlist.strings */ = {\n\t\t\tisa = PBXVariantGroup;\n\t\t\tchildren = (\n` +
+    refs.map(({ code, ref }) => `\t\t\t\t${ref} /* ${code} */,`).join('\n') +
+    `\n\t\t\t);\n\t\t\tname = InfoPlist.strings;\n\t\t\tsourceTree = "<group>";\n\t\t};\n`;
+  if (txt.includes('/* Begin PBXVariantGroup section */')) {
+    txt = txt.replace('/* Begin PBXVariantGroup section */\n', `/* Begin PBXVariantGroup section */\n${group}`);
+  } else {
+    need(txt.includes('/* End PBXResourcesBuildPhase section */'));
+    txt = txt.replace('/* End PBXResourcesBuildPhase section */\n',
+      `/* End PBXResourcesBuildPhase section */\n\n/* Begin PBXVariantGroup section */\n${group}/* End PBXVariantGroup section */\n`);
+  }
+
+  // **App 타깃**의 Resources 빌드 페이즈에 추가한다.
+  // ⚠️ "파일에서 첫 PBXResourcesBuildPhase" 로 잡으면 안 된다 — 알림 확장(NotificationService)이
+  // 있는 앱은 확장 패치가 자기 섹션을 앞에 끼워 넣어, .lproj 가 App.app 이 아니라 .appex 로 들어간다.
+  // 빌드는 성공하는데 앱 번들엔 번역이 없는 상태가 된다(실기기 빌드에서 실제로 발생).
+  const at = appResourcesFilesAnchor(txt);
+  need(at !== -1);
+  if (at !== -1) {
+    txt = txt.slice(0, at) + `\n\t\t\t\t${BF} /* InfoPlist.strings in Resources */,` + txt.slice(at);
+  }
+
+  // knownRegions — supported 기준으로 **재구성**한다(추가만 하면 지운 로케일이 남는다).
+  txt = rewriteKnownRegions(txt, {
+    drop: Object.values(LOCALES).map((v) => v.ios),
+    add: refs.map((r) => r.code),
+    ensure: ['en'],
+  });
+
+  // App 그룹(children)에도 넣어 Xcode 에서 보이게 한다(빌드엔 영향 없음).
+  const grpRe = /(\/\* App \*\/ = \{\n\t+isa = PBXGroup;\n\t+children = \()/;
+  if (grpRe.test(txt)) txt = txt.replace(grpRe, `$1\n\t\t\t\t${VG} /* InfoPlist.strings */,`);
+
+  // 치환이 실제로 반영됐는지 확인한다. 앵커 문자열은 맞았는데 삽입이 빠지는 경우
+  // (개행/포맷 차이)를 잡지 못하면 또 "빌드는 되는데 번역이 없는" 상태가 된다.
+  need(txt.includes(`${BF} /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile;`));
+  need(txt.includes(`${VG} /* InfoPlist.strings */ = {`));
+  need((txt.match(/InfoPlist\.strings in Resources \*\/,/g) || []).length === 1);
+  need(refs.every(({ code }) => txt.includes(`path = "${code}.lproj/InfoPlist.strings"`)));
+  need(refs.every(({ code }) => new RegExp(`knownRegions = \\([\\s\\S]*?"${code.replace('-', '\\-')}"[\\s\\S]*?\\);`).test(txt)));
+  if (!ok) {
+    // 경고로 넘기면 **빌드는 성공하는데 번역만 없는** 앱이 나간다 — 사용자 기기에서야 발견된다.
+    // 로케일을 선언한 이상 배선 실패는 빌드를 세우는 게 맞다(ATT 문구 누락과 같은 취급).
+    fail('iOS project.pbxproj 에 InfoPlist.strings 를 등록하지 못했습니다(앵커 불일치) — ' +
+      '이대로 두면 .lproj 가 앱 번들에 들어가지 않아 번역이 전부 사라집니다. ' +
+      'build/<slug> 를 지우고 다시 생성하거나, Xcode 프로젝트 형식 변경 여부를 확인하세요.');
+  }
+  writeFileSync(pbx, txt);
+  log.ok(`iOS project.pbxproj: InfoPlist.strings ${refs.length}종 등록(PBXVariantGroup + knownRegions)`);
+}
+
+/**
+ * Android 다국어: values[-<locale>]/strings.xml + locales_config.xml(안드13+ 언어별 앱 설정).
+ * 리소스 수식어 표기는 lib/i18n.mjs 가 정본 — values-id / values-zh 같은 표기는 조용히 무시된다.
+ */
+function patchAndroidLocalizations(buildDir, cfg) {
+  const resDir = join(buildDir, 'android', 'app', 'src', 'main', 'res');
+  if (!existsSync(resDir)) return;
+  const appName = cfg.localized?.appName ?? { base: cfg.appName, map: null };
+
+  // 1) 기본 values/strings.xml 의 app_name/title_activity_main 을 config 값으로 맞춘다.
+  //    (지금까지는 cap add 시점 값에서 영영 갱신되지 않아, appName 을 바꿔도 반영되지 않았다.)
+  const baseFile = join(resDir, 'values', 'strings.xml');
+  if (existsSync(baseFile)) {
+    let xml = readFileSync(baseFile, 'utf8');
+    const before = xml;
+    xml = setAndroidStrings(xml, escAndroid(appName.base));
+    if (xml !== before) {
+      writeFileSync(baseFile, xml);
+      log.ok(`android values/strings.xml: app_name="${appName.base}"`);
+    }
+  }
+
+  const supported = cfg.locales?.supported ?? [];
+  // 지원 목록에서 빠진 values-* 제거. **안드로이드는 res/ 아래 디렉터리를 전부 자동 컴파일한다** —
+  // 참조를 지우는 개념이 없어서, 남겨두면 지운 언어의 번역이 그대로 앱에 실려 나간다(iOS 보다 위험).
+  // supported 가 비어도(로케일 선언을 통째로 뺀 경우) 수행해야 하므로 early return 앞에 둔다.
+  pruneStaleLocaleDirs(resDir, supported, (l) => LOCALES[l].androidRes, 'strings.xml');
+  if (!supported.length) { disableAndroidLocalesConfig(buildDir, resDir); return; }
+
+  // 2) 로케일별 values-*/strings.xml (기본 폴백 values/ 는 위에서 default 값으로 채웠다)
+  const written = [];
+  for (const loc of supported) {
+    const { androidRes } = LOCALES[loc];
+    const dir = join(resDir, androidRes);
+    mkdirSync(dir, { recursive: true });
+    const v = escAndroid(resolveLocalized(appName, loc));
+    const file = join(dir, 'strings.xml');
+    // 우리가 만든 파일이면 통째로 재작성한다. 아니면(사람이 만든 로케일 리소스) **두 키만 갱신**한다 —
+    // 덮어쓰면 그 로케일의 다른 번역이 통째로 사라진다.
+    if (existsSync(file) && !readFileSync(file, 'utf8').includes(GENERATED_NOTE)) {
+      writeFileSync(file, setAndroidStrings(readFileSync(file, 'utf8'), v));
+    } else {
+      writeFileSync(file,
+        '<?xml version="1.0" encoding="utf-8"?>\n' +
+        `<!-- ${GENERATED_NOTE} -->\n<resources>\n` +
+        `    <string name="app_name">${v}</string>\n` +
+        `    <string name="title_activity_main">${v}</string>\n` +
+        '</resources>\n', 'utf8');
+    }
+    written.push(androidRes);
+  }
+  log.ok(`android 로케일 리소스: ${written.join(', ')}`);
+
+  // 3) locales_config.xml + AndroidManifest android:localeConfig
+  //    (안드13+ 시스템 설정의 "앱 언어" 목록. iOS CFBundleLocalizations 의 대응물.)
+  const xmlDir = join(resDir, 'xml');
+  mkdirSync(xmlDir, { recursive: true });
+  writeFileSync(join(xmlDir, 'locales_config.xml'),
+    '<?xml version="1.0" encoding="utf-8"?>\n' +
+    `<!-- ${GENERATED_NOTE} -->\n` +
+    '<locale-config xmlns:android="http://schemas.android.com/apk/res/android">\n' +
+    supported.map((l) => `    <locale android:name="${LOCALES[l].androidTag}"/>`).join('\n') +
+    '\n</locale-config>\n', 'utf8');
+
+  const manifest = join(buildDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+  if (existsSync(manifest)) {
+    let mx = readFileSync(manifest, 'utf8');
+    if (!mx.includes('android:localeConfig')) {
+      mx = mx.replace(/<application\b/, '<application\n        android:localeConfig="@xml/locales_config"');
+      writeFileSync(manifest, mx);
+    }
+    log.ok(`android locales_config.xml ${supported.length}종 + manifest localeConfig`);
+  }
 }
 
 // 로컬 dev 모드(--local) 전용: 평문 http 로컬 서버 로드를 위해 ATS 예외를 주입한다.
@@ -1557,6 +1961,13 @@ function main() {
   }
   log.step('iOS 권한 사용 설명(Info.plist) 점검');
   patchIosUsageStrings(buildDir, cfg);
+  // 7b-3) 다국어 리소스. 앱 이름/권한 문구는 웹이 뜨기 전에 OS 가 직접 보여주므로 네이티브가 갖는다.
+  //       locales.supported 가 비면(=미선언 앱) 아무것도 만들지 않는다.
+  if (cfg.locales?.supported?.length) {
+    log.step(`다국어 리소스 (${cfg.locales.supported.join(', ')} — 기본 ${cfg.locales.default})`);
+  }
+  patchIosLocalizations(buildDir, cfg);
+  patchAndroidLocalizations(buildDir, cfg);
   if (args.local) patchIosLocalAts(buildDir); // 로컬 dev 평문 http 허용(ATS 예외)
 
   // 7c) 인증 네이티브 배선 (OAuth 복귀 URL scheme + Apple Sign In)

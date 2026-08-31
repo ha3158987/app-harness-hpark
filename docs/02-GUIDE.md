@@ -4,7 +4,7 @@ title: GUIDE — Appharness 마스터 가이드
 category: 시작
 audience: 전체
 status: active
-updated: 2026-08-27
+updated: 2026-08-31
 ---
 
 # GUIDE — Appharness 마스터 가이드
@@ -214,6 +214,8 @@ flowchart TB
 ```jsonc
 {
   "slug": "aipia", "appName": "AIPIA", "appId": "kr.co.aipia.app",
+  // appName 은 로케일 맵도 된다: { "en": "Popchat", "ko-KR": "캐릭터챗" }  ↓ 다국어 문자열
+  "locales": { "default": "en", "supported": ["en","ko-KR","ja-JP","zh-Hant","th-TH","id-ID","es-419","pt-BR"] },
   "startUrl": "https://aipia.co.kr",
   "version": { "name": "1.0.0", "code": 1 },
   "theme": { "primary": "#1A73E8", "statusBarStyle": "light", "background": "#FFFFFF" },
@@ -269,6 +271,60 @@ flowchart TB
   실제 google-services.json / GoogleService-Info.plist 는 secrets 에서 빌드 시 배치.
 - `theme.statusBarStyle`: `light`(밝은 배경/어두운 텍스트) | `dark`. `version.code` 는 단조 증가 정수.
 
+**다국어 문자열 (`locales` + 로케일 맵)**
+
+앱 이름 · iOS 권한 사용 설명 · ATT 문구는 **웹이 로드되기 전에 OS 가 직접** 보여준다. 웹(next-intl)의
+i18n 이 닿지 않는 자리라 config 가 언어별 값을 갖고, `generate-app` 이 네이티브 리소스로 굽는다.
+
+```jsonc
+"locales": { "default": "en", "supported": ["en","ko-KR","ja-JP","zh-Hant","th-TH","id-ID","es-419","pt-BR"] },
+"appName": { "en": "Popchat", "ko-KR": "캐릭터챗" },
+"tracking": { "att": { "usageDescription": { "en": "…", "ko-KR": "…" } } },
+"ios": { "usageDescriptions": { "NSCameraUsageDescription": { "en": "…" } } }   // 선택 — 하네스 기본 문구 덮어쓰기
+```
+
+- **`locales` 를 안 쓰면 지금까지와 100% 동일하게 동작한다.** 문자열 값(`"appName": "팝테일"`)도 계속
+  유효하다 — 모든 언어 공통값으로 쓴다. (기존 앱은 아무것도 안 고쳐도 된다.)
+- 코드는 **BCP-47**. 나라코드(`jp`·`cn`)는 금지 — 웹(character-chatbot-web)의 8종과 같은 표기를 쓴다.
+- **폴백**: `해당 로케일 → locales.default → 문자열값`. 객체 형태인데 `default` 키가 없으면 **빌드 실패**
+  (폴백 없이 출시되는 걸 막는다). `locales` 를 선언하지 않고 로케일 맵을 쓰는 것도 실패한다 —
+  선언 없이는 어디에도 안 쓰이므로 조용히 무시될 자리다.
+- iOS 권한 문구 5종(카메라/사진/사진저장/위치/FaceID)의 8언어 번역은 **하네스가 갖고 있다**
+  (`scripts/lib/i18n.mjs`). 앱은 필요할 때 `ios.usageDescriptions` 로 plist 키 단위로만 덮어쓴다.
+  ATT 문구는 하네스가 기본값을 주지 않는다 — 앱마다 실제 용도가 달라 config 강제다(위 필드 메모).
+- 문구는 **기능이 켜진 앱에만** 들어간다(`features.camera` 가 꺼져 있으면 카메라 문구 없음).
+
+**로케일 코드 표기 — 플랫폼마다 다르다** (`scripts/lib/i18n.mjs` 가 정본. 그대로 쓰면 조용히 무시된다)
+
+| config | iOS `.lproj` | Android res | App Store | Play |
+|---|---|---|---|---|
+| `en` | `en` | `values-en` | `en-US` | `en-US` |
+| `ko-KR` | `ko` | `values-ko` | `ko` | `ko-KR` |
+| `ja-JP` | `ja` | `values-ja` | `ja` | `ja-JP` |
+| `zh-Hant` | `zh-Hant` | `values-zh-rTW` | `zh-Hant` | `zh-TW` |
+| `th-TH` | `th` | `values-th` | `th` | `th` |
+| `id-ID` | `id` | **`values-in`** (자바 구 ISO 코드) | `id` | `id` |
+| `es-419` | `es-419` | **`values-b+es+419`** | **`es-MX`** (App Store 는 es-419 를 모른다) | `es-419` |
+| `pt-BR` | `pt-BR` | `values-pt-rBR` | `pt-BR` | `pt-BR` |
+
+**무엇이 생성되나**
+
+| 플랫폼 | 파일 |
+|---|---|
+| iOS | `App/<code>.lproj/InfoPlist.strings` · `Info.plist` 의 `CFBundleLocalizations` · `project.pbxproj` 등록(PBXVariantGroup + knownRegions) |
+| Android | `res/values-*/strings.xml` · `res/xml/locales_config.xml` + manifest `android:localeConfig`(안드13+ 언어별 앱 설정) |
+
+`res/values/`(수식어 없음)에는 **`locales.default` 값**이 들어간다 — 폴백 자리라 로케일 디렉터리가
+아니다. 그래서 영어도 자기 디렉터리(`values-en`)를 따로 갖는다.
+
+`locales.supported` 에서 로케일을 빼면 해당 `.lproj` / `values-*` 디렉터리와 pbxproj 등록을
+**지운다.** 특히 안드로이드는 `res/` 아래 디렉터리를 전부 자동 컴파일하므로, 남겨두면 지운 언어의
+번역이 그대로 출시된다.
+
+> ⚠️ pbxproj 등록이 빠지면 `.lproj` 가 번들에 안 들어가 **빌드는 성공하는데 번역만 사라진다.**
+> 하네스가 매 생성마다 등록을 재구성하지만, Xcode 에서 프로젝트를 손으로 고친 뒤에는 확인할 것.
+> (실제로 알림 확장이 있는 앱에서 `.lproj` 가 `App.app` 이 아니라 `.appex` 로 들어간 적이 있다.)
+
 **config 를 바꾼 뒤 재생성하면 어디까지 반영되나**
 
 `generate-app` 은 재실행 안전(idempotent)이지만, **네이티브 패치는 "없으면 추가" 방식**이라 이미
@@ -279,6 +335,7 @@ flowchart TB
 | `www`, `app-config.json`, `capacitor.config.json`, 버전 코드 | ✅ 매번 덮어씀 |
 | `package.json` 플러그인 목록 | ✅ **빠진 것 추가**(삭제는 안 함) |
 | `Info.plist` 문구, associated-domains, Android intent-filter | ⚠️ 없으면 추가, **있으면 안 고침** |
+| `.lproj/InfoPlist.strings`, `values-*/strings.xml`, `locales_config.xml`, `CFBundleLocalizations`, `values/strings.xml` 의 `app_name` | ✅ 매번 덮어씀 (하네스 소유 생성물) |
 
 즉 `tracking.att.usageDescription` 같은 **문구를 바꾸면 기존 build 에는 반영되지 않는다.**
 확실히 하려면 `rm -rf build/<slug>` 후 재생성한다.
@@ -358,7 +415,7 @@ RC(source: 'remoteConfig')  →  URL(minVersionUrl)  →  통과
 | 항목 | 값 |
 |---|---|
 | Capacitor | 8 |
-| Node | 20 LTS+ |
+| Node | **24** (`.nvmrc` — 개발·CI 기준, 웹 레포와 정렬). **최소 22** — Capacitor CLI 8 이 20 을 거부한다 |
 | JDK (Android) | **21 필수** |
 | Android SDK | platform 35, build-tools 35 (targetSdk 35, 2026-08 이후 36) |
 | iOS | **macOS + Xcode 26** (또는 CI macOS 러너 — 맥 없이) |

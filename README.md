@@ -135,7 +135,7 @@ Appharness/
 | 항목 | 값 |
 |---|---|
 | Capacitor | 8 |
-| Node | **22 이상 필수** (`.nvmrc` = 22). Capacitor CLI 8 이 20 을 거부한다 — `nvm use 22` |
+| Node | **24** (`.nvmrc` — 웹 레포와 같은 버전). 최소 22 — Capacitor CLI 8 이 20 을 거부한다 — `nvm use` |
 | pnpm (웹 측) | 10.5.2 (AIPIA 웹 표준) |
 | JDK (Android) | **21 필수** |
 | Android SDK | platform 35, build-tools 35 (target 36 — AIPIA 표준 🅰️) |

@@ -111,7 +111,7 @@ bundle exec fastlane android beta slug:<slug>   # 또는 ios beta
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
-| CI 가 generate-app/cap sync 에서 깨짐 | Node 20 (Capacitor 8 은 22 필요) | release.yml `node-version: '22'` (적용됨) |
+| CI 가 generate-app/cap sync 에서 깨짐 | Node 20 (Capacitor 8 은 22 필요) | 워크플로가 `.nvmrc`(=24)를 읽는다 — `node-version-file` (적용됨) |
 | `validateSigningRelease FAILED — release.keystore not found` | keystore 경로를 app 모듈 기준으로 찾음 | generate-app 이 `rootProject.file()` 로 해석 (적용됨) |
 | Play 가 업로드 거부 (versionCode) | versionCode 가 이전과 같거나 작음 | `app.config.json` 의 `version.code` 를 +1 |
 | 업로드는 됐는데 테스터가 못 봄 | 초안(draft) 상태 | Play Console 에서 "검토 후 출시" |

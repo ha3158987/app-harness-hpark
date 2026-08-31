@@ -5,7 +5,7 @@
   "type": "module",
   "description": "여러 웹 서비스를 하나의 얇은 Capacitor 셸 + 공유 브릿지로 감싸 iOS/Android 앱으로 반복 추출하는 하네스.",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "generate": "node scripts/generate-app.mjs",

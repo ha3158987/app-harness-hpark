@@ -189,12 +189,12 @@ MMP 를 안 쓰면 이 절 전체를 건너뛴다. 상세 절차는 **[24-MMP-CO
 ### H-1. 로컬에서 프로젝트 생성
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.22.3/bin:$PATH"   # Node 22 필수
+nvm use                                                     # .nvmrc = 24 (최소 22)
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8                  # CocoaPods 필수
 node scripts/generate-app.mjs --slug <slug> --platform ios
 ```
 
-- [ ] **Node 22 이상** — v20 이면 Capacitor CLI 가 거부한다
+- [ ] **Node 24 권장 / 22 이상 필수** — v20 이면 Capacitor CLI 가 거부한다
 - [ ] **`LANG` 을 UTF-8 로** — 비어 있으면 CocoaPods 가
       `Unicode Normalization not appropriate for ASCII-8BIT` 로 죽는다
 

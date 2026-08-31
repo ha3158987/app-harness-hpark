@@ -3,6 +3,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { normalizeLocales, normalizeLocalized, IOS_USAGE_KEYS } from './i18n.mjs';
 
 const APP_ID_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/; // 역도메인, 각 세그먼트는 글자로 시작
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -200,9 +201,12 @@ export function loadConfig(repoRoot, slug) {
     err(slug, `JSON 파싱 실패 — ${e.message}`);
   }
 
-  // 필수 필드
-  for (const f of ['slug', 'appName', 'appId', 'startUrl']) {
+  // 필수 필드 (appName 은 다국어를 받으므로 아래 locales 정규화에서 따로 검증한다)
+  for (const f of ['slug', 'appId', 'startUrl']) {
     if (!raw[f] || typeof raw[f] !== 'string') err(slug, `"${f}" 누락 또는 문자열 아님`);
+  }
+  if (!raw.appName || (typeof raw.appName !== 'string' && typeof raw.appName !== 'object')) {
+    err(slug, '"appName" 누락 — 문자열 또는 로케일 맵({ "en": "…" }) 이어야 함');
   }
   if (raw.slug !== slug) err(slug, `config.slug("${raw.slug}") 가 디렉터리명("${slug}") 과 불일치`);
   if (!APP_ID_RE.test(raw.appId)) {
@@ -221,6 +225,14 @@ export function loadConfig(repoRoot, slug) {
     err(slug, `version.code 는 1 이상 정수여야 함 (스토어는 단조 증가 요구)`);
   }
   if (typeof version.name !== 'string') err(slug, `version.name 문자열 필요`);
+
+  // 다국어(로케일). 네이티브 껍데기 문자열(앱 이름·iOS 권한 문구·ATT 문구)은 웹이 로드되기 전에
+  // OS 가 직접 보여주므로 웹의 i18n 이 닿지 않는다 — config 가 언어별 값을 갖는다.
+  // locales 를 선언하지 않은 앱은 supported: [] → 생성기가 로케일 산출물을 아예 만들지 않는다
+  // (기존 앱의 산출물이 이번 변경으로 달라지지 않는다). 상세: docs/02-GUIDE.md §6
+  const locales = normalizeLocales(raw.locales, (m) => err(slug, m));
+  const loc = (path, value) => normalizeLocalized(path, value, locales, (m) => err(slug, m));
+  const appName = loc('appName', raw.appName);
 
   // theme / features 정규화 (기본값 병합)
   const theme = merge(DEFAULT_THEME, raw.theme ?? {});
@@ -326,7 +338,15 @@ export function loadConfig(repoRoot, slug) {
 
   // tracking 정규화 + 검증. ATT 는 켜는 순간 Info.plist 문구가 스토어에 노출되므로
   // 문구 누락은 경고가 아니라 실패로 막는다(경고는 무시된다).
-  const tracking = merge(DEFAULT_TRACKING, raw.tracking ?? {});
+  //   ⚠️ usageDescription 이 로케일 맵일 수 있다. merge 는 null 기본값과 객체를 병합하지 못하고,
+  //   무엇보다 cfg.tracking 은 runtimeConfig 로 웹에 그대로 나가므로 **문자열로 접어서** 넘긴다.
+  //   언어별 원본은 cfg.localized.attUsageDescription 으로만 흐른다(네이티브 리소스 생성용).
+  const rawTracking = JSON.parse(JSON.stringify(raw.tracking ?? {}));
+  const attDesc = rawTracking.att?.usageDescription != null
+    ? loc('tracking.att.usageDescription', rawTracking.att.usageDescription)
+    : null;
+  if (attDesc) rawTracking.att.usageDescription = attDesc.base;
+  const tracking = merge(DEFAULT_TRACKING, rawTracking);
   if (tracking.att.enabled) {
     const desc = tracking.att.usageDescription;
     if (typeof desc !== 'string' || desc.trim() === '') {
@@ -342,6 +362,22 @@ export function loadConfig(repoRoot, slug) {
   // 지문은 Play Console 등록 후에야 나오므로 빌드를 세우면 순서가 꼬인다.
   // 대신 generate-app 이 파일을 만들지 못했다고 크게 경고한다.
   const ios = merge(DEFAULT_IOS, raw.ios ?? {});
+  // ios.usageDescriptions: 하네스 기본 권한 문구를 plist 키 단위로 덮어쓰는 선택 블록.
+  // 네이티브 생성 전용이라 cfg.ios(→ runtimeConfig 로 웹 노출)에는 남기지 않는다.
+  const iosUsage = {};
+  if (ios.usageDescriptions != null) {
+    if (typeof ios.usageDescriptions !== 'object' || Array.isArray(ios.usageDescriptions)) {
+      err(slug, 'ios.usageDescriptions 는 객체여야 함 — { "NSCameraUsageDescription": "…" }');
+    }
+    for (const [k, v] of Object.entries(ios.usageDescriptions)) {
+      if (!IOS_USAGE_KEYS.includes(k)) {
+        err(slug, `ios.usageDescriptions 의 "${k}" 는 지원하지 않는 키 — 오타면 조용히 무시된다. ` +
+          `가능: ${IOS_USAGE_KEYS.join(' | ')}`);
+      }
+      iosUsage[k] = loc(`ios.usageDescriptions.${k}`, v);
+    }
+    delete ios.usageDescriptions;
+  }
   const android = merge(DEFAULT_ANDROID, raw.android ?? {});
   if (ios.appStoreId != null && !/^\d+$/.test(String(ios.appStoreId))) {
     err(slug, `ios.appStoreId "${ios.appStoreId}" 형식 오류 — 숫자만 (예: "6480000000")`);
@@ -364,9 +400,17 @@ export function loadConfig(repoRoot, slug) {
   const permissions = merge(DEFAULT_PERMISSIONS, raw.permissions ?? {});
 
   return {
-    slug, appName: raw.appName, appId: raw.appId, startUrl: raw.startUrl,
+    slug, appName: appName.base, appId: raw.appId, startUrl: raw.startUrl,
     version, theme, features, navigation, assets, marketing, auth, iap, monitoring,
     firebase, tracking, ios, android, legal, permissions,
+    // 로케일 선언 + 언어별 원본. 기존 필드는 전부 문자열(기본 로케일 값)로 유지되므로
+    // runtimeConfig·브릿지·capacitor.config 는 이 블록을 몰라도 그대로 동작한다.
+    locales,
+    localized: {
+      appName: appName.map ? appName : null,
+      attUsageDescription: attDesc?.map ? attDesc : null,
+      iosUsage,
+    },
     _appDir: appDir,
   };
 }
