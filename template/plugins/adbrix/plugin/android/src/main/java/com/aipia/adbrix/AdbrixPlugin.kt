@@ -60,7 +60,7 @@ class AdbrixPlugin : Plugin() {
                         put("result", deepLink.result?.toString())
                     }
                     // 리스너가 아직 안 붙었으면 버퍼링한다. 설치 첫 실행에서 SDK 콜백이
-                    // 웹 로딩보다 먼저 오는 경우가 실제로 있다(POPTALE-GLOBAL G10 / SCRUM1-697).
+                    // 웹 로딩보다 먼저 오는 경우가 실제로 있다(팝테일 글로벌 가이드 G10 / SCRUM1-697).
                     if (listenerAttached) notifyListeners("deferredDeepLink", payload)
                     else pendingDeferred = payload
                 }
