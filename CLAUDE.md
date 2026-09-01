@@ -50,13 +50,14 @@
 | config 스키마 확인 | 02 §6 | 02 §6 이 스키마 정본 |
 | 기능 지원 여부 / 기기 지원 확인 | 18 · 19 | 조회용 |
 | Poptale 이전 | 01 → 21 |  |
+| Poptale 글로벌 앱 신규 구축 | 26 → 01 → 04 → 25 | 26 이 이 프로젝트의 정본. 국내 이전(21)과 별건이다 |
 | 아이콘 · 스플래시 | — | `generate-assets` 스킬 사용 |
 
 ---
 
-## 2. 전체 문서 23개
+## 2. 전체 문서 26개
 
-전부 [`docs/`](docs/) 에 있다. 번호는 01 부터 연속이며 **마지막 번호 = 전체 개수(22)**.
+전부 [`docs/`](docs/) 에 있다. 번호는 01 부터 연속이며 **마지막 번호 = 전체 개수(26)**.
 
 | # | 문서 | 카테고리 | 대상 독자 | 상태 | 최종 수정 | 내용 |
 |---|---|---|---|---|---|---|
@@ -84,6 +85,8 @@
 | 22 | [NATIVE_FEATURES_PLAN](docs/22-NATIVE_FEATURES_PLAN.md) | 마이그레이션 | 개발자 | reference | 2026-08-19 | characterchat 네이티브 기능 조사 스냅샷 |
 | 23 | [FORCE-UPDATE](docs/23-FORCE-UPDATE.md) | 기능연동 | 개발자 | active | 2026-08-21 | 강제 업데이트 — Remote Config 콘솔 셋업 |
 | 24 | [MMP-CONSOLE-SETUP](docs/24-MMP-CONSOLE-SETUP.md) | 기능연동 | 개발자 | active | 2026-08-21 | 어트리뷰션 콘솔·스토어 신고 절차 |
+| 25 | [AUTH-DELEGATION](docs/25-AUTH-DELEGATION.md) | 기능연동 | 개발자 | active | 2026-08-27 | **인증 정본** — 외부 인증서버 위탁 규약 |
+| 26 | [POPTALE-GLOBAL](docs/26-POPTALE-GLOBAL.md) | 앱추가 | 개발자 | active | 2026-09-01 | 팝테일 글로벌 앱 구현 참고 — 작업 목록·함정 |
 
 **상태** — `active`: 현행 문서, 순서대로 읽는다 · `reference`: 수시 조회용, 처음부터 읽을 필요 없다
 
@@ -106,8 +109,6 @@
 
 | 위치 | 내용 |
 |---|---|
-| [docs/25-AUTH-DELEGATION.md](docs/25-AUTH-DELEGATION.md) | **인증 — 외부 인증서버 위탁(기본)** |
-| [idp/README.md](idp/README.md) | 중앙 IdP(Keycloak) 구동 — 레거시 |
 | [backend/auth-reference/README.md](backend/auth-reference/README.md) | 백엔드 레퍼런스 구현 (인메모리 · 학습용) |
 | [secrets/README.md](secrets/README.md) | 로컬 키 파일 배치 규칙 |
 | [template/plugins/README.md](template/plugins/README.md) | 네이티브 플러그인 작업 개요 |
@@ -118,7 +119,7 @@
 
 ## 5. 문서 관리 규칙
 
-1. 문서는 `docs/` 에만 둔다. 번호는 **01 부터 빈칸 없이 연속** — 마지막 번호 = 전체 개수(현재 **23**).
+1. 문서는 `docs/` 에만 둔다. 번호는 **01 부터 빈칸 없이 연속** — 마지막 번호 = 전체 개수(현재 **26**).
 2. 새 문서는 해당 카테고리 블록의 **끝 번호**를 받는다. 뒤 문서를 밀지 않는다 (링크가 깨진다). 전면 재정렬은 별도 작업으로 한 번에 한다.
 3. 모든 문서는 frontmatter 6개 키를 갖는다. 새 문서도 반드시 붙인다.
 4. **색인은 이 파일 하나다.** 다른 문서에 문서 목록 표를 새로 만들지 않는다 — 반드시 낡는다. (README 와 `02-GUIDE §8` 에 있던 중복 색인을 이 파일로 합쳤다.)

@@ -1,11 +1,20 @@
+---
+doc: 26
+title: POPTALE-GLOBAL — Poptale 글로벌 앱 구현 참고
+category: 앱추가
+audience: 개발자
+status: active
+updated: 2026-09-01
+---
+
 # POPTALE-GLOBAL — Poptale 글로벌 앱 구현 참고 문서
 
 > 이 문서는 **구현 시 참고용**이다. 계획·일정·판정은 `poptale-app/.claude/docs/global-launch-plan.md`
 > (및 그 아티팩트)에 있고, 여기에는 **"어떻게 만드는가"**만 둔다.
 >
-> 📌 **선행 필독**: [`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md) → [`GUIDE.md`](GUIDE.md) → [`ONBOARDING.md`](ONBOARDING.md)
+> 📌 **선행 필독**: [`01-AIPIA-CONVENTIONS.md`](./01-AIPIA-CONVENTIONS.md) → [`02-GUIDE.md`](./02-GUIDE.md) → [`ONBOARDING.md`](../ONBOARDING.md)
 >
-> ⚠️ [`POPTALE-MIGRATION.md`](POPTALE-MIGRATION.md)와 **다른 건**이다. 그 문서는 국내 Flutter 앱을
+> ⚠️ [`21-POPTALE-MIGRATION.md`](./21-POPTALE-MIGRATION.md)와 **다른 건**이다. 그 문서는 국내 Flutter 앱을
 > 같은 번들 ID(`com.aipia.poptale`)로 교체하는 마이그레이션이고, 이 문서는 **비즈니스 정책상 분리
 > 출시하는 별도 글로벌 앱**이다. 두 문서의 전제가 다르다:
 >
@@ -27,7 +36,7 @@
 | **1차 기능 범위** | **"다" — 전부 포함** | ⚠️ D6은 전부지만 **하네스는 일정에서 제외 · 점진 보완**으로 결정됨 → Tier 3의 1차 완성은 보장되지 않는다. 웹의 해당 UI를 숨겨야 함 |
 | **fork vs 단일 코드베이스** | **팝테일과 분리 · 글로벌 원빌드** | **market 플래그 불필요** (§2-2-A 하단 가이드는 미채택). 한국 전용은 플래그가 아니라 **삭제**. T6·T7 함정 해소 |
 | **서버 / DB** | **분리 / 분리** | 별도 API 도메인 · 별도 DB |
-| **계정 / 재화** | **계정 통합 / 재화만 분리** | **해결됨.** 인증만 공유하는 계층 = **외부 인증서버 위탁**(팝챗과 동일 방식). Keycloak 자체 구축은 **현 요구사항에서는** 불필요 — [25-AUTH-DELEGATION.md](docs/25-AUTH-DELEGATION.md). ⚠️ **IdP 수준 SSO 는 성립하지 않는다**(인증서버가 internal-only). 다만 앱이 실제 Safari·Chrome 을 열므로 **공급자 세션이 공유돼 재로그인은 무마찰**이고, 남는 마찰은 "수단을 다시 고르는 것" 하나다. ⚠️ **길 A(웹 리다이렉트) 전환으로도 해결되지 않는다** — 팝테일 웹도 브로커가 BE 다. SSO 가 요구사항이 되면 **IdP 신설이 유일한 답**이므로 그때는 별도 예산·일정 결정이 필요하다 |
+| **계정 / 재화** | **계정 통합 / 재화만 분리** | **해결됨.** 인증만 공유하는 계층 = **외부 인증서버 위탁**(팝챗과 동일 방식). Keycloak 자체 구축은 **현 요구사항에서는** 불필요 — [25-AUTH-DELEGATION.md](./25-AUTH-DELEGATION.md). ⚠️ **IdP 수준 SSO 는 성립하지 않는다**(인증서버가 internal-only). 다만 앱이 실제 Safari·Chrome 을 열므로 **공급자 세션이 공유돼 재로그인은 무마찰**이고, 남는 마찰은 "수단을 다시 고르는 것" 하나다. ⚠️ **길 A(웹 리다이렉트) 전환으로도 해결되지 않는다** — 팝테일 웹도 브로커가 BE 다. SSO 가 요구사항이 되면 **IdP 신설이 유일한 답**이므로 그때는 별도 예산·일정 결정이 필요하다 |
 | **출시 언어** | **EN · KO · JP · ES 4개** | 🔴 번역·레이아웃 QA 2배. **KO가 글로벌 빌드에 포함**되므로 에디션≠언어 축 분리가 실제로 필수 |
 | **스토어 배포 국가** | **동일 빌드 여러 나라 동시 배포** | 🔴 국가 분리 안 함 → **Apple 4.3(Spam) 리스크 유지.** 한국 포함 여부 확인 필요 |
 | **백엔드** | **다음달 착수 + 3개월** | W5 착수 → **W18 완료. 크리티컬 패스** |
@@ -54,7 +63,7 @@
 |---|---|---|---|
 | `poptale-app` | `origin/main` | `a3918d36` | — |
 | `poptale-frontend` | **`origin/prod`** | `7abe4d74` (2026-08-14) | **기본 브랜치가 `main`이 아니다** |
-| `app-harness` | `feat/att-pre-permission` | `574cc1e` (main+5) | ATT 배관 · AASA 자동생성 · `APP-GROWTH-FEATURES.md` |
+| `app-harness` | `feat/att-pre-permission` | `574cc1e` (main+5) | ATT 배관 · AASA 자동생성 · `15-APP-GROWTH-FEATURES.md` |
 
 ### 0-A-1. 실측 인벤토리 — `poptale-frontend` (origin/prod)
 
@@ -156,7 +165,7 @@ iap/products/restore  iap/purchases/verify  amplitude/private-id  ad-attribution
 | **G8** | **화면 캡쳐 방지** | `blockCapture?()` 가 `dist/index.d.ts:277`에 **optional 선언만, 구현 없음(no-op)** | **Android**: `FLAG_SECURE` 토글 — AppBridge.kt에 메서드 추가(드물게 Kotlin을 짜야 하는 케이스). **iOS**: OS가 스크린샷 차단 API를 제공하지 않음 → `UIScreen.capturedDidChangeNotification`(녹화 감지) + `willResignActive` 시 블러 오버레이가 한계. **iOS는 "차단 불가"임을 제품 결정으로 확정할 것** | Android 1일 / iOS 2~3일 |
 | **G9** | **뷰어 밝기** | `setBrightness?()`/`getBrightness?()` 가 `index.d.ts:281-283`에 **선언만** | 커뮤니티 brightness 플러그인 배선. 앱 종료/백그라운드 시 원복 필수(시스템 밝기를 영구 변경하면 안 됨) | 1일 |
 | **G10** | **어트리뷰션 결과 웹 전달** | `initMarketing()`만 있고 앱→웹 push 채널 없음 | 앱이 획득한 어트리뷰션 페이로드를 웹으로 전달하는 규약 추가. `dispatchAppEvent()`(어댑터에 이미 존재)로 `CustomEvent` 발행 + `onAttribution(cb)` 구독 API. **설치 첫 세션에 미전달되는 이슈**가 Flutter 쪽에서 이미 발생했었음(`poptale-app` SCRUM1-697) — 같은 함정을 피하려면 **초기화 완료 전 도착한 값을 버퍼링**해야 한다 | 2~3일 |
-| **G11** | **IAP 구독(subscription)** | `getProducts`/`purchase`/`restorePurchases`만 | `cordova-plugin-purchase`의 구독 상품 타입 지원 + 갱신/유예/취소 상태 노출. **서버 알림(App Store Server Notifications / Play RTDN) 수신은 백엔드 몫** — 브릿지는 클라 상태만. `IAP.md`도 "난도↑"로 명시 | 2~3주 |
+| **G11** | **IAP 구독(subscription)** | `getProducts`/`purchase`/`restorePurchases`만 | `cordova-plugin-purchase`의 구독 상품 타입 지원 + 갱신/유예/취소 상태 노출. **서버 알림(App Store Server Notifications / Play RTDN) 수신은 백엔드 몫** — 브릿지는 클라 상태만. `11-IAP.md`도 "난도↑"로 명시 | 2~3주 |
 | **G12** | **Android 인앱 업데이트** | `checkForceUpdate` = 버전 비교 + 스토어 유도만 | Play In-App Update(immediate/flexible) 플러그인 배선. Android 전용, iOS는 no-op. `forceUpdate` capability 재사용 | 3~5일 |
 
 **Tier 2 합계: 약 3~4주. 글로벌 1차에 필요한 건 G8·G9·G10 (6~8일)**
@@ -200,7 +209,7 @@ API 초안: `download({id, url, checksum})` · `cancelDownload(id)` · `listDown
 #### G15. TTS — 3~5주
 
 Flutter: `flutter_tts` (`poptale://tts?play=&text=&speed=`).
-하네스: **SDK에 메서드 자체가 없다** (`NATIVE_FEATURES_PLAN.md`가 "❌ SDK에 없음"으로 명시).
+하네스: **SDK에 메서드 자체가 없다** (`22-NATIVE_FEATURES_PLAN.md`가 "❌ SDK에 없음"으로 명시).
 
 - ①② 단: `@capacitor-community/text-to-speech` 추가 — **쉽다 (2~3일)**
 - ⑤ 단: **백그라운드·화면 잠금 중 재생** — iOS `UIBackgroundModes: audio` Capability +
@@ -208,7 +217,7 @@ Flutter: `flutter_tts` (`poptale://tts?play=&text=&speed=`).
   Android는 포그라운드 서비스 + 미디어 세션.
 - 미디어 컨트롤(잠금화면 재생/일시정지, 이어폰 버튼)까지 하려면 추가 작업.
 
-> **범용 수요는 확인됐다** — `NATIVE_FEATURES_PLAN.md`가 characterchat용으로 동일한 TTS 요구를
+> **범용 수요는 확인됐다** — `22-NATIVE_FEATURES_PLAN.md`가 characterchat용으로 동일한 TTS 요구를
 > 적어놨다. 즉 이건 Poptale 전용 기능이 아니라 **하네스 코어에 들어갈 값어치가 있다.**
 
 ### 1-4. Tier 0 — 글로벌 이전에 하네스 자체가 끝내야 할 것
@@ -223,7 +232,7 @@ Flutter: `flutter_tts` (`poptale://tts?play=&text=&speed=`).
 
 ### 1-5. 하네스 작업 총량 — 참고용 (일정 트랙 아님)
 
-**추정 근거 — 관측된 실제 속도**: 2026-08-18 하루에 `APP-GROWTH-FEATURES.md`(804줄) +
+**추정 근거 — 관측된 실제 속도**: 2026-08-18 하루에 `15-APP-GROWTH-FEATURES.md`(804줄) +
 ATT 사전동의 배관 + bridge 1.3.0 + NSE 서명 배선이 나왔다. **ATT 3단 배관 전체가 하루**였고,
 Tier 1은 전부 그보다 작은 작업이다.
 
@@ -323,7 +332,7 @@ G12 인앱 업데이트       3~5일
 | **N5** | Firebase 프로젝트 3개 생성 + `google-services.json`/`GoogleService-Info.plist` 배치 | 앱 | 3일 | 하 | `{env}-aipia-<slug>` 컨벤션. 파일은 secrets로 |
 | **N6** | 아이콘·스플래시 원본 제작 → `generate-assets` | 디자인 | 1~2주 | 하 | 리사이즈는 자동. 원본만 만들면 됨 |
 | **N7** | 소셜 로그인 콘솔 등록 (Google / Apple) | 앱 | 1주 | 하 | Kakao/Naver 불필요(제품 결정). **하네스는 7종을 공통 지원**하므로 수단 추가는 config `providers` 배열만 바꾸면 된다 |
-| **N8** | 서명키 생성 · fastlane match · GitHub Secrets | 앱 | 1주 | 중 | 스토어 계정 준비 시점에 착수. `DEPLOY.md` 절차 |
+| **N8** | 서명키 생성 · fastlane match · GitHub Secrets | 앱 | 1주 | 중 | 스토어 계정 준비 시점에 착수. `08-DEPLOY.md` 절차 |
 
 #### P2 — 본 개발 (W2~W15). 프론트만 — 백엔드 미포함
 
@@ -334,7 +343,7 @@ G12 인앱 업데이트       3~5일
 | **N11** | 글로벌 웹 — 인증 재구성 + API 도메인 분기 | 웹 | 2주 | 중 | Kakao/Naver 제거, Google/Apple 중심. **위탁 구조를 따른다** — 팝챗 계약(`be-auth-contract.md`)이 그대로 재사용된다. **백엔드 엔드포인트 규격 확정이 선행** |
 | **N12** | 번역 + 다국어 레이아웃 QA | 번역·웹 | 3~4주 | 중 | N9와 일부 병렬. 번역은 외주 가능, 레이아웃 수정은 웹 |
 | **N13** | 웹 ↔ 브릿지 연동 — `initHarness()` · `installAppChannelShim({scheme})` | 웹·앱 | **3일~1주** | 하 | **웹이 이미 AppChannel 20종 호출 중 → 거의 무수정.** shim routes 1:1 대조만 필요 |
-| — | 🔴 **백엔드 인프라 분리 · 엔드포인트** | 백엔드 | **미산정** | — | **이 계획에 포함되지 않음.** `docs/25-AUTH-DELEGATION.md`(인증 위탁) · `docs/11-IAP.md` 규약을 백엔드 팀에 전달하고 산정을 받을 것. **회원탈퇴 엔드포인트는 스토어 정책상 필수** |
+| — | 🔴 **백엔드 인프라 분리 · 엔드포인트** | 백엔드 | **미산정** | — | **이 계획에 포함되지 않음.** `25-AUTH-DELEGATION.md`(인증 위탁) · `docs/11-IAP.md` 규약을 백엔드 팀에 전달하고 산정을 받을 것. **회원탈퇴 엔드포인트는 스토어 정책상 필수** |
 
 #### P3 — 출시 준비 (W10~W22)
 
@@ -343,8 +352,8 @@ G12 인앱 업데이트       3~5일
 | **N14** | IAP 상품 등록 + 통화별 가격 티어 입력 | 앱 | 1주 | 중 | 가격 *값*은 사업에서 수령, 등록은 개발. 가격은 config가 아니라 **스토어 콘솔** |
 | **N15** | 마케팅 SDK 대시보드 앱 등록 | 앱 | 3일 | 하 | AppsFlyer 등 (Adbrix 불필요) |
 | **N16** | 푸시 화이트리스트 경로 정의 + AASA 호스팅 배치 | 앱·웹 | 3일 | 하 | G0-2 선행. **AASA/assetlinks 파일 자체는 `generate-app.mjs`가 자동 생성** — 웹이 `.well-known/`에 배치·서빙 |
-| **N17** | 스토어 개인정보 라벨 · 데이터 안전성 양식 작성 | 앱 | 3일 | 하 | 수집 항목 목록은 개발 산출물. `DATA-COLLECTION.md` 양식. **약관·처리방침 본문 작성은 법무 소관** |
-| **N18** | 통합 QA + 기기 매트릭스 | QA | 4주 | 중 | `DEVICE-SUPPORT.md`. **백엔드 스테이징 없으면 착수 불가** |
+| **N17** | 스토어 개인정보 라벨 · 데이터 안전성 양식 작성 | 앱 | 3일 | 하 | 수집 항목 목록은 개발 산출물. `17-DATA-COLLECTION.md` 양식. **약관·처리방침 본문 작성은 법무 소관** |
+| **N18** | 통합 QA + 기기 매트릭스 | QA | 4주 | 중 | `19-DEVICE-SUPPORT.md`. **백엔드 스테이징 없으면 착수 불가** |
 | **N19** | 스토어 빌드 업로드 + 심사 대응 + 소프트런칭 | 앱 | 3~4주 | 중 | **Apple 4.2 리스크는 낮음** — 웹이 네이티브 기능 20종을 실제로 호출하므로 순수 래퍼 판정 근거가 약함 |
 
 #### 인계 지점 — 여기서 막히면 상대 트랙이 멈춘다
@@ -492,22 +501,21 @@ export const isGlobal = MARKET === 'global';
 
 | 필요한 것 | 위치 |
 |---|---|
-| 전사 컨벤션 (번들ID·도메인·SDK) | [`AIPIA-CONVENTIONS.md`](AIPIA-CONVENTIONS.md) |
-| 하네스 사용법 마스터 · config 스키마 정본 | [`GUIDE.md`](GUIDE.md) §6 |
-| 새 서비스 추가 전체 흐름 | [`ONBOARDING.md`](ONBOARDING.md) |
-| 웹 통합 API · 어댑터 | [`INTEGRATION.md`](INTEGRATION.md), `template/integration/harness-adapter.js` |
-| **인증 — 위탁 규약(정본)** | [`docs/25-AUTH-DELEGATION.md`](docs/25-AUTH-DELEGATION.md) |
-| 인증 — 게스트/탈퇴/기기세션 | [`docs/10-AUTH.md`](docs/10-AUTH.md) — **Keycloak 절은 레거시** |
-| 인앱결제 정책·구현 | [`IAP.md`](IAP.md) |
-| 개인정보/권한/연령등급 | [`COMPLIANCE.md`](COMPLIANCE.md), [`DATA-COLLECTION.md`](DATA-COLLECTION.md) |
-| CI/배포/시크릿/서명 | [`DEPLOY.md`](DEPLOY.md), [`HOWTO-DEPLOY.md`](HOWTO-DEPLOY.md) |
-| 기기/OS 지원 범위 | [`DEVICE-SUPPORT.md`](DEVICE-SUPPORT.md) |
-| 푸시 셋업 | [`PUSH-NOTIFICATIONS.md`](PUSH-NOTIFICATIONS.md) |
-| 네이티브 기능 가능/불가 매트릭스 | [`NATIVE_FEATURES_PLAN.md`](NATIVE_FEATURES_PLAN.md) §2 |
-| 국내 마이그레이션 (별건) | [`POPTALE-MIGRATION.md`](POPTALE-MIGRATION.md) |
+| 전사 컨벤션 (번들ID·도메인·SDK) | [`01-AIPIA-CONVENTIONS.md`](./01-AIPIA-CONVENTIONS.md) |
+| 하네스 사용법 마스터 · config 스키마 정본 | [`02-GUIDE.md`](./02-GUIDE.md) §6 |
+| 새 서비스 추가 전체 흐름 | [`ONBOARDING.md`](../ONBOARDING.md) |
+| 웹 통합 API · 어댑터 | [`06-INTEGRATION.md`](./06-INTEGRATION.md), `template/integration/harness-adapter.js` |
+| **인증 — 위탁 규약(정본)** | [`25-AUTH-DELEGATION.md`](./25-AUTH-DELEGATION.md) |
+| 인증 — 게스트/탈퇴/기기세션 | [`10-AUTH.md`](./10-AUTH.md) — **Keycloak 절은 레거시** |
+| 인앱결제 정책·구현 | [`11-IAP.md`](./11-IAP.md) |
+| 개인정보/권한/연령등급 | [`16-COMPLIANCE.md`](./16-COMPLIANCE.md), [`17-DATA-COLLECTION.md`](./17-DATA-COLLECTION.md) |
+| CI/배포/시크릿/서명 | [`08-DEPLOY.md`](./08-DEPLOY.md), [`07-HOWTO-DEPLOY.md`](./07-HOWTO-DEPLOY.md) |
+| 기기/OS 지원 범위 | [`19-DEVICE-SUPPORT.md`](./19-DEVICE-SUPPORT.md) |
+| 푸시 셋업 | [`12-PUSH-NOTIFICATIONS.md`](./12-PUSH-NOTIFICATIONS.md) |
+| 네이티브 기능 가능/불가 매트릭스 | [`22-NATIVE_FEATURES_PLAN.md`](./22-NATIVE_FEATURES_PLAN.md) §2 |
+| 국내 마이그레이션 (별건) | [`21-POPTALE-MIGRATION.md`](./21-POPTALE-MIGRATION.md) |
 | 계획·일정·판정 | `poptale-app/.claude/docs/global-launch-plan.md` |
 
 ---
 
-**Last Updated**: 2026-08-19
-</content>
+**Last Updated**: 2026-09-01 — 경로·링크 정리 (본문 내용 최종 갱신은 2026-08-19)
