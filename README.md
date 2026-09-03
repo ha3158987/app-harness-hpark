@@ -151,13 +151,17 @@ Appharness/
 
 ### 검증됨 ✅
 - Android `assembleDebug` 빌드 (전 기능 + 8 소셜 + IAP + 안전영역)
+- **iOS — `.ipa` 생성과 TestFlight 업로드만 검증** — fastlane `ios build`(.ipa, match) / `ios beta` 동작. 앱 내부 기능은 아래 참고
 - 백엔드 레퍼런스 스모크(게스트/기기/지갑)
 - `aipiaPreset()` 자동 생성 → loadConfig 검증 통과
-- 3개 앱 config (`aipia`, `poptale`, `poptale-dev`) doctor 통과, 오류 0
+- 5개 앱 config (`aipia`, `characterchat`, `characterchat-dev`, `poptale`, `poptale-dev`) doctor 오류 0
+
+### 구현됨, 실기기 검증 전 🔧
+- **iOS 실기기 기능** — APNs 수신 · NSE 실행 · 유니버설 링크(AASA) 연결. **빌드/업로드 성공이 기능 동작을 보장하지 않는다**
+- **Adbrix 네이티브 플러그인** (어트리뷰션 · 디퍼드 딥링크 버퍼링) — 코드는 있으나 cold/warm start · 앱 종료 후 복구 · 중복 이벤트 · 버퍼 소비 시점이 미검증. **cold install → 광고 링크 클릭 → 최초 실행 수신**을 실기기로 확인할 것
 
 ### 미검증 ⚠️
-- **iOS 빌드** (Windows 환경에서 작성) — 첫 macOS/CI 실행에서 엔타이틀먼트 pbxproj 연결 확인 필요
-- Kakao/Naver/Adbrix/WhaTap 네이티브 플러그인 — `template/plugins/*/SPEC.md` 작업 사양만 있음, 실제 SDK 통합은 dev 가 채워야 함
+- Kakao/Naver/WhaTap 네이티브 플러그인 — `template/plugins/*/SPEC.md` 작업 사양만 있음, 실제 SDK 통합은 dev 가 채워야 함
 - Poptale 마이그 호환성 매트릭스(`docs/21-POPTALE-MIGRATION.md §3`) — 10개 항목 PASS/FAIL 검증 미실행
 
 ### 외부 의존(사람 몫) 🙋

@@ -436,7 +436,8 @@ config 스키마 상세는 이 문서 §6.
 
 ## 9. 현재 상태 / 주의 (정직)
 
-- ✅ **검증됨**: Android `assembleDebug` 빌드(전 기능 + 8 소셜 + IAP + 안전영역 등), 백엔드 레퍼런스 스모크(게스트/기기/지갑).
-- ⚠️ **미검증**: **iOS 빌드**(Windows 환경) — 첫 macOS/CI 실행에서 엔타이틀먼트 pbxproj 연결 확인 필요.
+- ✅ **검증됨(빌드·업로드)**: Android `assembleDebug` 빌드(전 기능 + 8 소셜 + IAP + 안전영역 등), **iOS `.ipa` 생성과 TestFlight 업로드만**(fastlane `ios build`/`ios beta`, match 서명 — 앱 내부 기능은 아래), 백엔드 레퍼런스 스모크(게스트/기기/지갑).
+- 🔧 **구현됨, 실기기 검증 전**: iOS APNs 수신 · NSE 실행 · 유니버설 링크(AASA) 연결, Adbrix 디퍼드 딥링크 최초 실행 수신. **업로드 성공은 기능 동작을 보장하지 않는다.**
+- ⚠️ **미검증**: Kakao/Naver/WhaTap 네이티브 플러그인(`template/plugins/*/SPEC.md` 사양만 있음).
 - ⚠️ **레퍼런스/스텁**: `backend/auth-reference`(인메모리), `/iap/verify` 검증 로직 → 실 DB·실 검증으로 교체.
 - 🙋 **사람/외부**: 계정·서명·소셜키·스토어 상품·본인확인 PG·IdP 배포 (§5). 하네스는 흐름을 열고 받을 뿐.

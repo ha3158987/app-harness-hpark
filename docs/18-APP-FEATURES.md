@@ -4,7 +4,7 @@ title: APP-FEATURES — 앱에서 할 수 있는 기능 + 버전
 category: 레퍼런스
 audience: 전체
 status: reference
-updated: 2026-05-30
+updated: 2026-09-03
 ---
 
 # APP-FEATURES — 앱에서 할 수 있는 기능 + 버전
@@ -17,16 +17,18 @@ updated: 2026-05-30
 
 ---
 
-## 기준 버전 (2026-05)
+## 기준 버전 (2026-09)
 
-| 항목 | 버전 |
-|---|---|
-| Capacitor | **8** (`@capacitor/core`, `@capacitor/cli` ^8) |
-| Node | **20 LTS+** |
-| iOS 빌드 | **Xcode 26 / iOS 26 SDK** (2026-04-28부터 제출 필수) |
-| iOS 배포 타깃 | **iOS 15** (SDK는 26, 타깃은 낮게) |
-| Android targetSdk | **35** (2026-08-31부터 **36** 필수) |
-| Android minSdk | **23** (Capacitor 8 기본) 유지 가능 |
+| 항목 | 버전 | 정본 |
+|---|---|---|
+| Capacitor | **8** (`@capacitor/core`, `@capacitor/cli` ^8) | — |
+| Node | **24** (`.nvmrc`) · 최소 **22** (`package.json` engines) | `.nvmrc` |
+| iOS 빌드 | **Xcode 26 / iOS 26 SDK** (2026-04-28부터 제출 필수) | — |
+| iOS 배포 타깃 | **iOS 15** (SDK는 26, 타깃은 낮게) | `AIPIA_DEFAULTS.minOS.ios` |
+| Android targetSdk | **36** (Google Play 제출 기준 — 신규 앱·기존 앱 업데이트 모두. 2026-08-31 기한 지남) | `AIPIA_DEFAULTS.minOS.targetSdk` |
+| Android minSdk | **29** (하네스 기본값. Capacitor 8 자체 하한은 23) | `AIPIA_DEFAULTS.minOS.androidSdk` |
+
+> 값의 정본은 `scripts/lib/config.mjs` 의 `AIPIA_DEFAULTS` 와 `.nvmrc` 다. 이 표와 어긋나면 코드가 맞다.
 
 ---
 
@@ -34,6 +36,7 @@ updated: 2026-05-30
 
 | 기능 | 패키지 | 비고 (왜 / 주의) |
 |---|---|---|
+| 껍데기 다국어(8언어) | 하네스 내장 (`scripts/lib/i18n.mjs`) | 앱 이름 · iOS 권한 문구 · ATT 문구를 언어별로 네이티브 리소스에 굽는다. **웹의 i18n 이 닿지 않는 자리** — config 가 언어별 값을 갖는다. 스키마는 `docs/02-GUIDE.md` §6 |
 | 원격 푸시 | `@capacitor/push-notifications` ^8 | FCM/APNs. **Android 13+는 런타임 알림 권한 필수** (DEVICE-SUPPORT 참고) |
 | 로컬 푸시 | `@capacitor/local-notifications` ^8 | 스케줄/리마인드 |
 | 딥링크/유니버설링크 | `@capacitor/app` ^8 (`appUrlOpen`) | 특정 화면 진입. iOS associated domains / Android intent filter 설정 필요 |

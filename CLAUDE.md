@@ -62,7 +62,7 @@
 | # | 문서 | 카테고리 | 대상 독자 | 상태 | 최종 수정 | 내용 |
 |---|---|---|---|---|---|---|
 | 01 | [AIPIA-CONVENTIONS](docs/01-AIPIA-CONVENTIONS.md) | 시작 | 개발자 | active | 2026-08-19 | 전사 표준 정본 — 번들ID·도메인·SDK·이벤트명 |
-| 02 | [GUIDE](docs/02-GUIDE.md) | 시작 | 전체 | active | 2026-08-20 | 하네스 동작 방식 + config 스키마 정본 |
+| 02 | [GUIDE](docs/02-GUIDE.md) | 시작 | 전체 | active | 2026-09-03 | 하네스 동작 방식 + config 스키마 정본 |
 | 03 | [STRATEGY](docs/03-STRATEGY.md) | 전략 | 전체 | active | 2026-05-30 | 왜 이 구조인가 — 결정과 이유 |
 | 04 | [NEW-APP-CHECKLIST](docs/04-NEW-APP-CHECKLIST.md) | 앱추가 | 배포담당자 | active | 2026-08-20 | 사람이 직접 할 콘솔·계정 작업 전부 |
 | 05 | [SETUP](docs/05-SETUP.md) | 앱추가 | 개발자 | active | 2026-05-30 | 환경·키 단계별 준비 |
@@ -78,7 +78,7 @@
 | 15 | [APP-GROWTH-FEATURES](docs/15-APP-GROWTH-FEATURES.md) | 기능연동 | 개발자 | active | 2026-08-20 | 성장 기능 설계·결정 기록 |
 | 16 | [COMPLIANCE](docs/16-COMPLIANCE.md) | 정책 | 기획자 | active | 2026-05-30 | 권한 고지·개인정보·성인인증 |
 | 17 | [DATA-COLLECTION](docs/17-DATA-COLLECTION.md) | 정책 | 기획자 | active | 2026-05-30 | 스토어 개인정보 양식 정답지 |
-| 18 | [APP-FEATURES](docs/18-APP-FEATURES.md) | 레퍼런스 | 전체 | reference | 2026-05-30 | 지원 기능 + 패키지 버전 |
+| 18 | [APP-FEATURES](docs/18-APP-FEATURES.md) | 레퍼런스 | 전체 | reference | 2026-09-03 | 지원 기능 + 패키지 버전 |
 | 19 | [DEVICE-SUPPORT](docs/19-DEVICE-SUPPORT.md) | 레퍼런스 | 개발자 | reference | 2026-07-24 | 기기·OS 지원 매트릭스 |
 | 20 | [REFERENCES](docs/20-REFERENCES.md) | 레퍼런스 | 개발자 | reference | 2026-05-30 | 외부 1차 소스 링크 |
 | 21 | [POPTALE-MIGRATION](docs/21-POPTALE-MIGRATION.md) | 마이그레이션 | 전체 | active | 2026-06-01 | Poptale Flutter → 하네스 이전 인계 |
