@@ -58,10 +58,16 @@ export function authSetup(cfg, platform) {
       'providers 에 추가해야 합니다 (하네스는 한 config 로 양 스토어를 낸다 — iOS 심사에서 리젝된다).');
   }
 
-  // 회원탈퇴는 App Store · Play 양쪽 필수. providers 가 있을 때만 본다 —
-  // 즉 auth.providers 없이 웹 레이어에서만 로그인하는 앱(현재 characterchat)은 이 게이트를
-  // 그냥 통과한다. 스토어 요건은 그래도 적용되므로 게이트가 완전하다고 오해하지 마라.
-  if (providers.length && !cfg.auth?.deleteEndpoint) {
+  // 회원탈퇴는 App Store · Play 양쪽 필수. "이 앱이 계정을 만드는가" 로 본다.
+  //
+  // ★ providers 만으로 판정하지 않는다. 브로커 로그인 앱은 providers 가 **비어 있는 게
+  //   정상**인데(네이티브 인증 수단이 없다) 계정은 분명히 만든다 — providers 만 보면
+  //   탈퇴 게이트가 조용히 꺼져 스토어 리젝을 못 막는다.
+  // ⚠️ 그래도 완전하지는 않다. 두 신호가 **모두** 없이 웹 레이어에서만 로그인하는 앱은
+  //   여전히 이 게이트를 통과한다. 스토어 요건은 그래도 적용되므로 게이트가 완전하다고
+  //   오해하지 마라.
+  const createsAccounts = providers.length > 0 || cfg.auth?.oauthReturnScheme === true;
+  if (createsAccounts && !cfg.auth?.deleteEndpoint) {
     storeBlockers.push('auth.deleteEndpoint 누락 — 회원탈퇴는 App Store · Play 양쪽의 필수 요건입니다. ' +
       '백엔드 탈퇴 API URL 을 auth.deleteEndpoint 에 넣으세요(docs/10-AUTH.md).');
   }
@@ -93,6 +99,37 @@ export function authSetup(cfg, platform) {
     }
   }
   return { plugins, warnings, storeBlockers, hasOAuth: social.length > 0 };
+}
+
+/**
+ * OAuth 복귀 커스텀 스킴(`<appId>://`)을 네이티브에 등록해야 하는가.
+ *
+ * ★ 두 경로가 **같은 스킴**을 필요로 한다.
+ *   · 네이티브 OAuth(hasOAuth) — 공급자가 이 주소로 code 를 돌려준다.
+ *   · 브로커 로그인(oauthReturnScheme) — 앱이 우리 백엔드의 start 를 시스템 브라우저로
+ *     열고, auth 가 이 주소로 redirect 해 code 를 앱에 넘긴다. 네이티브 OAuth 는 **하지
+ *     않는다.**
+ *
+ * ⚠️ 이 판정을 providers 하나로 되돌리지 마라. 그러면 브로커 앱이 스킴을 얻으려고
+ *    providers 를 채워야 하고, 쓰지도 않는 clientId 누락이 storeBlockers 로 잡혀
+ *    `--release` 빌드가 막힌다(팝챗에서 실제로 난 문제다).
+ *
+ * @param {object} cfg loadConfig() 결과
+ * @param {{ hasOAuth: boolean }} authSetupResult authSetup() 결과
+ */
+export function needsOAuthReturnScheme(cfg, authSetupResult) {
+  return authSetupResult.hasOAuth || cfg.auth?.oauthReturnScheme === true;
+}
+
+/**
+ * **네이티브** Sign in with Apple 을 쓰는가 — iOS 엔타이틀먼트가 필요한 경우.
+ *
+ * ⚠️ 복귀 스킴 판정과 **묶지 마라.** 브로커 앱은 애플도 웹 경로로 처리하므로 복귀
+ *    스킴은 필요하지만 엔타이틀먼트는 필요 없다. 묶어 두면 쓰지 않는 권한을 선언한
+ *    채로 심사에 들어간다.
+ */
+export function usesNativeApple(cfg) {
+  return (cfg.auth?.providers || []).includes('apple');
 }
 
 /**

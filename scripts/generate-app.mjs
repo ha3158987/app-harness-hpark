@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig, runtimeConfig, WIRED_PROVIDERS } from './lib/config.mjs';
 import { LOCALES, resolveLocalized, baseLocaleOf } from './lib/i18n.mjs';
 import { appResourcesFilesAnchor, stripLprojRefs, rewriteKnownRegions } from './lib/pbxproj.mjs';
-import { authSetup } from './lib/auth-setup.mjs';
+import { authSetup, needsOAuthReturnScheme, usesNativeApple } from './lib/auth-setup.mjs';
 import { log, fail } from './lib/log.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1971,11 +1971,24 @@ function main() {
   if (args.local) patchIosLocalAts(buildDir); // 로컬 dev 평문 http 허용(ATS 예외)
 
   // 7c) 인증 네이티브 배선 (OAuth 복귀 URL scheme + Apple Sign In)
-  if (authConf.hasOAuth || (cfg.auth?.providers || []).includes('apple')) {
+  //
+  // ★ 두 배선의 조건이 **다르다.** 예전에는 한 조건에 묶여 있었는데, 그래서 네이티브
+  //   OAuth 를 안 하는 앱(브로커 로그인)이 복귀 스킴을 얻을 방법이 없었다 —
+  //   auth.providers 를 채우면 스킴은 오지만 쓰지도 않는 clientId 누락이 storeBlockers
+  //   로 잡혀 릴리즈 빌드가 막혔다.
+  //   · 복귀 URL 스킴  — 네이티브 OAuth 를 하거나(hasOAuth), 브로커로 복귀만 받거나.
+  //   · Apple 엔타이틀먼트 — **네이티브** Sign in with Apple 을 쓸 때만. 브로커는 애플도
+  //     웹 경로로 처리하므로 엔타이틀먼트가 필요 없다(넣으면 심사에서 쓰지 않는 권한을
+  //     선언하게 된다).
+  const needsReturnScheme = needsOAuthReturnScheme(cfg, authConf);
+  const needsAppleNative = usesNativeApple(cfg);
+  if (needsReturnScheme || needsAppleNative) {
     log.step('인증 네이티브 배선 (OAuth URL scheme / Apple Sign In)');
-    patchAndroidAuthScheme(buildDir, cfg);
-    patchIosAuthScheme(buildDir, cfg);
-    patchIosAppleEntitlement(buildDir, cfg);
+    if (needsReturnScheme) {
+      patchAndroidAuthScheme(buildDir, cfg);
+      patchIosAuthScheme(buildDir, cfg);
+    }
+    if (needsAppleNative) patchIosAppleEntitlement(buildDir, cfg);
   }
 
   // 7d) iOS 엔타이틀먼트를 Xcode 프로젝트에 연결(App.entitlements 있을 때만)

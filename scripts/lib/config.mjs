@@ -73,6 +73,17 @@ const DEFAULT_AUTH = {
   guestEndpoint: null,      // 게스트(익명) 계정 생성 백엔드 URL (IAP/진행상황 보관 시)
   deviceEndpoint: null,     // 푸시토큰/기기를 계정에 등록하는 백엔드 URL (기기↔계정 바인딩)
   oauth: {},                // 직접 모드: { google: { clientId, scopes?, redirectUri?, authorizeUrl?, extraQuery? }, ... }
+  // OAuth 복귀 커스텀 스킴(`<appId>://`)을 네이티브에 등록할지. **providers 와 독립이다.**
+  //
+  // 왜 별도 키인가: 브로커 로그인(앱이 우리 백엔드의 start 를 시스템 브라우저로 열고,
+  // 커스텀 스킴 딥링크로 code 만 받아 WebView 에서 상환하는 방식)은 네이티브 OAuth 를
+  // **전혀 하지 않으면서** 복귀 스킴은 반드시 필요하다. 스킴 등록을 providers 에 물려
+  // 두면 스킴을 얻기 위해 providers 를 채우게 되고, 그러면 쓰지도 않는 clientId 누락이
+  // storeBlockers 로 잡혀 `--release` 빌드가 막힌다(그게 정확히 팝챗에서 난 문제다).
+  //
+  // providers 가 비어 있지 않으면 이 값과 무관하게 스킴은 등록된다(네이티브 OAuth 가
+  // 복귀 주소를 쓰므로). 즉 이 키는 "네이티브 OAuth 없이 복귀만 받는" 앱을 위한 것이다.
+  oauthReturnScheme: false,
 };
 const KNOWN_AUTH_PROVIDERS = ['email', 'apple', 'google', 'naver', 'kakao', 'facebook', 'x', 'threads', 'line', 'discord'];
 

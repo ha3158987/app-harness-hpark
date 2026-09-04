@@ -77,22 +77,12 @@
   },
   "permissions": {},
   "auth": {
-    "providers": ["email", "kakao", "naver", "line", "google", "apple", "facebook", "x", "discord"],
-    "sessionEndpoint": "https://api.chat.dev.poptale.ai/auth/social/native",
+    "providers": [],
+    "oauthReturnScheme": true,
     "signupEndpoint": "https://api.chat.dev.poptale.ai/auth/signup",
     "logoutEndpoint": "https://api.chat.dev.poptale.ai/auth/logout",
     "deleteEndpoint": "https://api.chat.dev.poptale.ai/auth/withdraw",
-    "deviceEndpoint": "https://api.chat.dev.poptale.ai/api/push/register",
-    "oauth": {
-      "kakao":    { "clientId": null },
-      "naver":    { "clientId": null },
-      "line":     { "clientId": null },
-      "google":   { "clientId": null },
-      "apple":    { "clientId": null },
-      "facebook": { "clientId": null },
-      "x":        { "clientId": null },
-      "discord":  { "clientId": null }
-    }
+    "deviceEndpoint": "https://api.chat.dev.poptale.ai/api/push/register"
   },
   "firebase": {
     "enabled": true,
