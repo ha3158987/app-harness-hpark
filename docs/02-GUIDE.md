@@ -4,7 +4,7 @@ title: GUIDE — Appharness 마스터 가이드
 category: 시작
 audience: 전체
 status: active
-updated: 2026-08-31
+updated: 2026-09-07
 ---
 
 # GUIDE — Appharness 마스터 가이드
@@ -91,6 +91,8 @@ flowchart LR
 | `build-android` | generate-app → gradle (AAB/APK), 헤드리스 |
 | `build-ios` | generate-app → xcodebuild (.ipa), **macOS 필요** |
 | `submit-store` | fastlane → TestFlight / Play 내부·베타 (프로덕션 제외) |
+| `release-app` | **새 버전 전 채널 릴리즈** — bump → 태그 → CI → 보고. "모바일 앱 새 버전 배포해줘" |
+| `publish-apk` | 사내 테스트 APK 를 GCS 고정 링크/QR 로 배포 (스토어 안 거침) |
 
 점검 도구: `node scripts/doctor.mjs` (환경 + 모든 앱 config 검사)
 
@@ -243,7 +245,7 @@ flowchart TB
                   "apm": { "provider": null } },
   "firebase": { "enabled": false, "fcm": false, "analytics": false, "crashlytics": false,
                 "remoteConfig": false, "project": { "dev": null, "stage": null, "prod": null } },
-  "ios": { "teamId": null },                          // 조직 공통 — 보통 환경변수로 해결
+  "ios": { "teamId": null, "usesNonExemptEncryption": null },  // teamId 는 조직 공통(환경변수로도 해결)
   "android": { "sha256CertFingerprints": [] },        // 앱마다 다름 — Play 앱 서명 시 2개
   "legal": { "privacyUrl": "...", "termsUrl": "...", "ageVerifyUrl": "..." },
   "permissions": { "notifications": { "required": false, "purpose": "..." } }
@@ -270,6 +272,11 @@ flowchart TB
 - `firebase.enabled`: FCM/Analytics/Crashlytics/RemoteConfig 토글 + flavor 별 프로젝트 ID 표시.
   실제 google-services.json / GoogleService-Info.plist 는 secrets 에서 빌드 시 배치.
 - `theme.statusBarStyle`: `light`(밝은 배경/어두운 텍스트) | `dark`. `version.code` 는 단조 증가 정수.
+- `ios.usesNonExemptEncryption`: iOS **수출 규정 신고** (`Info.plist` 의 `ITSAppUsesNonExemptEncryption`).
+  `false` = 면제 대상 암호화만(HTTPS/TLS·OS 제공·표준 알고리즘) · `true` = 비면제(별도 서류 필요) ·
+  **`null`(기본) = plist 에 안 씀** → App Store Connect 가 빌드마다 묻고, 답하기 전엔 TestFlight
+  테스터에게도 안 나간다. **법적 신고 내용이라 하네스가 기본값을 정하지 않는다** — 앱마다 사람이 판단.
+  불리언만 받는다(문자열 `"false"` 는 빌드 실패). 판단 기준: [07-HOWTO-DEPLOY.md §6](07-HOWTO-DEPLOY.md).
 
 **다국어 문자열 (`locales` + 로케일 맵)**
 

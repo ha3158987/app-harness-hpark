@@ -1175,6 +1175,36 @@ ${block}</dict>
 }
 
 // (2) UIBackgroundModes remote-notification (백그라운드/사일런트 푸시 수신).
+// iOS 수출 규정 준수(ITSAppUsesNonExemptEncryption).
+//
+// 이 키가 Info.plist 에 **없으면** App Store Connect 가 업로드된 빌드마다 암호화 사용 여부를
+// 묻고, 답하기 전까지 그 빌드는 "수출 규정 준수 정보 누락" 으로 **내부 테스터에게도 안 나간다.**
+// 업로드는 성공인데 아무도 못 받는, 조용히 새는 게이트다(Play 의 draft 와 같은 성격).
+//
+// 값은 **법적 신고 내용**이라 하네스가 임의로 정하지 않는다 — config 에 있을 때만 쓴다.
+// 판단 기준과 값의 의미: docs/07-HOWTO-DEPLOY.md §6
+function patchIosEncryptionCompliance(buildDir, cfg) {
+  const plistFile = join(buildDir, 'ios', 'App', 'App', 'Info.plist');
+  if (!existsSync(plistFile)) return;
+  const declared = cfg.ios?.usesNonExemptEncryption;
+  if (declared == null) {
+    log.warn(
+      'iOS Info.plist: ITSAppUsesNonExemptEncryption 미선언 — App Store Connect 가 빌드마다 ' +
+      '수출 규정을 묻고, 답하기 전엔 TestFlight 테스터에게 안 나갑니다. ' +
+      '없애려면 app.config.json 에 "ios": { "usesNonExemptEncryption": false } (docs/07 §6)'
+    );
+    return;
+  }
+  let xml = readFileSync(plistFile, 'utf8');
+  if (xml.includes('ITSAppUsesNonExemptEncryption')) return; // idempotent
+  const block = `\t<key>ITSAppUsesNonExemptEncryption</key>\n\t<${declared ? 'true' : 'false'}/>`;
+  const close = xml.lastIndexOf('</dict>');
+  if (close === -1) return;
+  xml = xml.slice(0, close) + block + '\n' + xml.slice(close);
+  writeFileSync(plistFile, xml);
+  log.ok(`iOS Info.plist: ITSAppUsesNonExemptEncryption=${declared} (수출 규정 신고 — ASC 질문 없음)`);
+}
+
 function patchIosPushBackgroundMode(buildDir) {
   const plistFile = join(buildDir, 'ios', 'App', 'App', 'Info.plist');
   if (!existsSync(plistFile)) return;
@@ -1961,6 +1991,8 @@ function main() {
   }
   log.step('iOS 권한 사용 설명(Info.plist) 점검');
   patchIosUsageStrings(buildDir, cfg);
+  // 수출 규정 준수 — 푸시 여부와 무관하게 모든 iOS 빌드에 해당한다.
+  patchIosEncryptionCompliance(buildDir, cfg);
   // 7b-3) 다국어 리소스. 앱 이름/권한 문구는 웹이 뜨기 전에 OS 가 직접 보여주므로 네이티브가 갖는다.
   //       locales.supported 가 비면(=미선언 앱) 아무것도 만들지 않는다.
   if (cfg.locales?.supported?.length) {

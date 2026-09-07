@@ -154,7 +154,13 @@ const DEFAULT_TRACKING = {
 // appStoreId = App Store 숫자 ID. 강제 업데이트 게이트의 기본 스토어 URL 조립에 쓴다.
 // (예전엔 marketing.attribution.appsflyer.iosAppId 에서 읽었는데, 어트리뷰션 벤더를
 //  안 쓰거나 AppsFlyer 가 아닌 앱은 URL 이 깨졌다 — 벤더 중립 자리로 옮긴다.)
-const DEFAULT_IOS = { teamId: null, appStoreId: null };
+// usesNonExemptEncryption: Info.plist ITSAppUsesNonExemptEncryption 값.
+//   null(기본) = plist 에 안 씀 → App Store Connect 가 **빌드마다** 수출 규정 질문을 띄우고,
+//                답하기 전엔 TestFlight 내부 테스터에게도 안 나간다.
+//   false      = 면제 대상 암호화만 사용(HTTPS/TLS·OS 제공·표준 알고리즘) → 질문 안 뜸.
+//   true       = 비면제 암호화 사용 → 별도 수출 서류가 필요하다.
+// **법적 신고 내용이라 하네스가 기본값을 false 로 정하지 않는다.** 앱마다 사람이 판단해 넣는다.
+const DEFAULT_IOS = { teamId: null, appStoreId: null, usesNonExemptEncryption: null };
 const DEFAULT_ANDROID = { sha256CertFingerprints: [] };
 
 // SHA-256 지문: 대문자 16진수 2자리 32쌍을 콜론으로 이은 형태 (AA:BB:...:FF)
@@ -392,6 +398,11 @@ export function loadConfig(repoRoot, slug) {
   const android = merge(DEFAULT_ANDROID, raw.android ?? {});
   if (ios.appStoreId != null && !/^\d+$/.test(String(ios.appStoreId))) {
     err(slug, `ios.appStoreId "${ios.appStoreId}" 형식 오류 — 숫자만 (예: "6480000000")`);
+  }
+  // 문자열 "false" 를 넣으면 plist 에 <true/> 가 박혀 반대 신고가 된다 — 불리언만 받는다.
+  if (ios.usesNonExemptEncryption != null && typeof ios.usesNonExemptEncryption !== 'boolean') {
+    err(slug, `ios.usesNonExemptEncryption 는 true/false 불리언이어야 함 (받은 값: ${JSON.stringify(ios.usesNonExemptEncryption)}). ` +
+      '수출 규정 신고 값이라 문자열을 허용하지 않는다 — docs/07-HOWTO-DEPLOY.md §6');
   }
   if (ios.teamId != null && !APPLE_TEAM_ID_RE.test(ios.teamId)) {
     err(slug, `ios.teamId "${ios.teamId}" 형식 오류 — 영숫자 대문자 10자리 (예: 3W889GYPRK)`);

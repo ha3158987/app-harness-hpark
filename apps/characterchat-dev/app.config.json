@@ -94,7 +94,8 @@
     "remoteConfigFetchIntervalSeconds": 3600
   },
   "ios": {
-    "teamId": "3W889GYPRK"
+    "teamId": "3W889GYPRK",
+    "usesNonExemptEncryption": false
   },
   "android": {
     "sha256CertFingerprints": []

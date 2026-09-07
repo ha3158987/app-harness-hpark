@@ -4,13 +4,14 @@ title: DEPLOY — 빌드 후 자동 배포 (CI/CD)
 category: 빌드배포
 audience: 배포담당자
 status: active
-updated: 2026-09-04
+updated: 2026-09-07
 ---
 
 # DEPLOY — 빌드 후 자동 배포 (CI/CD)
 
 `.github/workflows/release.yml` 이 앱을 빌드해 **내부 테스터까지** 자동 업로드한다
-(iOS=TestFlight · Android=Firebase App Distribution + Play 내부/베타 트랙).
+(iOS=TestFlight · Android=Firebase App Distribution + Play 내부/베타 트랙 + GCS 고정 링크).
+전 채널을 한 번에 태우는 진입점은 `release-app` 스킬 — [07-HOWTO-DEPLOY.md](./07-HOWTO-DEPLOY.md).
 **프로덕션 공개(심사 제출/정식 릴리즈)는 자동화하지 않는다** — 사람이 콘솔에서(STRATEGY 안전원칙).
 
 ---
@@ -46,7 +47,7 @@ updated: 2026-09-04
 | 값 | 무엇이 도나 | 테스터가 받는 방법 |
 |---|---|---|
 | `firebase` | Firebase App Distribution (APK) | 초대 메일/링크 → **즉시 설치**. 콘솔 클릭 불필요 |
-| `play` | Play 내부/베타 트랙 (AAB, 초안) | Play Console 에서 "검토 후 출시" 한 뒤 Play 스토어 |
+| `play` | Play 내부/베타 트랙 (AAB) | Play 스토어 — **바로 출시**(`release_status: 'completed'`), 콘솔 클릭 없음 |
 | `both` | 둘 다 (Firebase 먼저) | — |
 
 > Firebase 는 **Play 업로드보다 먼저** 돈다. Play 는 versionCode 중복·앱 레코드 미등록으로
@@ -169,7 +170,11 @@ error: Provisioning profile "match AppStore <appId>" doesn't include the Associa
 
 ## 7. 프로덕션 게이트 (수동)
 - iOS: TestFlight 까지만 자동. 외부 배포/심사 제출은 App Store Connect 에서 직접.
-- Android: `internal`/`beta` 트랙 + `draft` 까지만. production 승격은 Play Console 에서 직접.
+  > ⚠️ 내부 테스터에게도 **수출 규정 준수 답변** 전에는 빌드가 안 나간다. 하네스는
+  > `ITSAppUsesNonExemptEncryption` 을 넣지 않으므로 **매 빌드마다 콘솔에서 답해야 한다** —
+  > 없애는 방법과 판단 기준은 [07-HOWTO-DEPLOY.md §6](./07-HOWTO-DEPLOY.md).
+- Android: `internal`/`beta` 트랙까지만. 그 트랙 테스터에게는 바로 출시되지만(`completed`),
+  **production 승격은 Play Console 에서 사람이** — Fastfile 이 track 을 internal|beta 로 제한한다.
 - Android(Firebase App Distribution): **지정한 테스터 그룹까지만.** 스토어와 무관한 사내 채널이라
   공개 위험은 없지만, 그룹에 외부인을 넣으면 그게 곧 배포다 — 그룹 구성은 사람이 관리한다.
 
@@ -225,7 +230,7 @@ Android 먼저 → Firebase 콘솔 "테스트 메시지"로 앱 계층 격리 �
 ## 10. Android 내부 테스터 배포 런북 (Firebase App Distribution)
 
 **목적**: iOS 의 TestFlight 처럼 — 빌드가 올라가면 **테스터에게 바로 뜨는** 안드로이드 채널.
-Play 내부 트랙은 초안(draft)이라 매번 콘솔에서 "검토 후 출시"를 눌러야 하고, 테스터도 Play
+Play 내부 트랙도 이제 바로 출시되지만(`completed`), 테스터는 Play
 스토어를 거친다. App Distribution 은 그 두 단계가 없다.
 
 ### 하네스가 자동으로 하는 것

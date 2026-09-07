@@ -25,7 +25,7 @@ description: 빌드된 앱을 내부 테스터/스토어에 업로드한다. iOS
    bundle exec fastlane android beta slug:<slug>  # supply, track: internal|beta
    ```
    **채널 선택 기준** — "테스터에게 빨리 주고 싶다"면 `firebase`(콘솔 클릭 불필요),
-   "스토어 경로 그대로 검증"이면 `beta`(Play 초안 → 사람이 출시). 애매하면 둘 다.
+   "스토어 경로 그대로 검증"이면 `beta`(Play 내부트랙에 바로 출시). 애매하면 둘 다.
    CI 로 돌릴 땐 `gh workflow run release.yml -f android_channel=firebase|play|both`.
 3. 업로드 결과(빌드 번호, 채널/트랙, 테스터 그룹, 처리 상태)를 사용자에게 보고.
 4. 프로덕션으로 올리고 싶어 하면: **"여기서부터는 콘솔에서 직접 승인/제출하세요"** 라고 안내하고

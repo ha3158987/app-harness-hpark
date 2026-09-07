@@ -9,8 +9,8 @@ description: 모바일 앱의 새 버전을 전 채널로 릴리즈한다 — iO
 
 | 채널 | 산출물 | 테스터가 받는 법 | 사람 개입 |
 |---|---|---|---|
-| **iOS TestFlight** | `.ipa` | 빌드 처리 후 TestFlight 에 노출 | 없음 |
-| **Android Play 내부트랙** | `.aab` (**초안**) | Play 스토어 | 🔴 콘솔에서 "검토 후 출시" |
+| **iOS TestFlight** | `.ipa` | 빌드 처리 후 TestFlight 에 노출 | 🔴 **수출 규정 준수 답변** ([07 §6](../../../docs/07-HOWTO-DEPLOY.md)) |
+| **Android Play 내부트랙** | `.aab` | Play 스토어 (몇 분 뒤 업데이트) | 없음 (`release_status: 'completed'`) |
 | **Android Firebase App Distribution** | `.apk` | 초대/알림 메일 → App Tester | 없음 |
 | **Android GCS 고정 링크** | `.apk` | 기존 QR·URL 그대로 | 없음 |
 
@@ -80,7 +80,8 @@ gh run watch <run-id> --interval 20 --exit-status
 
 ### 7단계 — 결과 보고
 채널별 성공/스킵/실패를 표로. 그리고 **사람이 할 일을 반드시 남긴다**:
-- Play Console → 테스트 → 내부 테스트 → 새 릴리즈 **"검토 후 출시"** (안 누르면 테스터가 못 본다)
+- **iOS**: App Store Connect → TestFlight → 해당 빌드 → **수출 규정 준수** 질문에 답한다.
+  답하기 전엔 내부 테스터에게도 안 나간다 ([docs/07-HOWTO-DEPLOY.md §6](../../../docs/07-HOWTO-DEPLOY.md))
 - 정식 출시·심사 제출이 필요하면 콘솔 위치만 안내하고 **자동 실행하지 않는다**
 
 ## 2. 전제 — 앱마다 1회 (없으면 해당 채널이 조용히 빠진다)
@@ -115,7 +116,8 @@ gh run watch <run-id> --interval 20 --exit-status
 | 태그 푸시했는데 CI 가 옛 버전을 빌드 | bump 커밋보다 태그가 앞섬 | 태그 지우고 bump 커밋 위에 다시 |
 | 한쪽 잡이 `skipped` | `platform` 을 한쪽만 줌 — 실패가 아니라 "안 돌린 것" | `platform=both` 로 재실행 |
 | Firebase 스텝이 `건너뜀` | 변수/`google-services.json` 미설정 | §2 표 |
-| 업로드는 됐는데 테스터가 못 봄 (Play) | 초안 상태 | 콘솔 "검토 후 출시" |
+| 업로드는 됐는데 테스터가 못 봄 (Play) | 테스터가 내부 트랙 옵트인 링크 미수락 / 반영 지연 | Play Console → 내부 테스트 → 테스터 탭의 옵트인 URL 로 참여 |
+| 업로드는 됐는데 테스터가 못 봄 (TestFlight) | **수출 규정 준수 정보 누락** | ASC 에서 답변 — [docs/07 §6](../../../docs/07-HOWTO-DEPLOY.md) |
 | iOS: 프로파일/capability 오류 | App ID capability ↔ 프로파일 불일치 | [docs/08-DEPLOY.md §6](../../../docs/08-DEPLOY.md) — 로컬에서 `fastlane ios regen_profile` 1회 |
 
 ## 5. 주의
