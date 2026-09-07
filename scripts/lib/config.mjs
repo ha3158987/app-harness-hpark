@@ -72,6 +72,10 @@ const DEFAULT_AUTH = {
   deleteEndpoint: null,     // 회원탈퇴/계정삭제 백엔드 URL (스토어 정책상 사실상 필수)
   guestEndpoint: null,      // 게스트(익명) 계정 생성 백엔드 URL (IAP/진행상황 보관 시)
   deviceEndpoint: null,     // 푸시토큰/기기를 계정에 등록하는 백엔드 URL (기기↔계정 바인딩)
+  // 로그아웃·탈퇴 시 그 기기 토큰을 계정에서 떼는 백엔드 URL. 없으면 브릿지는 해제를
+  // 건너뛴다 — 그러면 토큰이 이전 계정에 붙은 채 남아 로그아웃한 뒤에도 그 계정의
+  // 푸시가 이 기기로 온다(계정 전환 기기에서는 남의 알림이 된다).
+  deviceUnregisterEndpoint: null,
   oauth: {},                // 직접 모드: { google: { clientId, scopes?, redirectUri?, authorizeUrl?, extraQuery? }, ... }
   // OAuth 복귀 커스텀 스킴(`<appId>://`)을 네이티브에 등록할지. **providers 와 독립이다.**
   //
@@ -560,6 +564,7 @@ export const AIPIA_DEFAULTS = Object.freeze({
     authLogout:   '/api/v2/auth/logout',
     authDelete:   '/api/v2/auth/delete',
     authDevice:   '/api/v2/auth/device',
+    authDeviceUnregister: '/api/v2/auth/device/unregister',
     authMe:       '/api/v2/auth/me',
     iapVerify:    '/api/v2/iap/verify',
     webhookApple: '/api/v2/webhooks/apple',
@@ -625,6 +630,7 @@ export function aipiaPreset({ slug, appName, ...rest }) {
       deleteEndpoint:  `https://${apiProd}${D.backendEndpoints.authDelete}`,
       guestEndpoint:   `https://${apiProd}${D.backendEndpoints.authGuest}`,
       deviceEndpoint:  `https://${apiProd}${D.backendEndpoints.authDevice}`,
+      deviceUnregisterEndpoint: `https://${apiProd}${D.backendEndpoints.authDeviceUnregister}`,
       oauth,
     },
     iap: {

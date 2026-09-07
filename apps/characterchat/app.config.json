@@ -78,7 +78,8 @@
     "signupEndpoint": "https://api.chat.poptale.ai/auth/signup",
     "logoutEndpoint": "https://api.chat.poptale.ai/auth/logout",
     "deleteEndpoint": "https://api.chat.poptale.ai/auth/withdraw",
-    "deviceEndpoint": "https://api.chat.poptale.ai/api/push/register"
+    "deviceEndpoint": "https://api.chat.poptale.ai/api/push/register",
+    "deviceUnregisterEndpoint": "https://api.chat.poptale.ai/api/push/unregister"
   },
   "ios": {
     "teamId": "3W889GYPRK"

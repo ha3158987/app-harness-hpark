@@ -142,6 +142,8 @@ export interface AppBridgeSDK {
    * 같은 콜백으로 들어온다. 등록 전 도착한 콜드스타트 딥링크도 즉시 전달. 반환=해제 함수.
    */
   onDeepLink(handler: (url: string, raw: unknown) => void): () => void;
+  /** 보류 중인(아직 아무 핸들러도 받지 않은) 딥링크를 버린다. logout/deleteAccount 가 내부적으로 호출한다. */
+  clearPendingDeepLink(): void;
 
   /**
    * 강제 업데이트 체크. minVersionUrl JSON 과 현재 versionCode 비교, 구버전이면
@@ -207,6 +209,8 @@ export interface AppBridgeSDK {
 
   /** 앱 포그라운드 복귀 시 실행(지갑/세션 갱신용). 웹은 focus/visibility 폴백. 반환=해제 함수. */
   onResume(handler: () => void): () => void;
+  /** 앱이 백그라운드로 나갈 때. onResume 과 짝으로 써서 "실제로 나갔다 돌아왔는지"를 가른다. */
+  onPause(handler: () => void): () => void;
 
   /** 안전영역 인셋(px) — 노치/펀치홀/제스처바. CSS 만으로 되면 var(--safe-area-inset-*) 직접 사용 권장. */
   getSafeAreaInsets(): { top: number; bottom: number; left: number; right: number };

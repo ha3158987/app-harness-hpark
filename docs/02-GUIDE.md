@@ -108,7 +108,7 @@ flowchart LR
 |---|---|---|---|
 | 코어 | `ready` `isNative` `platform` `capabilities` `config` `context` | — | INTEGRATION |
 | 로그인/SSO | `login` `logout` `completeSignup` `deleteAccount` `getLastLogin` `guestLogin` `onDeepLink` | `auth` | AUTH |
-| 기기바인딩 | `enableBiometricLogin` `biometricLoginEnabled` `unlock` (+`registerPush`로 기기등록) | `auth.deviceEndpoint` | AUTH §3-7 |
+| 기기바인딩 | `enableBiometricLogin` `biometricLoginEnabled` `unlock` (+`registerPush`로 기기등록, `logout`/`deleteAccount`로 해제) | `auth.deviceEndpoint` `auth.deviceUnregisterEndpoint` | AUTH §3-7 |
 | 인앱결제 | `getProducts` `purchase` `restorePurchases` | `iap` | IAP |
 | 권한 | `getPermissionNotice` `requestPermission` `permissionStatus` | `permissions` | COMPLIANCE |
 | 추적동의 | `requestTracking` (iOS ATT) | `marketing` | DATA-COLLECTION |
@@ -238,7 +238,10 @@ flowchart TB
     "oauth": { "google": { "clientId": "xxxx.apps.googleusercontent.com" },
                "apple":  { "clientId": "<APPLE_SERVICE_ID>" } },
     "sessionEndpoint": "...", "signupEndpoint": "...", "logoutEndpoint": "...",
-    "deleteEndpoint": "...", "guestEndpoint": "...", "deviceEndpoint": "..." },
+    "deleteEndpoint": "...", "guestEndpoint": "...", "deviceEndpoint": "...",
+    // 로그아웃·탈퇴에서 그 기기 푸시토큰을 계정에서 떼는 URL. 없으면 해제를 건너뛰므로
+    // 로그아웃 뒤에도 이전 계정의 푸시가 이 기기로 계속 온다.
+    "deviceUnregisterEndpoint": "..." },
   "iap": { "verifyEndpoint": "...", "googleTokenCompression": false, "products": [
     { "id": "coin_100", "storeId": "kr.co.aipia.app.coin100", "type": "consumable" } ] },
   "monitoring": { "crash": { "provider": "sentry", "dsn": "", "environment": "production" },
@@ -265,7 +268,7 @@ flowchart TB
   `loadConfig` 가 모든 빌드에서 멈춘다(`scripts/lib/config.mjs:296-299`). 자체 IdP 모드는 #25 에서
   제거됐다 — [25-AUTH-DELEGATION.md §8](25-AUTH-DELEGATION.md).
 - `auth.providers` 허용값 10종: `email · apple · google · naver · kakao · facebook · x · threads ·
-  line · discord` (`scripts/lib/config.mjs:76`). 목록 밖 값은 경고가 아니라 `throw` 다.
+  line · discord` (`scripts/lib/config.mjs:92`). 목록 밖 값은 경고가 아니라 `throw` 다.
 - `iap.googleTokenCompression`: Google purchase token 이 길어 페이로드 한계에 걸릴 때 gzip+base64.
   활성 시 `verifyEndpoint` 백엔드도 같은 포맷을 수용해야 함.
 - `monitoring.apm`: APM/RUM 벤더 (`whatap` | `datadog` | null). 크래시와 별개.

@@ -115,7 +115,7 @@ AppBridge.logout() / deleteAccount()
 ### pass-through 는 "전부"가 아니다 — 예약 이름이 있다 (실측)
 
 `_finishLogin` 이 `{ ...data, ...credential, session, user, isNew, needsProfile, backend }` 순서로
-합치기 때문에(`template/bridge/dist/index.js:1369-1375`) **`...data` 를 먼저 펼치고 뒤에서
+합치기 때문에(`template/bridge/dist/index.js:1474-1481`) **`...data` 를 먼저 펼치고 뒤에서
 덮어쓴다.** 그래서 다음 이름들은 BE 가 보내도 웹에 그 값으로 도착하지 않는다.
 
 | 티어 | 이름 | 조건 |
@@ -182,13 +182,13 @@ provider 를 추가하려면 **세 곳을 동시에** 고쳐야 한다. 하나�
 
 | 위치 | 무엇 |
 |---|---|
-| `template/bridge/dist/index.js:40` | `OAUTH_PRESETS` (authorizeUrl · scopes) |
+| `template/bridge/dist/index.js:45` | `OAUTH_PRESETS` (authorizeUrl · scopes) |
 | `template/bridge/dist/index.d.ts:53` | `AuthProvider` union 타입 |
-| `scripts/lib/config.mjs:76` | `KNOWN_AUTH_PROVIDERS` |
+| `scripts/lib/config.mjs:92` | `KNOWN_AUTH_PROVIDERS` |
 
 > **`.d.ts` 를 빼먹으면 웹(TypeScript)에서 `login('line')` 이 컴파일 에러**가 난다. 런타임보다 먼저 막힌다.
 >
-> **`config.mjs:302` 의 미지 provider 검증은 경고가 아니라 `throw`** 다. 허용목록을 넓히기 전에
+> **`config.mjs:329` 의 미지 provider 검증은 경고가 아니라 `throw`** 다. 허용목록을 넓히기 전에
 > `app.config.json` 의 `providers` 에 새 값을 넣으면 **config 파싱 자체가 예외로 죽는다.**
 
 브릿지에 **빌드 스텝이 없다.** `dist/index.js` 가 곧 편집 대상 소스이고(`src` 디렉터리 없음),

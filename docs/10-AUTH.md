@@ -206,6 +206,12 @@ await ensureSession();          // 비로그인이면 게스트 신원 확보 �
   `unlock()`(Face ID/지문)로 즉시 진입.
 - **기기 등록**: `registerPush()` 시 푸시토큰+deviceId 를 `POST {deviceEndpoint}` 로 계정에 등록 →
   그 사람 기기로 푸시 + 기기/세션 관리(§6).
+- **기기 해제**: `logout()` · `deleteAccount()` 가 **세션 종료 앞에서** 같은 페이로드를
+  `POST {deviceUnregisterEndpoint}` 로 보낸다. 순서가 계약이다 — 세션이 끝난 뒤에는 서버가
+  "누구의 기기인가" 를 판정할 수 없어 401 로 버린다.
+  ⚠️ 이 키를 안 넣으면 브릿지는 해제를 **건너뛴다.** 그러면 토큰이 이전 계정에 붙은 채 남아
+  로그아웃한 뒤에도 그 계정의 푸시가 이 기기로 오고, 계정 전환 기기에서는 남의 알림이 된다.
+  **화면에는 아무 증상이 없어 수동 QA 로 잡히지 않는다.**
 ```js
 // 실로그인 성공 후
 await AppBridge.enableBiometricLogin();    // "다음엔 Face ID로 로그인" 권유

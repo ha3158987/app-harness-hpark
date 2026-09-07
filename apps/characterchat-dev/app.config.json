@@ -82,7 +82,8 @@
     "signupEndpoint": "https://api.chat.dev.poptale.ai/auth/signup",
     "logoutEndpoint": "https://api.chat.dev.poptale.ai/auth/logout",
     "deleteEndpoint": "https://api.chat.dev.poptale.ai/auth/withdraw",
-    "deviceEndpoint": "https://api.chat.dev.poptale.ai/api/push/register"
+    "deviceEndpoint": "https://api.chat.dev.poptale.ai/api/push/register",
+    "deviceUnregisterEndpoint": "https://api.chat.dev.poptale.ai/api/push/unregister"
   },
   "firebase": {
     "enabled": true,

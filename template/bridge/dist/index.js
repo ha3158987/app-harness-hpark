@@ -35,6 +35,11 @@ function deriveCapabilities(features) {
   };
 }
 
+// 핸들러가 없을 때 도착한 딥링크를 보류하는 시간. 콜드스타트에서 웹 번들이 뜨고
+// onDeepLink 가 걸릴 때까지를 덮을 만큼만 짧게 둔다 — 길면 한참 뒤의 로그인이
+// 옛 OAuth code 를 받는다(그 code 는 이미 만료·소비돼 로그인이 실패한다).
+const PENDING_DEEP_LINK_TTL_MS = 30_000;
+
 // 범용 OAuth2(시스템 브라우저) 공급자 프리셋. config.auth.oauth.<provider> 가 덮어쓴다.
 // 비밀키(client secret)는 앱에 없음 — authorization code 를 백엔드가 교환(PKCE).
 const OAUTH_PRESETS = {
@@ -86,8 +91,12 @@ class AppBridgeImpl {
     this._autoCaptureStarted = false;
     this._eventQueue = [];       // 초기화 전 track() 호출 버퍼
     this._deepLinkHandlers = []; // onDeepLink 로 등록된 라우팅 콜백들
+    this._pushToken = null;      // 마지막으로 등록한 푸시 토큰(로그아웃 시 해제에 쓴다)
     this._deepLinkStarted = false;
-    this._lastDeepLink = null;   // 핸들러 등록 전에 도착한 딥링크 보관(콜드스타트 레이스 방지)
+    // 핸들러가 **하나도 없을 때** 도착한 딥링크만 보류한다(콜드스타트 레이스 방지).
+    // ⚠️ 배달되면 즉시 버린다 — 남겨 두면 다음 onDeepLink 등록자에게 다시 배달돼
+    //    이미 소비된 OAuth code 가 재생된다(아래 onDeepLink 주석).
+    this._pendingDeepLink = null;
     // ATT: 시스템 팝업은 유저당 평생 1회만 뜬다(응답 후엔 notDetermined 로 못 돌아옴).
     // 호출부가 실수로 두 곳에서 요청하면 응답 타이밍이 엉켜 잘못된 값이 어트리뷰션 SDK 로 간다
     // (Poptale 실제 사례). 그래서 API 자체를 멱등하게 만든다 — 아래 2개가 그 상태다.
@@ -275,20 +284,40 @@ class AppBridgeImpl {
   // ── 딥링크 / 유니버설·앱 링크 ──────────────────────────────────────────
   /**
    * 딥링크 라우팅 핸들러 등록. 직접 딥링크(appUrlOpen)와 디퍼드 딥링크(AppsFlyer)가
-   * 같은 콜백으로 들어온다. 등록 전에 도착한 콜드스타트 딥링크도 즉시 전달한다.
+   * 같은 콜백으로 들어온다. **핸들러가 없을 때 도착한** 콜드스타트 딥링크는 보류분으로
+   * 남아 있다가 첫 등록자에게 1회 전달된다.
+   *
+   * ⚠️ **보류분은 1회만 배달한다.** 예전에는 마지막 딥링크를 영구 보관하며 새로 등록되는
+   *    모든 핸들러에게 다시 넘겼다. 그러면 OAuth 복귀를 딥링크로 기다리는 로그인
+   *    (브로커 로그인)에서 **다음 로그인 시도가 이전 시도의 `?code=` 를 즉시 받는다** —
+   *    그 code 는 일회용이라 상환이 실패하고, 그동안 브라우저는 열려서 새 code 를
+   *    보류분에 채운다. 그래서 "첫 시도 실패 → 두 번째 성공" 이 무한 교대로 반복된다.
+   *    보류분에 수명(TTL)도 둔다 — 앱을 오래 켜 둔 뒤의 로그인이 옛 링크를 받지 않게.
    * @returns 등록 해제 함수
    */
   onDeepLink(handler) {
     if (typeof handler !== 'function') return () => {};
     this._deepLinkHandlers.push(handler);
     if (this.isNative && !this._deepLinkStarted) this._startDeepLinks();
-    if (this._lastDeepLink) {
-      try { handler(this._lastDeepLink.url, this._lastDeepLink.raw); } catch { /* noop */ }
+    const pending = this._pendingDeepLink;
+    if (pending) {
+      this._pendingDeepLink = null; // 신선하든 아니든 여기서 소비한다(재생 금지)
+      if (Date.now() - pending.at <= PENDING_DEEP_LINK_TTL_MS) {
+        try { handler(pending.url, pending.raw); } catch { /* noop */ }
+      }
     }
     return () => {
       const i = this._deepLinkHandlers.indexOf(handler);
       if (i >= 0) this._deepLinkHandlers.splice(i, 1);
     };
+  }
+
+  /**
+   * 보류 중인 딥링크를 버린다. 로그아웃·탈퇴처럼 "이전 세션의 흔적을 남기면 안 되는"
+   * 시점에 호출한다(brdige 내부에서도 logout/deleteAccount 가 호출한다).
+   */
+  clearPendingDeepLink() {
+    this._pendingDeepLink = null;
   }
 
   // appUrlOpen(유니버설/앱 링크) 수신을 시작. 내부에서 1회만 켜진다.
@@ -307,10 +336,16 @@ class AppBridgeImpl {
   }
 
   // 등록된 모든 핸들러로 딥링크 분배 + 동선 자동 기록.
+  // 핸들러가 없으면 보류분으로 남긴다 — 있으면 배달로 끝이고 보관하지 않는다.
   _emitDeepLink(url, raw) {
-    this._lastDeepLink = { url, raw };
     this.track('deep_link_open', { url });
-    for (const h of this._deepLinkHandlers) {
+    const handlers = this._deepLinkHandlers.slice(); // 배달 중 등록/해제에 안전하게
+    if (!handlers.length) {
+      this._pendingDeepLink = { url, raw, at: Date.now() };
+      return;
+    }
+    this._pendingDeepLink = null;
+    for (const h of handlers) {
       try { h(url, raw); } catch { /* 한 핸들러 실패가 다른 핸들러를 막지 않게 */ }
     }
   }
@@ -811,6 +846,33 @@ class AppBridgeImpl {
     };
   }
 
+  /**
+   * 앱이 백그라운드로 나갈 때 핸들러 실행. 웹은 blur/visibility 폴백.
+   *
+   * ⚠️ onResume 만으로는 "복귀" 를 판정할 수 없다. isActive:true 는 앱이 **한 번도
+   *    나가지 않았는데도** 올 수 있고(외부 앱을 여는 순간 iOS 가 활성 상태를 흔든다),
+   *    그것을 복귀로 읽으면 진행 중인 브라우저 왕복(OAuth 로그인 등)이 "사용자가
+   *    닫고 돌아왔다" 로 오판돼 취소된다. onPause 로 **실제로 나갔는지**를 먼저 본다.
+   */
+  onPause(handler) {
+    if (typeof handler !== 'function') return () => {};
+    if (this.isNative) {
+      let remove = () => {};
+      import('@capacitor/app').then(({ App }) => {
+        App.addListener('appStateChange', ({ isActive }) => { if (!isActive) handler(); })
+          .then((h) => { remove = () => h.remove(); });
+      }).catch(() => {});
+      return () => remove();
+    }
+    const onVis = () => { if (document.visibilityState === 'hidden') handler(); };
+    window.addEventListener('blur', handler);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('blur', handler);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }
+
   // 안전영역 인셋(px). safe-area 플러그인이 주입한 --safe-area-inset-* (없으면 env() 폴백)을 읽는다.
   // 레이아웃을 JS 로 계산할 때 사용. CSS 만으로 되면 var(--safe-area-inset-top) 을 직접 써도 됨.
   getSafeAreaInsets() {
@@ -944,6 +1006,7 @@ class AppBridgeImpl {
 
   // 푸시 토큰을 계정에 등록(기기↔계정 바인딩). auth.deviceEndpoint 설정 시.
   async _registerDeviceToken(pushToken) {
+    this._pushToken = pushToken || null; // 로그아웃/탈퇴에서 해제에 쓴다
     const endpoint = this.config && this.config.auth && this.config.auth.deviceEndpoint;
     if (!endpoint) return;
     try {
@@ -955,6 +1018,29 @@ class AppBridgeImpl {
     } catch { /* noop */ }
   }
 
+  /**
+   * 푸시 토큰을 계정에서 해제(기기↔계정 바인딩 해제). auth.deviceUnregisterEndpoint 설정 시.
+   *
+   * ⚠️ **세션 쿠키가 살아 있는 동안** 불러야 한다 — 서버가 "누구의 기기인가"를 쿠키로
+   *    판정하므로 로그아웃 요청보다 먼저 보내지 않으면 401 로 버려진다. 그래서
+   *    logout()/deleteAccount() 가 세션 종료 **앞에서** 호출한다.
+   * ⚠️ 안 하면 기기 토큰이 이전 계정에 그대로 붙어 있어, 로그아웃한 뒤에도 그 계정의
+   *    푸시가 이 기기로 계속 온다(계정 전환 기기에서는 남의 알림이 된다).
+   */
+  async _unregisterDeviceToken() {
+    const endpoint = this.config && this.config.auth && this.config.auth.deviceUnregisterEndpoint;
+    const pushToken = this._pushToken;
+    if (!endpoint || !pushToken) return;
+    try {
+      await fetch(endpoint, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pushToken, deviceId: await this._deviceId(), platform: this.platform }),
+      });
+    } catch { /* noop — 해제 실패로 로그아웃을 막지 않는다 */ }
+    this._pushToken = null;
+  }
+
   // 기기 식별자 캐시 (백엔드 세션/기기 관리에 함께 보냄)
   async _deviceId() {
     if (this._devId !== undefined) return this._devId;
@@ -963,9 +1049,22 @@ class AppBridgeImpl {
     return this._devId;
   }
 
-  /** 로그아웃: 시큐어 토큰 삭제 + (설정 시) 백엔드 세션 종료 + 새로고침 */
+  /**
+   * 로그아웃: 기기 바인딩 해제 → 시큐어 토큰 삭제 → (설정 시) 백엔드 세션 종료 → 새로고침.
+   *
+   * ⚠️ 순서가 계약이다. 기기 토큰 해제는 **세션이 살아 있을 때**만 서버가 받으므로
+   *    로그아웃 요청보다 먼저 보낸다(_unregisterDeviceToken 주석).
+   * ⚠️ 기기에 남는 로그인 흔적을 함께 지운다 — 보류 딥링크(이전 흐름의 OAuth code)와
+   *    생체 빠른 로그인 플래그. 생체 플래그를 남기면 다음 사용자(계정 전환)에게
+   *    이전 사용자의 잠금이 걸린다.
+   *    `last_login_provider` 는 **남긴다** — 자격증명이 아니라 "어느 버튼을 눌렀더라"
+   *    힌트이고, 로그인 화면의 "마지막 로그인" 배지가 그 값으로 산다.
+   */
   async logout(opts = {}) {
+    await this._unregisterDeviceToken();
     try { await this.secureRemove('auth_token'); } catch { /* noop */ }
+    try { await this.removePref('biometric_login'); } catch { /* noop */ }
+    this.clearPendingDeepLink();
     const endpoint = (this.config && this.config.auth && this.config.auth.logoutEndpoint) || opts.endpoint;
     if (endpoint) { try { await fetch(endpoint, { method: 'POST', credentials: 'include' }); } catch { /* noop */ } }
     if (opts.reload !== false && this.isNative) location.reload();
@@ -979,6 +1078,8 @@ class AppBridgeImpl {
   async deleteAccount(opts = {}) {
     const endpoint = (this.config && this.config.auth && this.config.auth.deleteEndpoint) || opts.endpoint;
     if (!endpoint) return { ok: false, reason: 'no-delete-endpoint' };
+    // ⚠️ 기기 바인딩 해제는 탈퇴 요청 **앞**이다 — 세션이 끝난 뒤에는 서버가 받지 않는다.
+    await this._unregisterDeviceToken();
     try {
       const res = await fetch(endpoint, {
         method: 'POST', credentials: 'include',
@@ -988,6 +1089,10 @@ class AppBridgeImpl {
       if (res.ok) {
         try { await this.secureRemove('auth_token'); } catch { /* noop */ }
         try { await this.removePref('last_login_provider'); } catch { /* noop */ }
+        // 탈퇴는 흔적을 전부 지운다 — 생체 플래그를 남기면 이 기기의 다음 사용자가
+        // 사라진 계정의 잠금을 물려받는다.
+        try { await this.removePref('biometric_login'); } catch { /* noop */ }
+        this.clearPendingDeepLink();
         if (opts.reload !== false && this.isNative) location.reload();
       }
       return { ok: res.ok };
