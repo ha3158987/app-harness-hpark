@@ -73,8 +73,10 @@ const DEFAULT_AUTH = {
   guestEndpoint: null,      // 게스트(익명) 계정 생성 백엔드 URL (IAP/진행상황 보관 시)
   deviceEndpoint: null,     // 푸시토큰/기기를 계정에 등록하는 백엔드 URL (기기↔계정 바인딩)
   // 로그아웃·탈퇴 시 그 기기 토큰을 계정에서 떼는 백엔드 URL. 없으면 브릿지는 해제를
-  // 건너뛴다 — 그러면 토큰이 이전 계정에 붙은 채 남아 로그아웃한 뒤에도 그 계정의
-  // 푸시가 이 기기로 온다(계정 전환 기기에서는 남의 알림이 된다).
+  // 건너뛴다 — 그러면 토큰이 이전 계정에 붙은 채 남아, 그 기기에 아무도 로그인하지
+  // 않은 동안 이전 계정의 푸시가 계속 온다. 다음 사용자가 알림 권한을 **거부**하면
+  // 소유자 갱신(registerPush)이 일어나지 않아 남의 알림이 되기도 한다.
+  // (허용하면 서버가 토큰 소유자를 새 사용자로 갱신한다 — docs/10-AUTH §3-7)
   deviceUnregisterEndpoint: null,
   oauth: {},                // 직접 모드: { google: { clientId, scopes?, redirectUri?, authorizeUrl?, extraQuery? }, ... }
   // OAuth 복귀 커스텀 스킴(`<appId>://`)을 네이티브에 등록할지. **providers 와 독립이다.**

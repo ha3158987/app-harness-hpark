@@ -115,7 +115,7 @@ AppBridge.logout() / deleteAccount()
 ### pass-through 는 "전부"가 아니다 — 예약 이름이 있다 (실측)
 
 `_finishLogin` 이 `{ ...data, ...credential, session, user, isNew, needsProfile, backend }` 순서로
-합치기 때문에(`template/bridge/dist/index.js:1474-1481`) **`...data` 를 먼저 펼치고 뒤에서
+합치기 때문에(`template/bridge/dist/index.js:1476-1483`) **`...data` 를 먼저 펼치고 뒤에서
 덮어쓴다.** 그래서 다음 이름들은 BE 가 보내도 웹에 그 값으로 도착하지 않는다.
 
 | 티어 | 이름 | 조건 |
@@ -184,16 +184,50 @@ provider 를 추가하려면 **세 곳을 동시에** 고쳐야 한다. 하나�
 |---|---|
 | `template/bridge/dist/index.js:45` | `OAUTH_PRESETS` (authorizeUrl · scopes) |
 | `template/bridge/dist/index.d.ts:53` | `AuthProvider` union 타입 |
-| `scripts/lib/config.mjs:92` | `KNOWN_AUTH_PROVIDERS` |
+| `scripts/lib/config.mjs:94` | `KNOWN_AUTH_PROVIDERS` |
 
 > **`.d.ts` 를 빼먹으면 웹(TypeScript)에서 `login('line')` 이 컴파일 에러**가 난다. 런타임보다 먼저 막힌다.
 >
-> **`config.mjs:329` 의 미지 provider 검증은 경고가 아니라 `throw`** 다. 허용목록을 넓히기 전에
+> **`config.mjs:337` 의 미지 provider 검증은 경고가 아니라 `throw`** 다. 허용목록을 넓히기 전에
 > `app.config.json` 의 `providers` 에 새 값을 넣으면 **config 파싱 자체가 예외로 죽는다.**
 
 브릿지에 **빌드 스텝이 없다.** `dist/index.js` 가 곧 편집 대상 소스이고(`src` 디렉터리 없음),
 `dist/index.d.ts` 도 손으로 고친다. 변경은 `package.json` version bump + GitHub Packages publish
 로만 웹에 닿는다.
+
+### publish 규칙 — 프리릴리즈는 `--tag beta` 다 (실측 함정)
+
+```bash
+cd template/bridge
+npm publish --tag beta      # 1.5.0-beta.x
+npm publish                 # 안정판(1.6.0 등)만 기본 태그(latest)로
+```
+
+`npm publish` 의 기본 태그는 `latest` 다. 프리릴리즈를 그냥 올리면 **`latest` 가 안정판에서
+베타로 옮겨가고, 이 스코프를 쓰는 다른 앱의 일반 설치(`npm i @aipia-team/harness-bridge`)가
+베타로 끌려간다.** 레지스트리를 조회해야만 보이는 규칙이라 실수하기 쉽다 — 올리기 전에 현재
+태그를 확인한다.
+
+```bash
+npm view @aipia-team/harness-bridge dist-tags
+# { beta: '1.5.0-beta.1', latest: '1.4.0' }   ← latest 는 안정판에 둔다
+```
+
+**publish 는 되돌릴 수 없다**(같은 버전 재발행 불가). 올리기 전에 `npm test` 통과 +
+`npm publish --dry-run` 으로 tarball 내용을 확인하고, 사람 확인을 받는다.
+
+### 무엇이 앱 재빌드를 필요로 하는가 — 브릿지 JS 는 아니다
+
+셸이 원격 웹을 로드하므로(`server.url = startUrl`) **브릿지 JS 는 웹 번들에 실려 나간다.**
+그래서 `dist/index.js` 수정은 publish → 웹의 의존성 갱신 → **웹 배포만으로 이미 설치된 앱에
+닿는다.** 반면 `app.config.json` 값은 `generate-app` 이 `app-config.json` 으로 구워
+**바이너리에 들어가므로**(`Native.getConfig()` 가 번들 파일을 읽는다) 새 빌드·릴리즈가 필요하다.
+
+| 바꾼 것 | 반영 경로 |
+|---|---|
+| `template/bridge/dist/*` (JS) | publish → 웹 배포 (**앱 재빌드 불필요**) |
+| `template/bridge/{ios,android}/*` (네이티브) | 새 앱 빌드·릴리즈 |
+| `apps/<slug>/app.config.json` | 새 앱 빌드·릴리즈 |
 
 ---
 

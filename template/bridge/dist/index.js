@@ -1024,8 +1024,10 @@ class AppBridgeImpl {
    * ⚠️ **세션 쿠키가 살아 있는 동안** 불러야 한다 — 서버가 "누구의 기기인가"를 쿠키로
    *    판정하므로 로그아웃 요청보다 먼저 보내지 않으면 401 로 버려진다. 그래서
    *    logout()/deleteAccount() 가 세션 종료 **앞에서** 호출한다.
-   * ⚠️ 안 하면 기기 토큰이 이전 계정에 그대로 붙어 있어, 로그아웃한 뒤에도 그 계정의
-   *    푸시가 이 기기로 계속 온다(계정 전환 기기에서는 남의 알림이 된다).
+   * ⚠️ 안 하면 기기 토큰이 이전 계정에 그대로 붙어 있어, **그 기기에 아무도 로그인하지
+   *    않은 동안 이전 계정의 푸시가 계속 온다.** 다음 사용자가 알림 권한을 거부하면
+   *    소유자 갱신(registerPush)이 일어나지 않아 남의 알림이 되기도 한다 — 허용하면
+   *    서버가 토큰 소유자를 새 사용자로 갱신한다(docs/10-AUTH §3-7).
    */
   async _unregisterDeviceToken() {
     const endpoint = this.config && this.config.auth && this.config.auth.deviceUnregisterEndpoint;

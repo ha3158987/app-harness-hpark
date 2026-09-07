@@ -268,7 +268,7 @@ flowchart TB
   `loadConfig` 가 모든 빌드에서 멈춘다(`scripts/lib/config.mjs:296-299`). 자체 IdP 모드는 #25 에서
   제거됐다 — [25-AUTH-DELEGATION.md §8](25-AUTH-DELEGATION.md).
 - `auth.providers` 허용값 10종: `email · apple · google · naver · kakao · facebook · x · threads ·
-  line · discord` (`scripts/lib/config.mjs:92`). 목록 밖 값은 경고가 아니라 `throw` 다.
+  line · discord` (`scripts/lib/config.mjs:94`). 목록 밖 값은 경고가 아니라 `throw` 다.
 - `iap.googleTokenCompression`: Google purchase token 이 길어 페이로드 한계에 걸릴 때 gzip+base64.
   활성 시 `verifyEndpoint` 백엔드도 같은 포맷을 수용해야 함.
 - `monitoring.apm`: APM/RUM 벤더 (`whatap` | `datadog` | null). 크래시와 별개.
