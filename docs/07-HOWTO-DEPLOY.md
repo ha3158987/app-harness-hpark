@@ -13,9 +13,13 @@ app-harness 로 앱을 테스터에게 배포하는 **실전 가이드**.
 (인증 요소 설명·관리는 `09-CREDENTIALS.md`, CI 시크릿 등록은 `08-DEPLOY.md` 참조)
 
 > TL;DR: **`app.config.json` 의 versionCode 올리고 → `git tag <slug>-v<버전>` 푸시 → 끝.**
-> CI가 빌드·서명·업로드까지 자동.
-> iOS=**TestFlight** / Android=**Firebase App Distribution**(테스터에게 즉시) + Play 내부트랙.
-> (정식 출시는 사람이 콘솔에서)
+> CI가 빌드·서명·업로드까지 자동. 트리거 한 번에 **네 채널**이 나간다 —
+> iOS=**TestFlight** / Android=**Firebase App Distribution**(테스터에게 즉시) + **Play 내부트랙**
+> + **GCS 고정 링크**(QR 재사용). (정식 출시는 사람이 콘솔에서)
+>
+> 이 절차 전체(버전 bump → 커밋 → 트리거 → CI 감시 → 보고)를 대신 해주는 진입점이
+> **`release-app` 스킬**이다 — "모바일 앱 새 버전 배포해줘". 스토어를 안 건드리고 사내 APK
+> 링크만 갱신하려면 `publish-apk` 스킬.
 
 ---
 
@@ -61,6 +65,8 @@ git tag characterchat-dev-v1.0.1 && git push origin characterchat-dev-v1.0.1
 - **Android / Firebase App Distribution**: 테스터에게 **바로** 뜬다. 초대 메일 또는 App Tester 앱에서
   새 버전 확인 → 설치. 콘솔에서 누를 것 없음. (Firebase 콘솔 → App Distribution 에서 배포 이력 확인)
 - **Android / Play**: Play Console → 테스트 → 내부 테스트 → 새 릴리즈가 **초안(draft)** 으로 올라옴 → "검토 후 출시"
+- **Android / GCS 고정 링크**: `APK_DIST_BUCKET_<SLUG>` 변수가 있으면 같은 URL 이 최신 APK 로 갱신된다
+  (`https://storage.googleapis.com/<버킷>/android/<slug>.apk`). **뿌려둔 QR 은 그대로 유효** — 실행 요약(Job Summary)에 링크가 찍힌다
 - **iOS**: App Store Connect → TestFlight → 빌드 처리 후 테스터에게 노출
 
 > 자동화는 **테스터까지만**. 정식 스토어 공개(심사 제출/프로덕션 승격)는 **사람이 콘솔에서** (안전 원칙).
@@ -140,12 +146,15 @@ bundle exec fastlane ios beta slug:<slug>           # TestFlight
 ## 요약 흐름
 
 ```
+              "모바일 앱 새 버전 배포해줘"  =  release-app 스킬
+                                 │
 versionCode +1  →  git tag <slug>-v<버전>  →  git push origin <태그>
                                                       │
                                         CI: 빌드·서명·업로드
                                                       │
-                    ┌─────────────────────────────────┼─────────────────────────────┐
-                    ▼                                 ▼                             ▼
-        Firebase App Distribution           Play 내부 트랙(초안)              TestFlight
-        → 테스터에게 즉시 (Android)      → 콘솔에서 "검토 후 출시" (사람)     → 처리 후 노출 (iOS)
+        ┌───────────────────────┬─────────────────────┼──────────────────────┐
+        ▼                       ▼                     ▼                      ▼
+Firebase App Distribution   GCS 고정 링크      Play 내부 트랙(초안)      TestFlight
+→ 테스터에게 즉시           → 같은 QR 로 최신   → 콘솔 "검토 후 출시"     → 처리 후 노출
+  (Android)                   (Android)          (사람)                    (iOS)
 ```
