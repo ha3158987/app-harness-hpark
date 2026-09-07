@@ -26,7 +26,7 @@
 
 - 실제 키 · 비번 · 토큰 값을 레포에 커밋하지 않는다. (`docs/09-CREDENTIALS.md`)
 - 프로덕션 스토어 공개(심사 제출 · 정식 릴리즈)는 자동화하지 않는다. 사람이 콘솔에서 한다.
-- 앱 작업은 해당 스킬(`new-app` · `integrate-web` · `build-android` · `build-ios` · `bump-version` · `generate-assets` · `submit-store`)을 우선 사용한다. 직접 명령을 조립하지 마라.
+- 앱 작업은 해당 스킬(`new-app` · `integrate-web` · `build-android` · `build-ios` · `bump-version` · `generate-assets` · `submit-store` · `publish-apk`)을 우선 사용한다. 직접 명령을 조립하지 마라.
 - 요청받은 것만 한다. 문서·기능·추상화를 임의로 늘리지 않는다.
 
 ---
@@ -39,6 +39,7 @@
 | 웹 레포를 하네스에 연결(브릿지) | 06 → 01 | `integrate-web` 스킬 사용 |
 | Android / iOS 빌드 | 07 → 08 | `build-android` / `build-ios` 스킬 사용 |
 | 스토어 업로드 · 배포 | 07 → 08 → 09 | 프로덕션 공개는 절대 자동화하지 마라 |
+| 사내 테스트 APK 링크/QR 배포 | — | `publish-apk` 스킬 사용. 스토어 배포(07)와 다른 경로다 |
 | 버전 올리기 | 07 | `bump-version` 스킬 사용 |
 | 로그인 / SSO 작업 | 10 → 01 | 백엔드 규약은 10 이 정본 |
 | 인앱결제 작업 | 11 | 디지털 재화는 스토어 IAP 강제 |

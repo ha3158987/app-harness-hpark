@@ -10,7 +10,8 @@
   "scripts": {
     "generate": "node scripts/generate-app.mjs",
     "check": "node --check scripts/generate-app.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "publish:apk": "node scripts/publish-apk.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0",
