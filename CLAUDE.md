@@ -39,6 +39,7 @@
 | 웹 레포를 하네스에 연결(브릿지) | 06 → 01 | `integrate-web` 스킬 사용 |
 | Android / iOS 빌드 | 07 → 08 | `build-android` / `build-ios` 스킬 사용 |
 | 스토어 업로드 · 배포 | 07 → 08 → 09 | 프로덕션 공개는 절대 자동화하지 마라 |
+| 내부 테스터 배포 (TestFlight / Firebase App Distribution) | 07 → 08 §10 | Android 테스터 채널은 08 §10 이 정본 |
 | 사내 테스트 APK 링크/QR 배포 | — | `publish-apk` 스킬 사용. 스토어 배포(07)와 다른 경로다 |
 | 버전 올리기 | 07 | `bump-version` 스킬 사용 |
 | 로그인 / SSO 작업 | 10 → 01 | 백엔드 규약은 10 이 정본 |
@@ -68,9 +69,9 @@
 | 04 | [NEW-APP-CHECKLIST](docs/04-NEW-APP-CHECKLIST.md) | 앱추가 | 배포담당자 | active | 2026-08-20 | 사람이 직접 할 콘솔·계정 작업 전부 |
 | 05 | [SETUP](docs/05-SETUP.md) | 앱추가 | 개발자 | active | 2026-05-30 | 환경·키 단계별 준비 |
 | 06 | [INTEGRATION](docs/06-INTEGRATION.md) | 앱추가 | 개발자 | active | 2026-05-30 | 프론트 통합 — bridge·어댑터·API |
-| 07 | [HOWTO-DEPLOY](docs/07-HOWTO-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-06-19 | 배포 실전 절차 (진입점) |
-| 08 | [DEPLOY](docs/08-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-08-06 | CI/CD·시크릿·서명 상세 |
-| 09 | [CREDENTIALS](docs/09-CREDENTIALS.md) | 빌드배포 | 배포담당자 | active | 2026-08-20 | 자격증명 단일 출처 |
+| 07 | [HOWTO-DEPLOY](docs/07-HOWTO-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-09-04 | 배포 실전 절차 (진입점) |
+| 08 | [DEPLOY](docs/08-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-09-04 | CI/CD·시크릿·서명 상세 |
+| 09 | [CREDENTIALS](docs/09-CREDENTIALS.md) | 빌드배포 | 배포담당자 | active | 2026-09-04 | 자격증명 단일 출처 |
 | 10 | [AUTH](docs/10-AUTH.md) | 기능연동 | 개발자 | active | 2026-05-30 | 로그인·SSO·탈퇴·백엔드 규약 |
 | 11 | [IAP](docs/11-IAP.md) | 기능연동 | 전체 | active | 2026-06-01 | 인앱결제·가격분기·백엔드 검증 |
 | 12 | [PUSH-NOTIFICATIONS](docs/12-PUSH-NOTIFICATIONS.md) | 기능연동 | 개발자 | active | 2026-08-10 | FCM 셋업 — 키·확장·발송 규약 |

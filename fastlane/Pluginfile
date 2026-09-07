@@ -1,0 +1,15 @@
+# fastlane 플러그인 선언.
+#
+# ⚠️ 이 파일만으로는 로드되지 않는다. fastlane 의 PluginManager 는 **Bundler 의 Gemfile**
+#    (`Bundler::SharedHelpers.default_gemfile`)을 읽어 플러그인 목록을 얻고, 표준 설정에서는
+#    루트 Gemfile 이 `eval_gemfile("fastlane/Pluginfile")` 로 이 파일을 끌어온다.
+#    이 레포는 번들러를 쓰지 않으므로(`gem install fastlane`) Gemfile 이 없고, 따라서
+#    **Fastfile 이 직접 require 한다.** 여기는 "무엇이 필요한가"의 선언 겸, 나중에 번들러를
+#    도입하면 그대로 동작하도록 남겨둔 것이다.
+#
+#    플러그인을 추가하면 세 곳을 같이 고쳐라: 이 파일 · Fastfile 의 require · release.yml 의 gem install.
+#
+# 1.0.0+ 필수: 그 버전부터 external_account(Workload Identity Federation) 자격증명을 가른다.
+# 조직이 서비스 계정 키 발급을 막아둬서 CI 는 WIF 로만 인증한다 — 구버전은 그 파일을
+# service_account 로 오인해 인증이 깨진다.
+gem 'fastlane-plugin-firebase_app_distribution', '>= 1.0.0'

@@ -4,7 +4,7 @@ title: CREDENTIALS — 배포 인증(자격증명) 관리 단일 출처
 category: 빌드배포
 audience: 배포담당자
 status: active
-updated: 2026-08-20
+updated: 2026-09-04
 ---
 
 # CREDENTIALS — 배포 인증(자격증명) 관리 단일 출처
@@ -52,6 +52,7 @@ updated: 2026-08-20
 | 요소 | 로컬 위치 | CI GitHub Secret | 발급 방법 |
 |---|---|---|---|
 | Play 서비스계정 JSON | `secrets/play-service-account.json` | `PLAY_SERVICE_ACCOUNT_JSON` (내용) | GCP → 서비스계정 → JSON 키 → Play "사용자 및 권한"에 초대 |
+| Firebase App Distribution 업로드 | `gcloud auth application-default login` (키 파일 없음) | **변수** `FIREBASE_WIF_PROVIDER_<SLUG>` · `FIREBASE_WIF_SERVICE_ACCOUNT_<SLUG>` | 🔴 **키(.json)를 만들 수 없다** — 조직 정책 `iam.disableServiceAccountKeyCreation`. GitHub OIDC(WIF)로 SA 를 가장한다. 셋업: [08-DEPLOY.md §10](./08-DEPLOY.md). ⚠️ **GCP 프로젝트 단위** — Firebase 프로젝트가 앱마다 다르면 SA·바인딩·변수를 프로젝트마다 |
 | 업로드 keystore | `secrets/android/upload.jks` | `ANDROID_KEYSTORE_BASE64` (base64) | aipia.jks 재사용 (공유 1개) |
 | keystore 비번 | `.env` `ANDROID_KEYSTORE_PASSWORD` | `ANDROID_KEYSTORE_PASSWORD` | keystore.properties |
 | 키 별칭 | `.env` `ANDROID_KEY_ALIAS` | `ANDROID_KEY_ALIAS` | keystore.properties |
@@ -85,6 +86,11 @@ updated: 2026-08-20
             │                                              │
             └──────────────► fastlane Fastfile ◄───────────┘
                           (slug 무관 — 공유 자격증명 그대로 사용)
+
+   Firebase App Distribution 만 **파일이 없다** (조직이 SA 키 발급을 차단):
+     gcloud ADC              ─────────────▶     GitHub OIDC(WIF)
+     (application-default login)                 vars FIREBASE_WIF_PROVIDER_<SLUG>
+                                                      FIREBASE_WIF_SERVICE_ACCOUNT_<SLUG>
 ```
 
 keystore → base64 인코딩(CI Secret 입력용):
@@ -128,6 +134,10 @@ base64 -i secrets/android/upload.jks | tr -d '\n'   # macOS
 1. **Apple**: ASC API 팀 키 발급(App Manager) → `secrets/asc_api_key.p8`, Key ID, Issuer ID 확보
 2. **iOS match**: 빈 private repo 생성 → `fastlane match init` → `fastlane match appstore` 1회
 3. **Android**: GCP 서비스계정 JSON 발급 → Play "사용자 및 권한"에 초대(출시 권한) → `secrets/play-service-account.json`
+4. **Android 내부 테스터 배포**: Firebase 콘솔 → App Distribution 시작 → 테스터 그룹 `aipia_internal` 생성 →
+   `app-distribution-ci` 서비스계정 생성 + `firebaseappdistro.admin` 역할 + **WIF 바인딩** →
+   레포 변수 2개 등록. **키 파일은 만들지 않는다**(조직 정책상 불가).
+   (절차 상세: [08-DEPLOY.md §10](./08-DEPLOY.md))
 4. **Android keystore**: 공유 업로드 키(aipia.jks) → `secrets/android/upload.jks`
 5. 위 값들을 `fastlane/.env`(로컬) + GitHub Secrets(CI)에 입력 → §3 매핑표대로
 

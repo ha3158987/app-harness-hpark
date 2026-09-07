@@ -4,7 +4,7 @@ title: HOWTO-DEPLOY — 팀원용 배포 사용법
 category: 빌드배포
 audience: 배포담당자
 status: active
-updated: 2026-06-19
+updated: 2026-09-04
 ---
 
 # HOWTO-DEPLOY — 팀원용 배포 사용법
@@ -13,7 +13,9 @@ app-harness 로 앱을 테스터에게 배포하는 **실전 가이드**.
 (인증 요소 설명·관리는 `09-CREDENTIALS.md`, CI 시크릿 등록은 `08-DEPLOY.md` 참조)
 
 > TL;DR: **`app.config.json` 의 versionCode 올리고 → `git tag <slug>-v<버전>` 푸시 → 끝.**
-> CI가 빌드·서명·업로드까지 자동. iOS=TestFlight / Android=Play 내부트랙. (정식 출시는 사람이 콘솔에서)
+> CI가 빌드·서명·업로드까지 자동.
+> iOS=**TestFlight** / Android=**Firebase App Distribution**(테스터에게 즉시) + Play 내부트랙.
+> (정식 출시는 사람이 콘솔에서)
 
 ---
 
@@ -53,13 +55,19 @@ git tag characterchat-dev-v1.0.1 && git push origin characterchat-dev-v1.0.1
 | `<slug>` | `apps/<slug>` 폴더명 (=앱) | 다른 앱 배포 시 |
 | `<버전>` | 트리거 라벨 (실제 버전은 app.config.json) | 매 배포 |
 
-→ 태그가 올라가면 CI(`.github/workflows/release.yml`)가 **양 플랫폼(android+ios)** 을 `internal` 트랙으로 자동 빌드·업로드한다.
+→ 태그가 올라가면 CI(`.github/workflows/release.yml`)가 **양 플랫폼(android+ios)** 을 자동 빌드·업로드한다.
 
 ### 3단계 — 결과 확인
-- **Android**: Play Console → 테스트 → 내부 테스트 → 새 릴리즈가 **초안(draft)** 으로 올라옴 → "검토 후 출시"
+- **Android / Firebase App Distribution**: 테스터에게 **바로** 뜬다. 초대 메일 또는 App Tester 앱에서
+  새 버전 확인 → 설치. 콘솔에서 누를 것 없음. (Firebase 콘솔 → App Distribution 에서 배포 이력 확인)
+- **Android / Play**: Play Console → 테스트 → 내부 테스트 → 새 릴리즈가 **초안(draft)** 으로 올라옴 → "검토 후 출시"
 - **iOS**: App Store Connect → TestFlight → 빌드 처리 후 테스터에게 노출
 
 > 자동화는 **테스터까지만**. 정식 스토어 공개(심사 제출/프로덕션 승격)는 **사람이 콘솔에서** (안전 원칙).
+
+> **왜 채널이 둘인가**: Firebase 는 "지금 이 빌드를 팀이 깔아보는" 용도(TestFlight 대응), Play 내부
+> 트랙은 "스토어 경로 그대로" 검증하는 용도다. Firebase 배포용 APK 는 **업로드 키**로 서명돼
+> Play 배포본과 서명이 다르다 — 소셜 로그인·딥링크 지문 주의사항은 `08-DEPLOY.md §10`.
 
 ---
 
@@ -72,12 +80,18 @@ git tag characterchat-dev-v1.0.1 && git push origin characterchat-dev-v1.0.1
 gh workflow run release.yml --ref <브랜치> \
   -f slug=<slug> -f platform=android -f track=internal
 
+# 테스터에게만 급히 (Play 안 건드림)
+gh workflow run release.yml --ref <브랜치> \
+  -f slug=<slug> -f platform=android -f android_channel=firebase
+
 # 진행 상황 보기
 gh run watch <run-id> --exit-status
 ```
 
 - `platform`: `android` | `ios` | `both`
-- `track` (Android): `internal` | `beta`
+- `track` (Android Play): `internal` | `beta`
+- `android_channel`: `both`(기본) | `firebase` | `play`
+- `firebase_groups`: Firebase 테스터 그룹 별칭 (기본 `aipia_internal`, 쉼표로 여러 개)
 - `--ref`: 앱 정의(app.config.json)가 있는 브랜치. (main 에 없으면 작업 브랜치 지정)
 
 > Actions 탭 → release → "Run workflow" 로 클릭으로도 가능.
@@ -102,7 +116,9 @@ CI 안 쓰고 본인 맥에서 배포하려면, git 에 없는 **키 파일**을
 ```bash
 cp fastlane/.env.example fastlane/.env   # 값 채우기
 # secrets/ 에 .p8 / .json / .jks 배치
-bundle exec fastlane android beta slug:<slug>   # 또는 ios beta
+bundle exec fastlane android beta slug:<slug>       # Play 내부 트랙
+bundle exec fastlane android firebase slug:<slug>   # Firebase App Distribution
+bundle exec fastlane ios beta slug:<slug>           # TestFlight
 ```
 
 ---
@@ -114,7 +130,10 @@ bundle exec fastlane android beta slug:<slug>   # 또는 ios beta
 | CI 가 generate-app/cap sync 에서 깨짐 | Node 20 (Capacitor 8 은 22 필요) | 워크플로가 `.nvmrc`(=24)를 읽는다 — `node-version-file` (적용됨) |
 | `validateSigningRelease FAILED — release.keystore not found` | keystore 경로를 app 모듈 기준으로 찾음 | generate-app 이 `rootProject.file()` 로 해석 (적용됨) |
 | Play 가 업로드 거부 (versionCode) | versionCode 가 이전과 같거나 작음 | `app.config.json` 의 `version.code` 를 +1 |
-| 업로드는 됐는데 테스터가 못 봄 | 초안(draft) 상태 | Play Console 에서 "검토 후 출시" |
+| 업로드는 됐는데 테스터가 못 봄 (Play) | 초안(draft) 상태 | Play Console 에서 "검토 후 출시" |
+| 업로드는 됐는데 테스터가 못 봄 (Firebase) | 콘솔에 없는 테스터 그룹 별칭 | Firebase 콘솔의 그룹 별칭과 `firebase_groups` 일치 |
+| Firebase 스텝이 `건너뜀` 으로 지나감 | 레포 변수 `FIREBASE_WIF_PROVIDER_<SLUG>` 또는 시크릿 `GOOGLE_SERVICES_B64_<SLUG>` 미등록 | `08-DEPLOY.md §10` 셋업 |
+| Firebase APK 에서만 소셜 로그인 실패 | 업로드 키 지문이 각 소셜 콘솔에 미등록 (Play 배포본과 서명 키가 다름) | 업로드 키 SHA-1/256 도 등록 — `08-DEPLOY.md §10` |
 
 ---
 
@@ -123,7 +142,10 @@ bundle exec fastlane android beta slug:<slug>   # 또는 ios beta
 ```
 versionCode +1  →  git tag <slug>-v<버전>  →  git push origin <태그>
                                                       │
-                                          CI: 빌드·서명·업로드 (internal/TestFlight)
+                                        CI: 빌드·서명·업로드
                                                       │
-                                          콘솔에서 검토 후 테스터 출시 (사람)
+                    ┌─────────────────────────────────┼─────────────────────────────┐
+                    ▼                                 ▼                             ▼
+        Firebase App Distribution           Play 내부 트랙(초안)              TestFlight
+        → 테스터에게 즉시 (Android)      → 콘솔에서 "검토 후 출시" (사람)     → 처리 후 노출 (iOS)
 ```

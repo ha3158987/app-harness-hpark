@@ -4,12 +4,13 @@ title: DEPLOY — 빌드 후 자동 배포 (CI/CD)
 category: 빌드배포
 audience: 배포담당자
 status: active
-updated: 2026-08-06
+updated: 2026-09-04
 ---
 
 # DEPLOY — 빌드 후 자동 배포 (CI/CD)
 
-`.github/workflows/release.yml` 이 앱을 빌드해 **베타/내부 트랙까지** 자동 업로드한다.
+`.github/workflows/release.yml` 이 앱을 빌드해 **내부 테스터까지** 자동 업로드한다
+(iOS=TestFlight · Android=Firebase App Distribution + Play 내부/베타 트랙).
 **프로덕션 공개(심사 제출/정식 릴리즈)는 자동화하지 않는다** — 사람이 콘솔에서(STRATEGY 안전원칙).
 
 ---
@@ -35,10 +36,21 @@ updated: 2026-08-06
 
 | 방식 | 사용 | 결과 |
 |---|---|---|
-| **태그 푸시** | `git tag aipia-v1.2.0 && git push origin aipia-v1.2.0` | slug=aipia, 양쪽 플랫폼, `internal` 트랙 |
-| **수동 실행** | Actions 탭 → release → Run workflow (slug/platform/track 선택) | 지정대로 |
+| **태그 푸시** | `git tag aipia-v1.2.0 && git push origin aipia-v1.2.0` | slug=aipia, 양쪽 플랫폼, `internal` 트랙, Android 는 Firebase+Play 둘 다 |
+| **수동 실행** | Actions 탭 → release → Run workflow (slug/platform/track/android_channel 선택) | 지정대로 |
 
 태그 형식: **`<slug>-v<버전>`** (slug 는 `-v` 앞부분).
+
+**Android 배포 채널** (`android_channel` 입력, 기본 `both`)
+
+| 값 | 무엇이 도나 | 테스터가 받는 방법 |
+|---|---|---|
+| `firebase` | Firebase App Distribution (APK) | 초대 메일/링크 → **즉시 설치**. 콘솔 클릭 불필요 |
+| `play` | Play 내부/베타 트랙 (AAB, 초안) | Play Console 에서 "검토 후 출시" 한 뒤 Play 스토어 |
+| `both` | 둘 다 (Firebase 먼저) | — |
+
+> Firebase 는 **Play 업로드보다 먼저** 돈다. Play 는 versionCode 중복·앱 레코드 미등록으로
+> 곧잘 실패하는데, 그때도 내부 테스터에게는 빌드가 가야 하기 때문이다.
 
 ---
 
@@ -54,6 +66,21 @@ Settings → Secrets and variables → Actions 에 추가. (값은 레포에 절
 | `ANDROID_KEY_ALIAS` | 키 별칭 |
 | `ANDROID_KEY_PASSWORD` | 키 비번 |
 | `PLAY_SERVICE_ACCOUNT_JSON` | Play Console 서비스 계정 JSON **내용 전체** |
+| `GOOGLE_SERVICES_B64_<SLUG>` | (FCM·App Distribution) `google-services.json` 의 base64. App Distribution 은 여기서 Firebase 앱 ID 를 읽는다 |
+
+Firebase App Distribution 인증은 **시크릿이 아니라 변수(Variables)** 다 — 조직 정책상 서비스
+계정 키를 만들 수 없어 GitHub OIDC(WIF)를 쓴다. 셋업은 §10.
+
+| Variable | 설명 |
+|---|---|
+| `FIREBASE_WIF_PROVIDER_<SLUG>` | Workload Identity provider 리소스 경로. 접미사 없는 `FIREBASE_WIF_PROVIDER` 는 공통 폴백 |
+| `FIREBASE_WIF_SERVICE_ACCOUNT_<SLUG>` | 가장할 서비스 계정 이메일 (`app-distribution-ci@<project>.iam.gserviceaccount.com`) |
+| `APK_DIST_BUCKET_<SLUG>` | (선택) APK 를 QR 고정 링크로 뿌릴 공개 GCS 버킷명. 미설정이면 해당 스텝을 건너뛴다. 접미사 없는 `APK_DIST_BUCKET` 은 공통 폴백 |
+
+`APK_DIST_BUCKET` 을 걸면 스토어 릴리즈가 돌 때마다 **같은 URL** 이 최신 APK 를 서빙한다:
+`https://storage.googleapis.com/<버킷>/android/<slug>.apk` — 링크가 안 바뀌므로 **QR 은 한 번만 만들면 된다.**
+버킷의 서비스 계정 권한은 `roles/storage.objectAdmin`(버킷 스코프)이면 충분하고, 인증은 위 WIF 를 그대로 쓴다.
+로컬에서 같은 경로로 올리는 수동 경로는 `publish-apk` 스킬(`npm run publish:apk`)이다.
 
 ```bash
 # keystore → base64 (한 줄)
@@ -83,9 +110,19 @@ base64 -i release.keystore | tr -d '\n'   # macOS
 - **android** → `ubuntu-latest` (헤드리스 완전 자동). JDK21 + Android SDK + fastlane.
 - **ios** → `macos-latest` (GitHub 호스티드, 분당 과금). Xcode + CocoaPods + fastlane match.
 
-흐름(공통): `generate-app` → (아이콘 있으면)`@capacitor/assets` → 빌드 → `fastlane <plat> beta` → 산출물 업로드.
+흐름(공통): `generate-app` → (아이콘 있으면)`@capacitor/assets` → 빌드 → 업로드 → 산출물 아티팩트.
+업로드는 android 잡에서 `fastlane android firebase`(APK) → `fastlane android beta`(AAB) 순,
+ios 잡에서 `fastlane ios beta`.
 Android 서명은 generate-app 이 `app/build.gradle` 에 넣은 조건부 signingConfig 가 CI 가 쓴
-`keystore.properties` 를 읽어 적용한다.
+`keystore.properties` 를 읽어 적용한다 — **AAB 와 APK 가 같은 업로드 키로 서명된다**.
+
+> **플러그인 로딩 주의**: fastlane 은 플러그인을 **Bundler 의 Gemfile 을 통해서만** 자동
+> 로드한다(`PluginManager#available_gems` → `Bundler::SharedHelpers.default_gemfile`).
+> 이 레포는 번들러 없이 `gem install fastlane` 로 돌아 **Gemfile 이 없고**, 따라서
+> `fastlane/Pluginfile` 에 적어도 로드되지 않는다 —
+> `Could not find action, lane or variable 'firebase_app_distribution'` 로 죽는다.
+> 그래서 **Fastfile 이 직접 `require 'fastlane/plugin/firebase_app_distribution'`** 한다.
+> 플러그인을 추가하면 3곳을 같이 고쳐라: `Pluginfile` · `Fastfile` 의 require · 워크플로 `gem install`.
 
 ---
 
@@ -133,6 +170,8 @@ error: Provisioning profile "match AppStore <appId>" doesn't include the Associa
 ## 7. 프로덕션 게이트 (수동)
 - iOS: TestFlight 까지만 자동. 외부 배포/심사 제출은 App Store Connect 에서 직접.
 - Android: `internal`/`beta` 트랙 + `draft` 까지만. production 승격은 Play Console 에서 직접.
+- Android(Firebase App Distribution): **지정한 테스터 그룹까지만.** 스토어와 무관한 사내 채널이라
+  공개 위험은 없지만, 그룹에 외부인을 넣으면 그게 곧 배포다 — 그룹 구성은 사람이 관리한다.
 
 ---
 
@@ -180,3 +219,114 @@ error: Provisioning profile "match AppStore <appId>" doesn't include the Associa
 Android 먼저 → Firebase 콘솔 "테스트 메시지"로 앱 계층 격리 → deviceEndpoint 토큰 등록 로그 → 백엔드 발송.
 
 > ⚠️ **미검증 포인트**(실기기 빌드로 확인 필요): `@capacitor-community/fcm` 의 Capacitor 8 호환, pbxproj `GoogleService-Info.plist` 리소스 등록, AppDelegate `FirebaseApp.configure()` 주입, FCM 토큰 취득 경로.
+
+---
+
+## 10. Android 내부 테스터 배포 런북 (Firebase App Distribution)
+
+**목적**: iOS 의 TestFlight 처럼 — 빌드가 올라가면 **테스터에게 바로 뜨는** 안드로이드 채널.
+Play 내부 트랙은 초안(draft)이라 매번 콘솔에서 "검토 후 출시"를 눌러야 하고, 테스터도 Play
+스토어를 거친다. App Distribution 은 그 두 단계가 없다.
+
+### 하네스가 자동으로 하는 것
+- `assembleRelease` 로 **APK** 를 굽는다(AAB 와 동일한 업로드 키로 서명 — `buildTypes.release`)
+- `google-services.json` 에서 **Firebase 앱 ID** 를 파싱한다 → `app.config.json` 에 새 키 불필요
+- `fastlane android firebase` 로 업로드, 릴리즈 노트에 태그명 + 마지막 커밋 제목
+- 시크릿이나 `google-services.json` 이 없으면 **조용히 건너뛴다**(비 Firebase 앱 배포를 막지 않음)
+
+### 사람이 해야 하는 것 (조직 1회 + 앱 1회)
+
+1. **Firebase 콘솔 → 프로젝트 → App Distribution → 시작하기**
+   (해당 Android 앱이 이미 Firebase 에 등록돼 있어야 한다 = `google-services.json` 이 있으면 된 것)
+2. **테스터 그룹 생성** — 탭 "테스터 및 그룹" → 그룹 추가 → 이름 **`aipia_internal`**
+   (= 조직 표준 그룹. 다른 그룹으로 보내려면 워크플로 실행 시 `firebase_groups` 입력으로 지정)
+   > ⚠️ CI 가 쓰는 값은 표시 이름이 아니라 **별칭(alias)** 이다. 콘솔이 이름에서 별칭을
+   > 자동 생성하므로, 그룹을 만든 뒤 목록에서 별칭이 정말 `aipia_internal` 인지 확인할 것.
+   > 다르면 워크플로/Fastfile 기본값을 그 별칭으로 맞춰야 한다.
+
+   테스터를 넣는 방법 2가지 — **초대 메일을 보내는 버튼은 없다.**
+   - **이메일 추가**: 그룹 → 테스터 추가. 메일은 **그 그룹에 첫 배포가 나갈 때** 자동 발송된다.
+     등록만 해두고 배포가 없으면 아무 메일도 안 간다.
+   - **초대 링크**("초대 링크" 탭): 링크를 공유하면 각자 셀프 등록해 그룹에 편입된다. 인원이
+     늘 때 관리가 편하다.
+
+   테스터 쪽 준비: 초대 수락 → **기기에서** 링크 열어 **App Tester** 앱 설치 → 로그인 → 설치.
+   이메일은 **구글 계정**이어야 한다(로그인 필요).
+   → 그룹에 테스터 이메일 추가. 테스터는 초대 메일을 수락하고 **App Tester** 앱을 설치한다.
+3. **서비스 계정 + WIF 바인딩** — 🔴 **서비스 계정 키(.json)는 만들 수 없다.** aipia 조직은
+   org policy `constraints/iam.disableServiceAccountKeyCreation` 으로 키 발급을 전역 차단한다
+   (`FAILED_PRECONDITION: Key creation is not allowed on this service account`). 프로젝트 소유자도
+   못 푼다 — 조직 정책 관리자만 가능. 그래서 **GitHub OIDC(Workload Identity Federation)** 를 쓴다.
+   조직에 이미 `github-actions` 풀이 있고 다른 레포들도 이 방식이다.
+
+   ```bash
+   PROJECT=<firebase 프로젝트 id>            # 예: poptale-chat
+   PROJNUM=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+
+   # 3-1. 업로드 전용 서비스 계정
+   gcloud iam service-accounts create app-distribution-ci --project="$PROJECT" \
+     --display-name="App Distribution CI"
+
+   # 3-2. 업로드 권한 (이 역할 하나면 충분 — 최소권한)
+   gcloud projects add-iam-policy-binding "$PROJECT" \
+     --member="serviceAccount:app-distribution-ci@$PROJECT.iam.gserviceaccount.com" \
+     --role="roles/firebaseappdistro.admin" --condition=None
+
+   # 3-3. 이 레포의 Actions 가 그 계정을 가장할 수 있게 (키 대신 OIDC)
+   gcloud iam service-accounts add-iam-policy-binding \
+     "app-distribution-ci@$PROJECT.iam.gserviceaccount.com" --project="$PROJECT" \
+     --role="roles/iam.workloadIdentityUser" \
+     --member="principalSet://iam.googleapis.com/projects/$PROJNUM/locations/global/workloadIdentityPools/github-actions/attribute.repository/aipia-team/app-harness"
+   ```
+   > `github-actions` 풀이 그 프로젝트에 없으면 먼저 만들어야 한다(provider 는 issuer
+   > `https://token.actions.githubusercontent.com`, 조건 `assertion.repository_owner == 'aipia-team'`).
+
+4. **GitHub 변수 등록** — 시크릿이 아니라 **변수(Variables)** 다. 민감값이 아니고, 로그에
+   마스킹되지 않아야 디버깅이 쉽다.
+   ```bash
+   gh variable set FIREBASE_WIF_PROVIDER_<SLUG> \
+     --body "projects/$PROJNUM/locations/global/workloadIdentityPools/github-actions/providers/github"
+   gh variable set FIREBASE_WIF_SERVICE_ACCOUNT_<SLUG> \
+     --body "app-distribution-ci@$PROJECT.iam.gserviceaccount.com"
+   ```
+   > 서비스 계정과 WIF 풀은 **GCP 프로젝트 단위**다. `poptale-*`(dev-aipia-poptale)과
+   > `characterchat-dev`(poptale-chat)처럼 Firebase 프로젝트가 다르면 3~4 를 프로젝트마다
+   > 반복하고 변수도 슬러그별로 등록한다. 접미사 없는 `FIREBASE_WIF_PROVIDER` /
+   > `FIREBASE_WIF_SERVICE_ACCOUNT` 는 공통 폴백.
+
+### 배포
+```bash
+# 태그 푸시 — Firebase + Play 둘 다
+git tag <slug>-v<버전> && git push origin <slug>-v<버전>
+
+# Firebase 만, 즉석으로
+gh workflow run release.yml --ref <브랜치> \
+  -f slug=<slug> -f platform=android -f android_channel=firebase -f firebase_groups=aipia_internal
+```
+
+### ⚠️ 주의 — 서명 키가 Play 빌드와 다르다
+
+App Distribution APK 는 **업로드 키**로 서명된다. Play 는 여기에 **앱 서명 키**를 다시 씌운다.
+지문(SHA-1/SHA-256)에 묶인 기능은 두 빌드에서 다르게 동작한다:
+
+| 기능 | 증상 |
+|---|---|
+| Google 로그인 · Kakao · Naver SDK | 업로드 키 지문이 각 콘솔에 등록돼 있지 않으면 App Distribution 빌드에서만 로그인 실패 |
+| App Link(딥링크) 검증 | `android.sha256CertFingerprints` 에 **업로드 키 지문도** 넣어야 앱 링크가 열린다(§ `02-GUIDE §6`) |
+
+→ 두 지문을 모두 등록해 두면 양쪽이 같이 동작한다. `adb shell pm get-app-links <package>` 로 확인.
+
+### 트러블슈팅
+
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| 잡 로그에 `FIREBASE_WIF_PROVIDER* 변수 미설정 — 건너뜀` | 레포 변수 미등록 | 위 4번 |
+| `403 The caller does not have permission` | SA 에 `roles/firebaseappdistro.admin` 없음 | 위 3-2 |
+| 인증 스텝: `Unable to acquire impersonated credentials` / `permission iam.serviceAccounts.getAccessToken` | WIF 바인딩의 레포 경로가 다름 | 위 3-3 의 `attribute.repository/aipia-team/<레포>` 확인 |
+| 인증 스텝: `Missing id-token permission` | 잡에 `permissions.id-token: write` 없음 | `release.yml` 의 android 잡 permissions 확인 |
+| `gcloud iam service-accounts keys create` 가 `FAILED_PRECONDITION` | 조직이 SA 키 발급 차단 (`iam.disableServiceAccountKeyCreation`) | 정상이다. 키 대신 WIF 를 쓴다 — 위 3번 |
+| `Could not find action, lane or variable 'firebase_app_distribution'` | 플러그인 gem 미설치, 또는 Pluginfile 만 믿고 require 를 빠뜨림 | §5 의 플러그인 로딩 주의 — Fastfile 의 require 와 워크플로 `gem install` 확인 |
+| `google-services.json 없음 — Firebase 미등록 앱` | `GOOGLE_SERVICES_B64_<SLUG>` 미등록 | §4 표 |
+| `google-services.json 에 패키지 … 항목이 없습니다` | 다른 앱의 설정 파일이 주입됨 | 시크릿 이름의 슬러그 확인 |
+| 업로드는 성공인데 아무도 못 받음 | 콘솔에 없는 그룹 별칭 | 콘솔의 그룹 별칭과 `firebase_groups` 를 일치 |
+| 테스터가 "앱을 설치할 수 없음" | 같은 패키지가 **다른 키로 서명**돼 이미 설치됨(Play 버전) | 기존 앱 삭제 후 설치. dev 앱은 `appId` 를 분리(`.dev`)해 공존 |

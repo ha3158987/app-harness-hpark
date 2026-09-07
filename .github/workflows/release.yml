@@ -2,9 +2,11 @@
 #
 # 트리거 2가지:
 #   1) 태그 푸시:   <slug>-v<버전>   예) aipia-v1.2.0   → slug=aipia, 양쪽 플랫폼, internal 트랙
-#   2) 수동 실행:   Actions 탭에서 slug/platform/track 선택
+#                   Android 는 Firebase App Distribution + Play 내부트랙 **둘 다** 나간다.
+#   2) 수동 실행:   Actions 탭에서 slug/platform/track/android_channel 선택
 #
-# 필요한 GitHub Secrets 는 docs/08-DEPLOY.md 참조. 시크릿 없으면 해당 잡은 실패(빌드까지는 가능).
+# 필요한 GitHub Secrets/Variables 는 docs/08-DEPLOY.md §4 참조. 시크릿 없으면 해당 잡은 실패
+# (빌드까지는 가능). Firebase App Distribution 만 변수 미설정 시 조용히 건너뛴다.
 name: release
 
 on:
@@ -24,11 +26,22 @@ on:
         type: choice
         options: [android, ios, both]
       track:
-        description: 'Android 트랙 (iOS는 항상 TestFlight)'
+        description: 'Android Play 트랙 (iOS는 항상 TestFlight)'
         required: true
         default: 'internal'
         type: choice
         options: [internal, beta]
+      android_channel:
+        description: 'Android 배포 채널 (firebase=테스터에게 즉시 / play=스토어 내부트랙)'
+        required: true
+        default: 'both'
+        type: choice
+        options: [both, firebase, play]
+      firebase_groups:
+        description: 'Firebase 테스터 그룹 별칭 (콘솔에서 만든 이름, 쉼표 구분)'
+        required: false
+        default: 'aipia_internal'
+        type: string
 
 jobs:
   resolve:
@@ -38,6 +51,8 @@ jobs:
       slug_env: ${{ steps.r.outputs.slug_env }}   # 시크릿 이름용 (대문자, - → _)
       platform: ${{ steps.r.outputs.platform }}
       track: ${{ steps.r.outputs.track }}
+      android_channel: ${{ steps.r.outputs.android_channel }}
+      firebase_groups: ${{ steps.r.outputs.firebase_groups }}
     steps:
       - id: r
         shell: bash
@@ -46,23 +61,37 @@ jobs:
             echo "slug=${{ inputs.slug }}"        >> "$GITHUB_OUTPUT"
             echo "platform=${{ inputs.platform }}" >> "$GITHUB_OUTPUT"
             echo "track=${{ inputs.track }}"       >> "$GITHUB_OUTPUT"
+            echo "android_channel=${{ inputs.android_channel }}" >> "$GITHUB_OUTPUT"
+            echo "firebase_groups=${{ inputs.firebase_groups }}" >> "$GITHUB_OUTPUT"
           else
             TAG="${GITHUB_REF_NAME}"     # 예: aipia-v1.2.0
             echo "slug=${TAG%-v*}"  >> "$GITHUB_OUTPUT"
             echo "platform=both"    >> "$GITHUB_OUTPUT"
             echo "track=internal"   >> "$GITHUB_OUTPUT"
+            echo "android_channel=both"     >> "$GITHUB_OUTPUT"
+            echo "firebase_groups=aipia_internal" >> "$GITHUB_OUTPUT"
           fi
           # slug 별 시크릿 조회용 정규화 이름 (예: characterchat-dev → CHARACTERCHAT_DEV)
           SLUG_LINE=$(grep '^slug=' "$GITHUB_OUTPUT" | tail -1)
           echo "slug_env=$(echo "${SLUG_LINE#slug=}" | tr '[:lower:]-' '[:upper:]_')" >> "$GITHUB_OUTPUT"
-      - run: echo "slug=${{ steps.r.outputs.slug }} platform=${{ steps.r.outputs.platform }} track=${{ steps.r.outputs.track }}"
+      - run: echo "slug=${{ steps.r.outputs.slug }} platform=${{ steps.r.outputs.platform }} track=${{ steps.r.outputs.track }} android_channel=${{ steps.r.outputs.android_channel }}"
 
   android:
     needs: resolve
     if: ${{ needs.resolve.outputs.platform == 'android' || needs.resolve.outputs.platform == 'both' }}
     runs-on: ubuntu-latest
+    # id-token: GitHub OIDC 토큰 발급용. Firebase 인증이 이걸로 돈다(서비스 계정 키 없음).
+    permissions:
+      contents: read
+      id-token: write
     env:
       SLUG: ${{ needs.resolve.outputs.slug }}
+      # Firebase 인증(WIF) 설정 — 시크릿이 아니라 **변수(vars)** 다. Firebase 프로젝트가
+      # 앱마다 다르므로 슬러그별 우선, 없으면 공통값. 미설정이면 Firebase 배포를 건너뛴다.
+      WIF_PROVIDER: ${{ vars[format('FIREBASE_WIF_PROVIDER_{0}', needs.resolve.outputs.slug_env)] || vars.FIREBASE_WIF_PROVIDER }}
+      WIF_SERVICE_ACCOUNT: ${{ vars[format('FIREBASE_WIF_SERVICE_ACCOUNT_{0}', needs.resolve.outputs.slug_env)] || vars.FIREBASE_WIF_SERVICE_ACCOUNT }}
+      # QR 고정 링크용 공개 버킷. 미설정이면 GCS 업로드 스텝을 통째로 건너뛴다.
+      APK_DIST_BUCKET: ${{ vars[format('APK_DIST_BUCKET_{0}', needs.resolve.outputs.slug_env)] || vars.APK_DIST_BUCKET }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,7 +101,9 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3' }
-      - run: gem install fastlane --no-document
+      # 플러그인은 Fastfile 이 직접 require 한다(번들러 미사용 → Pluginfile 자동로드 안 됨).
+      # 1.0.0 부터 external_account(WIF) 자격증명을 지원한다 — 아래 OIDC 인증이 그걸 쓴다.
+      - run: gem install fastlane --no-document && gem install fastlane-plugin-firebase_app_distribution --no-document --version '>= 1.0.0'
 
       - name: Capacitor 프로젝트 생성/동기화
         # 어트리뷰션 키는 generate-app 이 네이티브 번들에 베이크한다 — **이 스텝에** 있어야 한다.
@@ -123,16 +154,90 @@ jobs:
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
 
+      # ── 테스터 배포(즉시) ── Play 보다 **먼저** 돈다. Play 업로드는 versionCode 중복·앱
+      # 레코드 미등록 같은 이유로 곧잘 실패하는데, 그때도 내부 테스터는 빌드를 받아야 한다.
+      #
+      # 인증은 **서비스 계정 키가 아니라 GitHub OIDC(WIF)** 다. aipia 조직은 org policy
+      # `iam.disableServiceAccountKeyCreation` 으로 키 발급 자체를 막아둬서 키 방식은 불가능하다.
+      - name: GCP 인증 (GitHub OIDC → 서비스 계정 가장, 키 없음)
+        id: gcp_auth
+        if: ${{ env.WIF_PROVIDER != '' && (needs.resolve.outputs.android_channel != 'play' || env.APK_DIST_BUCKET != '') }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+
+      - name: Firebase App Distribution 업로드 (내부 테스터 즉시 배포)
+        if: ${{ needs.resolve.outputs.android_channel != 'play' }}
+        env:
+          FIREBASE_TESTER_GROUPS: ${{ needs.resolve.outputs.firebase_groups }}
+          # 위 인증 스텝이 만든 external_account 자격증명 파일. 스텝이 스킵되면 빈 값.
+          FIREBASE_SERVICE_CREDENTIALS_FILE: ${{ steps.gcp_auth.outputs.credentials_file_path }}
+        run: |
+          # WIF 변수나 Firebase 설정이 없는 앱은 조용히 건너뛴다 — 태그 푸시 기본값이 both 라,
+          # 여기서 실패하면 Firebase 안 쓰는 앱의 배포가 통째로 막힌다.
+          if [ -z "$FIREBASE_SERVICE_CREDENTIALS_FILE" ]; then
+            echo "::notice::FIREBASE_WIF_PROVIDER* 변수 미설정 — Firebase 배포 건너뜀 (docs/08-DEPLOY.md §10)"
+            exit 0
+          fi
+          if [ ! -f "build/$SLUG/android/app/google-services.json" ]; then
+            echo "::notice::google-services.json 없음 — Firebase 미등록 앱, 배포 건너뜀"
+            exit 0
+          fi
+          NOTES="${GITHUB_REF_NAME} · $(git log -1 --pretty=%s)"
+          fastlane android firebase slug:"$SLUG" \
+            groups:"${FIREBASE_TESTER_GROUPS:-aipia_internal}" \
+            notes:"$NOTES"
+
       - name: Play 업로드 (fastlane, 내부/베타 트랙)
+        if: ${{ needs.resolve.outputs.android_channel != 'firebase' }}
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: fastlane android beta slug:"$SLUG" track:"${{ needs.resolve.outputs.track }}"
+
+      # ── QR 고정 링크 배포 ── 스토어 릴리즈 때도 같은 URL 이 최신 빌드를 서빙하게 한다.
+      # 경로가 slug 별로 고정(android/<slug>.apk)이라 한 번 뿌린 QR 을 계속 쓴다.
+      # 로컬 수동 경로(scripts/publish-apk.mjs)와 같은 버킷·같은 규칙이다.
+      - name: gcloud 준비
+        if: ${{ env.APK_DIST_BUCKET != '' && env.WIF_PROVIDER != '' }}
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: APK 를 GCS 고정 경로에 업로드 (QR 재사용)
+        if: ${{ env.APK_DIST_BUCKET != '' && env.WIF_PROVIDER != '' }}
+        run: |
+          set -euo pipefail
+          APK="build/$SLUG/android/app/build/outputs/apk/release/app-release.apk"
+          # android_channel=play 로 돌면 Firebase 스텝이 스킵돼 APK 가 없다 — 여기서 굽는다.
+          if [ ! -f "$APK" ]; then
+            echo "APK 없음 — build_apk 실행"
+            fastlane android build_apk slug:"$SLUG"
+          fi
+          # no-cache 가 핵심: 고정 경로에 덮어쓰므로, 캐시가 걸리면 QR 을 찍은 사람이 옛 빌드를 받는다.
+          COMMON=(--content-type=application/vnd.android.package-archive --cache-control="no-cache, max-age=0")
+          gcloud storage cp "$APK" "gs://$APK_DIST_BUCKET/android/$SLUG.apk" "${COMMON[@]}"
+          # 이력 사본은 겹치지 않게: 태그면 태그명, 수동 실행이면 브랜치+런번호.
+          STAMP="$(echo "${GITHUB_REF_NAME}" | tr "/" "-")-${GITHUB_RUN_NUMBER}"
+          gcloud storage cp "$APK" "gs://$APK_DIST_BUCKET/android/archive/$SLUG-$STAMP.apk" "${COMMON[@]}"
+          URL="https://storage.googleapis.com/$APK_DIST_BUCKET/android/$SLUG.apk"
+          # 올렸다고 끝이 아니다 — 공개로 실제 받아지는지 확인한다(버킷 권한이 바뀌면 여기서 잡힌다).
+          curl -sfI "$URL" > /dev/null || { echo "::error::공개 URL 이 200 이 아니다: $URL"; exit 1; }
+          echo "### 설치 링크 (QR 그대로 사용)" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.SLUG }}-aab
           path: build/${{ env.SLUG }}/android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: warn
+
+      # Firebase 를 안 쓰는 앱이나 배포 실패 시의 폴백(= 지금까지 쓰던 URL 다운로드 경로).
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && needs.resolve.outputs.android_channel != 'play' }}
+        with:
+          name: ${{ env.SLUG }}-apk
+          path: build/${{ env.SLUG }}/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: ignore
 
   ios:
     needs: resolve
@@ -155,6 +260,7 @@ jobs:
         with: { node-version-file: '.nvmrc' }
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3' }
+      # iOS 는 Firebase 플러그인이 필요 없다 — Fastfile 의 require 는 LoadError 를 삼킨다.
       - run: gem install fastlane --no-document
 
       - name: Capacitor 프로젝트 생성/동기화 (iOS 포함)

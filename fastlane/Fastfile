@@ -1,14 +1,37 @@
 # Fastfile — 멀티앱 하네스용 빌드/업로드 lane.
 #
 # 모든 lane 은 slug 파라미터를 받아 build/<slug> 프로젝트를 대상으로 한다.
-#   bundle exec fastlane android beta slug:service-a
-#   bundle exec fastlane ios beta slug:service-a
+#   bundle exec fastlane android beta slug:service-a       # Play 내부/베타 트랙
+#   bundle exec fastlane android firebase slug:service-a    # Firebase App Distribution
+#   bundle exec fastlane ios beta slug:service-a            # TestFlight
 #
 # 안전 원칙 (README/STRATEGY):
 #  - 자격증명은 여기 평문으로 두지 않는다. fastlane match / 환경변수(.env)로만.
-#  - 자동화 범위 = 베타/내부 트랙 업로드까지. 프로덕션 공개는 사람이 콘솔에서.
+#  - 자동화 범위 = 내부 테스터까지(TestFlight · Play 내부/베타 · Firebase App Distribution).
+#    프로덕션 공개는 사람이 콘솔에서.
 
 require 'json'
+
+# fastlane 은 플러그인을 **Gemfile 을 통해서만** 자동 로드한다 — `PluginManager#available_gems`
+# 가 `Bundler::SharedHelpers.default_gemfile` 을 읽고, 없으면 빈 배열을 돌려준다. 이 레포는
+# 번들러를 쓰지 않고 `gem install fastlane` 로 도는 구조라 Gemfile 이 없고, 그래서
+# fastlane/Pluginfile 에 적어둬도 로드되지 않는다("Could not find action 'firebase_app_distribution'").
+# → 여기서 직접 require 한다. gem 이 없는 환경에서도 다른 lane(ios beta / android beta)은
+#   돌아야 하므로 삼키고, 실제로 필요한 lane 에서만 아래 require_firebase_plugin! 로 끊는다.
+begin
+  require 'fastlane/plugin/firebase_app_distribution'
+rescue LoadError
+  nil
+end
+
+def require_firebase_plugin!
+  return if defined?(Fastlane::Actions::FirebaseAppDistributionAction)
+  UI.user_error!(
+    "fastlane-plugin-firebase_app_distribution (>= 1.0.0) 이 설치돼 있지 않습니다.\n" \
+    "  gem install fastlane-plugin-firebase_app_distribution --version '>= 1.0.0'\n" \
+    "(1.0.0 미만은 WIF external_account 자격증명을 못 가른다 — fastlane/Pluginfile 참고)"
+  )
+end
 
 REPO_ROOT = File.expand_path('..', __dir__)
 
@@ -28,6 +51,38 @@ def require_slug(options)
   slug = options[:slug]
   UI.user_error!('slug 파라미터 필요: fastlane <lane> slug:<slug>') if slug.nil? || slug.empty?
   slug
+end
+
+# Firebase App Distribution 이 요구하는 앱 식별자는 번들 id(appId)가 아니라
+# **Firebase 앱 ID**(`1:123456789012:android:abc…`) 다. 이 값은 CI 가 이미 시크릿에서
+# 배치하는 google-services.json 안에 들어 있으므로, app.config.json 에 키를 새로 만들지 않고
+# 거기서 꺼내 쓴다 — 앱이 늘어도 사람이 관리할 값이 늘지 않는다.
+#
+# 한 Firebase 프로젝트에 여러 앱(dev/prod)이 등록돼 있으면 client 배열에 여럿이 들어온다.
+# 반드시 **package_name 이 이 앱의 appId 와 같은 항목**을 골라야 한다 — 첫 항목을 집으면
+# 조용히 다른 앱으로 배포된다.
+def firebase_android_app_id(slug)
+  app_id = app_config(slug)['appId']
+  path = File.join(build_dir(slug), 'android', 'app', 'google-services.json')
+  unless File.exist?(path)
+    UI.user_error!(
+      "google-services.json 없음: #{path}\n" \
+      "Firebase App Distribution 은 Firebase 에 등록된 앱만 배포할 수 있습니다.\n" \
+      "  · CI  — GOOGLE_SERVICES_B64_<SLUG> 시크릿을 등록하세요 (docs/08-DEPLOY.md §4)\n" \
+      "  · 로컬 — Firebase 콘솔에서 받아 위 경로에 두세요"
+    )
+  end
+  clients = JSON.parse(File.read(path))['client'] || []
+  hit = clients.find { |c| c.dig('client_info', 'android_client_info', 'package_name') == app_id }
+  unless hit
+    known = clients.map { |c| c.dig('client_info', 'android_client_info', 'package_name') }.compact
+    UI.user_error!(
+      "google-services.json 에 패키지 #{app_id} 항목이 없습니다 (있는 것: #{known.join(', ')}).\n" \
+      "다른 앱의 google-services.json 이 주입됐을 수 있습니다 — 시크릿 이름의 슬러그를 확인하세요."
+    )
+  end
+  hit.dig('client_info', 'mobilesdk_app_id') ||
+    UI.user_error!("google-services.json 에 mobilesdk_app_id 가 없습니다: #{path}")
 end
 
 # 알림에 캐릭터 프로필 사진을 붙이는 Notification Service Extension 의 타깃명.
@@ -242,5 +297,78 @@ platform :android do
       release_status: 'draft'
     )
     UI.success("Play #{options[:track] || 'internal'} 트랙 업로드 완료 (#{slug}). 프로덕션 승격은 Play Console 에서 직접.")
+  end
+
+  desc 'Android 릴리즈 APK 빌드 (Firebase App Distribution 용).'
+  lane :build_apk do |options|
+    slug = require_slug(options)
+    # App Distribution 은 AAB 도 받지만, 그 경로는 Firebase↔Play 연동과 Play 앱 서명 키를
+    # 요구한다. 내부 테스터가 링크로 바로 설치하는 게 목적이므로 APK 로 굽는다.
+    # 서명은 AAB 와 동일 — generate-app 이 buildTypes.release 에 걸어둔 signingConfig 가
+    # assembleRelease 에도 그대로 적용된다.
+    gradle(
+      project_dir: File.join(build_dir(slug), 'android'),
+      task: 'assemble',
+      build_type: 'Release'
+    )
+  end
+
+  desc 'Firebase App Distribution 업로드 (내부 테스터에게 즉시 배포). 스토어 공개 아님.'
+  lane :firebase do |options|
+    # 7분짜리 APK 빌드를 다 돌린 뒤 "액션 없음"으로 죽지 않게, 맨 앞에서 확인한다.
+    require_firebase_plugin!
+    slug = require_slug(options)
+    app_id = firebase_android_app_id(slug)
+    build_apk(options) unless options[:skip_build]
+
+    apk = File.join(build_dir(slug), 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+    UI.user_error!("APK 없음: #{apk} — build_apk 가 실패했거나 산출물 경로가 바뀌었습니다") unless File.exist?(apk)
+
+    # 테스터 그룹은 **Firebase 콘솔에서 사람이 미리 만든 별칭(alias)** 이다. 없는 별칭을 주면
+    # 업로드는 되는데 아무에게도 안 가므로, 기본값을 두되 그 값을 로그에 남긴다.
+    groups = options[:groups] || ENV['FIREBASE_TESTER_GROUPS'] || 'aipia_internal'
+
+    # 자격증명 — **서비스 계정 키(.json)는 쓰지 않는다.** aipia 조직은 org policy
+    # `iam.disableServiceAccountKeyCreation` 으로 키 발급 자체를 막아뒀다. 대신:
+    #   · CI   — GitHub OIDC(WIF). release.yml 이 external_account 파일 경로를 넘긴다.
+    #   · 로컬 — gcloud Application Default Credentials.
+    # 플러그인 1.0.0+ 는 파일의 `type` 을 보고 external_account / service_account 를 알아서
+    # 가른다. 그래서 WIF 파일을 그대로 service_credentials_file 로 넘기면 된다.
+    creds = ENV['FIREBASE_SERVICE_CREDENTIALS_FILE'] || ENV['GOOGLE_APPLICATION_CREDENTIALS']
+    creds = File.expand_path(creds, REPO_ROOT) unless creds.nil? || creds.strip.empty?
+
+    cfg = app_config(slug)
+    notes = options[:notes] ||
+            "#{slug} #{cfg.dig('version', 'name')} (#{cfg.dig('version', 'code')})"
+
+    params = {
+      app: app_id,
+      android_artifact_type: 'APK',
+      android_artifact_path: apk,
+      groups: groups,
+      release_notes: notes
+    }
+
+    if creds && File.exist?(creds)
+      params[:service_credentials_file] = creds
+      UI.message("자격증명: #{creds}")
+    else
+      # 파일이 없으면 플러그인이 ADC 로 폴백한다. ADC 도 없으면 플러그인 에러 메시지가
+      # 맥락 없이 뜨므로, 여기서 먼저 조치를 안내하고 끊는다.
+      adc = File.expand_path('~/.config/gcloud/application_default_credentials.json')
+      unless File.exist?(adc)
+        UI.user_error!(
+          "Firebase 자격증명이 없습니다.\n" \
+          "  · CI  — GitHub OIDC(WIF) 로 자동 주입됩니다. 레포 변수 FIREBASE_WIF_PROVIDER_<SLUG> /\n" \
+          "          FIREBASE_WIF_SERVICE_ACCOUNT_<SLUG> 설정을 확인하세요 (docs/08-DEPLOY.md §10)\n" \
+          "  · 로컬 — gcloud auth application-default login --project=<firebase 프로젝트 id>"
+        )
+      end
+      UI.message('자격증명: gcloud Application Default Credentials')
+    end
+
+    UI.message("Firebase App Distribution → app=#{app_id} groups=#{groups}")
+    firebase_app_distribution(**params)
+    UI.success("Firebase App Distribution 업로드 완료 (#{slug} → #{groups}). 테스터는 초대 메일/링크로 즉시 설치 가능.")
   end
 end
