@@ -211,6 +211,10 @@ export interface AppBridgeSDK {
   onResume(handler: () => void): () => void;
   /** 앱이 백그라운드로 나갈 때. onResume 과 짝으로 써서 "실제로 나갔다 돌아왔는지"를 가른다. */
   onPause(handler: () => void): () => void;
+  /** 인앱 브라우저를 닫는다(SFSafariViewController / Chrome Custom Tabs). 웹에서는 no-op. */
+  closeInAppBrowser(): Promise<void>;
+  /** 인앱 브라우저가 닫힌 순간(사용자가 직접 닫은 경우 포함). OAuth 취소 판정의 근거. 반환=해제 함수. */
+  onBrowserClosed(handler: () => void): () => void;
 
   /** 안전영역 인셋(px) — 노치/펀치홀/제스처바. CSS 만으로 되면 var(--safe-area-inset-*) 직접 사용 권장. */
   getSafeAreaInsets(): { top: number; bottom: number; left: number; right: number };

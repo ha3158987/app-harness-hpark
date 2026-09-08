@@ -873,6 +873,40 @@ class AppBridgeImpl {
     };
   }
 
+  // ── 인앱 브라우저 (SFSafariViewController / Chrome Custom Tabs) ─────────
+  /**
+   * 인앱 브라우저를 닫는다. 웹·미설치 환경에서는 no-op.
+   * OAuth 복귀 딥링크를 받은 뒤 호출한다 — 안 닫으면 로그인이 끝났는데도 브라우저
+   * 창이 앱 위에 그대로 덮여 있다.
+   */
+  async closeInAppBrowser() {
+    if (!this.isNative) return;
+    try {
+      const { Browser } = await import('@capacitor/browser');
+      await Browser.close();
+    } catch { /* 이미 닫힘·미설치 — 무해 */ }
+  }
+
+  /**
+   * 인앱 브라우저가 닫힌 순간을 구독한다(사용자가 직접 닫은 경우 포함). 반환=해제 함수.
+   *
+   * ⚠️ **OAuth 취소 판정의 유일한 근거다.** 인앱 브라우저는 앱 위에 덮이는 창이라
+   *    앱이 백그라운드로 가지 않는다 — 즉 onPause/onResume 이 뜨지 않는다. 공용
+   *    브라우저(openExternal 의 system:true) 시절에 쓰던 "나갔다 돌아왔으면 취소"
+   *    판정을 그대로 두면, 사용자가 창을 닫아도 아무 신호가 없어 **타임아웃까지
+   *    스피너가 돈다.**
+   * @returns 해제 함수
+   */
+  onBrowserClosed(handler) {
+    if (typeof handler !== 'function' || !this.isNative) return () => {};
+    let remove = () => {};
+    import('@capacitor/browser').then(({ Browser }) => {
+      Browser.addListener('browserFinished', () => handler())
+        .then((h) => { remove = () => h.remove(); });
+    }).catch(() => {});
+    return () => remove();
+  }
+
   // 안전영역 인셋(px). safe-area 플러그인이 주입한 --safe-area-inset-* (없으면 env() 폴백)을 읽는다.
   // 레이아웃을 JS 로 계산할 때 사용. CSS 만으로 되면 var(--safe-area-inset-top) 을 직접 써도 됨.
   getSafeAreaInsets() {
@@ -1392,6 +1426,13 @@ class AppBridgeImpl {
     });
     const url = `${authorizeUrl}?${params.toString()}${extraQuery ? '&' + extraQuery : ''}`;
 
+    // ⚠️ **공용 브라우저는 탭이 남는다.** 로그인하다 만 공급자 화면이 살아남아, 나중에
+    //    그 탭에서 뒤늦게 완주하면 인증서버가 그 흐름을 거부할 수 있다(서버가 진행 중인
+    //    시도를 하나만 기억하는 설계일 때 — poptale-auth 가 그렇다). 브로커 경로는
+    //    이 문제로 인앱 브라우저로 옮겼다(웹 어댑터 awaitOAuthReturn 주석).
+    //    이 네이티브 OAuth 경로도 같은 노출이 있지만, 운영 중인 앱(poptale)의 로그인이
+    //    걸려 있어 실기기 확인 없이 바꾸지 않는다 — 바꿀 때는 { system: true } 를 빼고
+    //    onBrowserClosed 로 취소를 판정해야 한다(그냥 빼면 취소를 영영 모른다).
     const res = await this._awaitOAuthRedirect(state, opts.timeoutMs || 180000, () =>
       this.openExternal(url, { system: true }));
     if (!res.ok) return { ok: false, reason: res.reason, provider };
