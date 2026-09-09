@@ -1,0 +1,51 @@
+{
+  "slug": "poptale-global",
+  "appName": { "en": "Poptale", "ko-KR": "팝테일 글로벌", "ja-JP": "Poptale", "es-419": "Poptale" },
+  "appId": "com.aipia.poptale.global",
+  "startUrl": "https://global.poptale.ai",
+  "version": { "name": "0.1.0", "code": 1 },
+  "locales": { "default": "en", "supported": ["en", "ko-KR", "ja-JP", "es-419"] },
+  "theme": { "primary": "#000000", "statusBarStyle": "light", "background": "#000000" },
+  "assets": { "icon": "icon.png", "splash": "splash.png" },
+  "features": {
+    "push": true,
+    "pushPolicy": { "allowedPaths": ["/recommend", "/detail/", "/viewer", "/event", "/info/notice", "/info/inquiry"] },
+    "deepLink": true,
+    "secureStorage": true,
+    "share": true,
+    "camera": true,
+    "haptics": true,
+    "clipboard": true,
+    "darkMode": true,
+    "localNotification": true,
+    "biometric": false,
+    "geolocation": false,
+    "appChannelCompat": false,
+    "forceUpdate": { "enabled": false, "minVersionUrl": null },
+    "viewer": { "captureBlock": { "enabled": true, "paths": ["/viewer"] }, "brightness": { "enabled": true } }
+  },
+  "navigation": { "allowedDomains": ["global.poptale.ai"], "externalInBrowser": true },
+  "auth": {
+    "providers": [],
+    "oauthReturnScheme": true,
+    "logoutEndpoint": "https://api.poptale.ai/api/v2/user/logout",
+    "deleteEndpoint": "https://api.poptale.ai/api/v2/user/withdraw",
+    "deviceEndpoint": null,
+    "deviceUnregisterEndpoint": null
+  },
+  "iap": { "verifyEndpoint": "https://api.poptale.ai/api/v2/iap/verify", "googleTokenCompression": true, "products": [] },
+  "marketing": { "attribution": { "provider": null }, "analytics": { "provider": "amplitude" }, "crm": { "provider": null }, "autoCapture": true },
+  "monitoring": { "crash": { "provider": "crashlytics", "dsn": null, "environment": "production" }, "apm": { "provider": null } },
+  "firebase": {
+    "enabled": true,
+    "project": { "dev": "dev-aipia-poptale", "stage": "stage-aipia-poptale", "prod": "aipia-poptale" },
+    "fcm": true, "remoteConfig": true, "analytics": true, "crashlytics": true
+  },
+  "legal": { "privacyUrl": "https://global.poptale.ai/privacy", "termsUrl": "https://global.poptale.ai/terms", "ageVerifyUrl": null },
+  "permissions": {
+    "notifications": { "required": false, "purpose": "New episodes, events and purchase updates" },
+    "camera": { "required": false, "purpose": "Attach photos to support inquiries" }
+  },
+  "ios": { "teamId": "3W889GYPRK" },
+  "android": { "sha256CertFingerprints": [] }
+}
