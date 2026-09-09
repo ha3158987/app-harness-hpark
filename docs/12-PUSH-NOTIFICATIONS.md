@@ -145,6 +145,7 @@ base64 -i google-services.json     | tr -d '\n' | gh secret set GOOGLE_SERVICES_
 | iOS 빌드 서명 실패(capability 관련) | capability 켰는데 match 프로파일 구버전 | Step 4 + Step 5(regen_profile) |
 | 알림에 **기본(회색) 아이콘** | iOS 알림 아이콘 = **앱 아이콘**(별도 지정 없음). 캐시 잔상 | 앱 삭제 → **기기 재부팅** → 재설치 |
 | iOS 푸시 수신만 안 됨(토큰은 옴) | 정본 프로젝트에 **APNs 키 미업로드** | Step 3 |
+| **Android 알림 탭해도 앱이 안 열림** (iOS 는 정상) | 백엔드 페이로드의 `android.notification.click_action`(예: Flutter 잔재 `FLUTTER_NOTIFICATION_CLICK`). FCM SDK 는 이 값이 있으면 그 액션을 받는 Activity 만 실행하고 런처 폴백을 안 한다 — Capacitor 앱엔 그 인텐트 필터가 없음 | 백엔드에서 `click_action` 제거. 탭 라우팅은 `data.url` 만으로 동작한다 |
 
 **기억할 것**
 - 실제 프로젝트를 정하는 건 **CI 시크릿(plist/json)**. `app.config.project` 는 표시용.
