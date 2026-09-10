@@ -28,14 +28,14 @@
   "auth": {
     "providers": [],
     "oauthReturnScheme": true,
-    "logoutEndpoint": "https://api.poptale.ai/api/v2/user/logout",
-    "deleteEndpoint": "https://api.poptale.ai/api/v2/user/withdraw",
+    "logoutEndpoint": null,
+    "deleteEndpoint": null,
     "deviceEndpoint": null,
     "deviceUnregisterEndpoint": null
   },
-  "iap": { "verifyEndpoint": "https://api.poptale.ai/api/v2/iap/verify", "googleTokenCompression": true, "products": [] },
+  "iap": { "verifyEndpoint": "https://dev.api.poptale.ai/api/v2/iap/verify", "googleTokenCompression": true, "products": [] },
   "marketing": { "attribution": { "provider": null }, "analytics": { "provider": "amplitude" }, "crm": { "provider": null }, "autoCapture": true },
-  "monitoring": { "crash": { "provider": "crashlytics", "dsn": null, "environment": "production" }, "apm": { "provider": null } },
+  "monitoring": { "crash": { "provider": "crashlytics", "dsn": null, "environment": "development" }, "apm": { "provider": null } },
   "firebase": {
     "enabled": true,
     "project": { "dev": "dev-aipia-poptale", "stage": "stage-aipia-poptale", "prod": "aipia-poptale" },
