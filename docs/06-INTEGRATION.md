@@ -47,7 +47,7 @@ if (AppBridge.isNative) { /* 앱 */ } else { /* 브라우저 */ }
 | 영역 | 메서드 |
 |---|---|
 | 코어 | `ready()`, `isNative`, `platform`, `capabilities`, `config` |
-| 로그인/SSO | `login(provider)`, `logout()`, `completeSignup(profile)`, `getLastLogin()`, `deleteAccount()` |
+| 로그인/SSO | `login(provider)`, `logout()`, `completeSignup(profile)`, `rememberLastLogin(provider)`, `getLastLogin()`, `deleteAccount()` |
 | 인앱결제 | `getProducts()`, `purchase(id)`, `restorePurchases()` |
 | 공유/링크 | `share()`, `openExternal(url,{system})` |
 | 푸시/알림 | `registerPush()`, `scheduleNotification()`, `cancelNotification()` |

@@ -121,14 +121,22 @@ config 로 고르는 `broker` 모드가 필요해진다. **길 B 가 막혔다�
 
 ---
 
-## 4. 웹과의 계약 — 이 네 개가 전부다
+## 4. 웹과의 계약 — 이 다섯 개가 전부다
 
 ```js
-AppBridge.login(provider)      // → { ok, reason?, ...BE 응답 — 단 예약 이름은 브릿지가 이긴다 }
-AppBridge.completeSignup(body) // body 를 해석 없이 signupEndpoint 로 POST
-AppBridge.getLastLogin()       // → { provider } | null
+AppBridge.login(provider)             // → { ok, reason?, ...BE 응답 — 단 예약 이름은 브릿지가 이긴다 }
+AppBridge.completeSignup(body)        // body 를 해석 없이 signupEndpoint 로 POST
+AppBridge.rememberLastLogin(provider) // 기록. login() 성공 시 자동 — 그 밖은 웹이 직접
+AppBridge.getLastLogin()              // → { provider } | null
 AppBridge.logout() / deleteAccount()
 ```
+
+⚠️ **`getLastLogin()` 의 짝을 빼먹지 마라.** 길 B(앱이 자체 OAuth 를 도는 구성)는
+`login()` 을 지나지 않으므로 **자동 기록이 일어나지 않는다.** 이메일도 같다 —
+`login('email')` 은 기록 전에 `email-handled-by-web` 으로 빠진다. 웹이
+`rememberLastLogin()` 을 부르지 않으면 `getLastLogin()` 이 영원히 `null` 이고,
+**오류 없이 "마지막 로그인" 배지만 안 뜬다.** 브라우저에서는 웹이 자체 localStorage 로
+처리해 되는 것처럼 보여 **앱에서만 안 되는 버그**로 나타난다(팝챗 실측).
 
 **보장해야 할 것**
 
@@ -351,7 +359,7 @@ provider 가 0개이고 `admin/admin` 하드코딩이라 **데모 수준**이었
 | 공급자 세션(카카오·구글 …) | **된다** — 시스템 브라우저 쿠키 |
 | 인증서버 마스터 세션 | 안 된다 — 길 B 가 authorize 를 안 거친다 |
 | 앱 세션 쿠키 | 안 된다 — WebView 저장소가 앱마다 분리 |
-| `getLastLogin()` | 안 된다 — 앱별 저장소 |
+| `getLastLogin()` / `rememberLastLogin()` | 안 된다 — 앱별 저장소 |
 
 **실질 차이는 "입력"이 아니라 "선택"이다.** 앱 B 는 사용자가 어느 수단을 썼는지 모르므로
 버튼을 다시 고르게 해야 하고, 고른 뒤는 무마찰이다. 공급자별 세션 수명·재동의 요구는 각 사

@@ -977,8 +977,10 @@ class AppBridgeImpl {
     // 2) 백엔드 세션 발급(sessionEndpoint 설정 시) — OAuth/Apple 경로 공통
     const result = await this._finishLogin(credential, opts);
 
-    // 3) 다음에 "마지막 로그인 수단"으로 보여줄 수 있게 기기에 기록(재가입 방지 UX)
-    if (result && result.ok !== false) { try { await this.setPref('last_login_provider', provider); } catch { /* noop */ } }
+    // 3) 다음에 "마지막 로그인 수단"으로 보여줄 수 있게 기기에 기록(재가입 방지 UX).
+    //    ★ 기록은 rememberLastLogin() 한 곳에서만 한다 — 여기서 setPref 를 직접 쓰면
+    //      키를 아는 곳이 둘이 되고, login() 을 지나지 않는 앱은 그 키를 흉내내야 한다.
+    if (result && result.ok !== false) await this.rememberLastLogin(provider);
     return result;
   }
 
@@ -1006,7 +1008,46 @@ class AppBridgeImpl {
     }
   }
 
-  /** 이 기기에서 마지막으로 성공한 로그인 수단. 로그인 화면에 "마지막 로그인: 카카오" 배지용. */
+  /**
+   * 마지막으로 성공한 로그인 수단을 이 기기에 기록한다. `login()` 이 성공 시 내부에서
+   * 부르므로 그 경로를 쓰는 앱은 직접 부를 일이 없다.
+   *
+   * ★ **`login()` 을 지나지 않는 경로는 반드시 직접 불러야 한다.** 실제로 두 가지가 있다:
+   *   - **앱이 자체 OAuth 를 도는 경우** — 서비스의 start URL 을 시스템 브라우저로 열고
+   *     딥링크로 받은 code 를 웹이 상환하는 구성. 브릿지의 `login()` 을 지나지 않는다.
+   *   - **이메일 로그인** — `login('email')` 은 `email-handled-by-web` 으로 즉시 빠지므로
+   *     (웹이 폼으로 처리한다) 기록 지점까지 오지 않는다.
+   *
+   *   이때 아무도 기록하지 않으면 `getLastLogin()` 이 **영원히 null** 이고 "마지막 로그인"
+   *   배지가 렌더될 수 없다. 브라우저에서는 웹이 자체 localStorage 로 처리해 동작하는 것처럼
+   *   보이므로 **앱에서만 안 되는 버그**로 나타난다(팝챗에서 실제로 그랬다).
+   *
+   * 기록 **시점은 호출부가 정한다.** 소셜은 공급자로 떠났다 돌아와야 결과를 알아 "누를 때"
+   * 가 현실적이고(취소하면 그 수단이 남지만 다음 로그인이 덮어쓴다), 이메일은 제출 응답에서
+   * 판정이 끝나므로 "성공 후" 가 맞다. 이 값은 자격증명이 아니라 표시용 힌트다.
+   *
+   * @param provider `auth.providers` 에 들어 있는 수단. 'email' 도 된다.
+   * @returns `{ ok: true }` 또는 `{ ok: false, reason }`. **실패해도 던지지 않는다** —
+   *   힌트 하나 때문에 로그인 흐름이 막히면 안 되므로 호출부는 await 하지 않아도 된다.
+   */
+  async rememberLastLogin(provider) {
+    await this.ready();
+    const auth = (this.config && this.config.auth) || {};
+    const providers = auth.providers || [];
+    // login() 과 **같은 기준**으로 막는다. 여기서 통과시키면 getLastLogin() 이 나중에
+    // 이 앱이 그리지도 않는 수단을 돌려주고, 호출부는 없는 버튼에 배지를 달려 한다.
+    if (!providers.includes(provider)) return { ok: false, reason: 'provider-not-enabled' };
+    try {
+      await this.setPref('last_login_provider', provider);
+      return { ok: true };
+    } catch {
+      return { ok: false, reason: 'pref-write-failed' };
+    }
+  }
+
+  /** 이 기기에서 마지막으로 성공한 로그인 수단. 로그인 화면에 "마지막 로그인: 카카오" 배지용.
+   *  ★ 기록하는 쪽은 {@link rememberLastLogin} 이다 — `login()` 을 안 쓰는 앱은 그걸 직접
+   *    불러야 한다. 짝을 안 부르면 이 함수는 영원히 null 을 돌려준다. */
   async getLastLogin() {
     const provider = await this.getPref('last_login_provider');
     return provider ? { provider } : null;

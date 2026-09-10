@@ -264,7 +264,20 @@ export interface AppBridgeSDK {
    */
   guestLogin(opts?: { endpoint?: string }): Promise<{ ok: boolean; guest?: boolean; user?: unknown; reason?: string }>;
 
-  /** 이 기기에서 마지막으로 성공한 로그인 수단(재가입 방지 UX: "마지막 로그인: 카카오") */
+  /**
+   * 마지막으로 성공한 로그인 수단을 이 기기에 기록한다. `login()` 이 성공 시 내부에서 부른다.
+   *
+   * ★ **`login()` 을 지나지 않는 경로는 직접 불러야 한다** — 앱이 자체 OAuth 를 도는 구성
+   * (시스템 브라우저 + 딥링크 code 상환)과 이메일 로그인(`login('email')` 은
+   * `email-handled-by-web` 으로 즉시 빠진다)이 그렇다. 안 부르면 `getLastLogin()` 이 영원히
+   * null 이라 "마지막 로그인" 배지가 렌더될 수 없다.
+   *
+   * 기록 시점은 호출부가 정한다(소셜=누를 때 · 이메일=성공 후). 실패해도 던지지 않는다.
+   */
+  rememberLastLogin(provider: AuthProvider): Promise<{ ok: boolean; reason?: string }>;
+
+  /** 이 기기에서 마지막으로 성공한 로그인 수단(재가입 방지 UX: "마지막 로그인: 카카오").
+   *  기록하는 짝은 {@link rememberLastLogin} 이다. */
   getLastLogin(): Promise<{ provider: AuthProvider } | null>;
 
   /** 생체인증 빠른 재로그인 켜기/끄기(실로그인 직후). 다음 실행부터 Face ID/지문으로 잠금 해제. */
