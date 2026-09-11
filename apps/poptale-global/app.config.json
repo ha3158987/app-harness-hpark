@@ -46,6 +46,6 @@
     "notifications": { "required": false, "purpose": "New episodes, events and purchase updates" },
     "camera": { "required": false, "purpose": "Attach photos to support inquiries" }
   },
-  "ios": { "teamId": "3W889GYPRK" },
+  "ios": { "teamId": "3W889GYPRK", "usesNonExemptEncryption": false },
   "android": { "sha256CertFingerprints": [] }
 }
