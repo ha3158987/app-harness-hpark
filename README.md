@@ -100,8 +100,6 @@ Appharness/
 │   ├── bridge/                  # 공유 브릿지 (Capacitor 플러그인 + JS SDK + 타입)
 │   ├── integration/             #   harness-adapter.js (AppChannel shim 포함)
 │   └── plugins/                 # 네이티브 플러그인 작업 사양서 (코드 아님)
-│       ├── kakao/SPEC.md        #   P0
-│       ├── naver/SPEC.md        #   P0
 │       ├── adbrix/SPEC.md       #   P0
 │       └── whatap/SPEC.md       #   P1/보류
 ├── build/<slug>/                # 생성된 Capacitor 프로젝트 (gitignore)
@@ -160,7 +158,7 @@ Appharness/
 - **Adbrix 네이티브 플러그인** (어트리뷰션 · 디퍼드 딥링크 버퍼링) — 코드는 있으나 cold/warm start · 앱 종료 후 복구 · 중복 이벤트 · 버퍼 소비 시점이 미검증. **cold install → 광고 링크 클릭 → 최초 실행 수신**을 실기기로 확인할 것
 
 ### 미검증 ⚠️
-- Kakao/Naver/WhaTap 네이티브 플러그인 — `template/plugins/*/SPEC.md` 작업 사양만 있음, 실제 SDK 통합은 dev 가 채워야 함
+- WhaTap 네이티브 플러그인 — `template/plugins/whatap/SPEC.md` 작업 사양만 있음, 실제 SDK 통합은 dev 가 채워야 함 (Kakao/Naver 네이티브 SDK 사양은 2026-09-11 삭제 — 소셜 로그인은 브라우저 OAuth/브로커, `docs/25` §3)
 - Poptale 마이그 호환성 매트릭스(`docs/21-POPTALE-MIGRATION.md §3`) — 10개 항목 PASS/FAIL 검증 미실행
 
 ### 외부 의존(사람 몫) 🙋

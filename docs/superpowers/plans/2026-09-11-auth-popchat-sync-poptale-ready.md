@@ -241,7 +241,7 @@
 | docs/06 | ✅ §2 브로커 행 · §3 브로커 로그인 패턴(골격 + 참조 구현) | `docs/06-INTEGRATION.md` |
 | **D1′** docs/01 §3 (Q3 승인) | ✅ "두 형태" 표 신설, 3-2 두 경로 병기. K-market 4종은 네이티브 앱 기본으로 한정 | `docs/01-AIPIA-CONVENTIONS.md` |
 | **A3** (Q1 배너 → **삭제**로 변경, 같은 날) | ✅ `backend/auth-reference/` 삭제 · docs/10 §5 IdP/Keycloak 절 삭제 · 02/25/01/README/ONBOARDING/CLAUDE.md 참조 정리 — "하네스에는 유효한 코드만" 결정 | (삭제) |
-| **B9 · B10** | ✅ 주석·우선순위 주석 | `scripts/lib/auth-setup.mjs`, `template/plugins/README.md` |
+| **B9 · B10** | ✅ 주석 보정 · **B10 은 같은 날 삭제로 확대** — `template/plugins/{kakao,naver}/SPEC.md` 삭제(미구현·스키마 어긋남·브로커 전환으로 수요 소멸), docs/21·02·10·25·README·CLAUDE.md 참조 정리 | `scripts/lib/auth-setup.mjs`, `template/plugins/` |
 | CLAUDE.md §2 | ✅ 01/02/06/10/25 최종 수정 2026-09-11 | `CLAUDE.md` |
 
 **검증**: `npm test` 65/65 · `node scripts/doctor.mjs` 5 앱 오류 0(경고 11 — #34 기준선과 동일) · `npm run check` · `node --check` 통과 ·

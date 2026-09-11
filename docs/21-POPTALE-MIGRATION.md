@@ -45,7 +45,7 @@ updated: 2026-06-01
 | **하네스(이 레포)** | 네이티브 셸 + `@harness/bridge` + 빌드/배포 자동화. config 1개로 환경 분기. |
 | **웹(`poptale-frontend`)** | `@harness/bridge` import + `if (isNative) AppBridge.*` 분기. **앱화를 위해 거의 손대지 않는다**(AppChannel 호환 shim 덕분). |
 | **백엔드** | `/auth/native`, `/auth/signup`, `/auth/guest`, `/auth/device`, `/iap/verify`, FCM 토큰 처리, Google purchase token 압축 포맷 수용. |
-| **콘솔(사람)** | App Store Connect / Play Console — 같은 번들 ID 업데이트 시 IAP 상품 / 개인정보 라벨 / 스토어 정책. Kakao/Naver Developer Console 에 *Capacitor 빌드 키 해시 추가 등록*. |
+| **콘솔(사람)** | App Store Connect / Play Console — 같은 번들 ID 업데이트 시 IAP 상품 / 개인정보 라벨 / 스토어 정책. Kakao/Naver Developer Console 에 *커스텀 스킴 redirect(`com.aipia.poptale://oauth/<p>`) 추가 등록*(키 해시는 네이티브 SDK 전용 — 불필요). |
 | **DevOps** | GitHub Secrets (서명·match·플레이 서비스계정), CI macOS 러너 비용. |
 
 > **변경 금지**: Flutter 앱(`poptale-app`)은 긴급 패치만. 신기능 추가 금지. RemoteConfig 로 우회 가능한 건 RC 로.
@@ -62,7 +62,7 @@ updated: 2026-06-01
 | **1** | **IAP 영수증 포맷** | Flutter `in_app_purchase` 영수증 + Google purchase token 압축(0.28.21+102). Capacitor `cordova-plugin-purchase` 표준과 다름. | `verifyEndpoint` 백엔드를 **두 포맷 동시 수용**. config `iap.googleTokenCompression: true` 로 토큰 압축 활성. 6개월 후 구포맷 폐기 결정. |
 | **2** | **저장소 데이터** | Flutter: `flutter_secure_storage` + `shared_preferences` + Drift SQLite. Capacitor: `@capacitor/preferences` + `@capacitor/secure-storage`. **키 이름/위치 다름**. | 자동 로그인 끊김 허용(웹 쿠키는 도메인 단위라 살아있음) + 다운로드 콘텐츠는 **재다운로드 안내 배너**. |
 | **3** | **App Links / Universal Links** | 도메인 검증 파일(`apple-app-site-association`, `assetlinks.json`)은 도메인 호스팅 — 그대로 유지 OK. Capacitor `associatedDomains` 설정만 동일하게. | `apps/poptale/app.config.json` 의 `navigation.allowedDomains` 동일. iOS pbxproj `associated-domains` 엔타이틀먼트 *수동 확인* 필요(첫 macOS 빌드). |
-| **4** | **Kakao/Naver 키 해시** | Capacitor 빌드의 *서명 키 해시*가 Kakao/Naver Developer Console 에 등록되어 있어야 로그인 동작. | 프로토타입 출시 시 키 해시 발급 → Poptale 용 Kakao/Naver 앱에 **추가 등록**(기존 Flutter 해시는 유지). |
+| **4** | **Kakao/Naver 로그인 방식** | Flutter 는 네이티브 SDK(카카오톡 앱 점프). 하네스는 **브라우저 OAuth(길 B)** 만 지원 — 네이티브 SDK 플러그인은 만들지 않기로 했다(2026-09-11, 25 §3). Android 키 해시 등록은 네이티브 SDK 전용이라 **불필요**. 대신 공급자 콘솔에 커스텀 스킴 redirect(`com.aipia.poptale://oauth/<p>`)가 필요하다. | Poptale 용 Kakao/Naver 앱에 커스텀 스킴 redirect **추가 등록**(기존 Flutter 설정은 유지). 앱 점프 UX 포기는 제품에 공유. |
 | **5** | **FCM 토큰** | Firebase 프로젝트 동일하면 앱 첫 실행 시 토큰 재발급 → 백엔드에 `/auth/device` 로 자동 갱신. | 동일 Firebase 프로젝트 3개(`*-aipia-poptale`) 그대로 사용. config `firebase.enabled: true` + `fcm: true`. |
 | **6** | **Sign In with Apple App ID** | 같은 번들이라 그대로 동작. | 변경 없음. |
 | **7** | **App Tracking Transparency (ATT)** | iOS 14.5+ 동의 흐름. Adbrix/Amplitude init 전 호출. | `AppBridge.requestTracking()` (initHarness 안에서 자동). `permissions.idfa.purpose` 명시. |
@@ -81,8 +81,8 @@ updated: 2026-06-01
 | 주차 | 신규 앱 트랙 | 하네스 일반화 트랙 |
 |---|---|---|
 | W1 | 신규 슬러그/번들ID/도메인 확정, 아이콘/스플래시 발주 | 신규 앱이 즉시 쓸 항목 식별(Kakao/Naver/Adbrix/Amplitude) |
-| W2 | `gradlew assembleDebug` 첫 빌드, 실기기 확인 | **Kakao Capacitor 플러그인** (`template/plugins/kakao/SPEC.md`) |
-| W3 | 4종 소셜 로그인 결선 | **Naver Capacitor 플러그인** (`template/plugins/naver/SPEC.md`) |
+| W2 | `gradlew assembleDebug` 첫 빌드, 실기기 확인 | ~~Kakao 네이티브 플러그인~~ → 브라우저 OAuth(길 B)로 대체, 플러그인 없음 |
+| W3 | 4종 소셜 로그인 결선 | ~~Naver 네이티브 플러그인~~ → 같음. 공급자 콘솔 redirect 등록만 |
 | W4 | IAP 상품 등록, 영수증 검증 결선 | IAP Google 토큰 압축 옵션 |
 | W5 | FCM 푸시 + 딥링크 + 화이트리스트 | 푸시 화이트리스트 모듈(`pushPolicy.allowedPaths` 소비) |
 | W6 | **iOS 첫 빌드**(macOS 러너), TestFlight | **Adbrix provider**, **Amplitude 이벤트 표준** |
@@ -101,8 +101,7 @@ P0 = 10주 안에 반드시. P1 = Poptale 마이그 직전. P2 = 이후.
 
 | 우선 | 항목 | 작업 폴더 / 변경점 | 참고 |
 |---|---|---|---|
-| **P0** | Kakao Capacitor 플러그인 | `template/plugins/kakao/` | Flutter `kakao_flutter_sdk_user` 동작 매칭 |
-| **P0** | Naver Capacitor 플러그인 | `template/plugins/naver/` | Flutter `flutter_naver_login` 동작 매칭 |
+| ~~P0~~ | ~~Kakao/Naver Capacitor 플러그인~~ | (삭제 2026-09-11) | 네이티브 SDK 는 만들지 않는다 — 브라우저 OAuth(길 B). "카카오톡 앱 점프" UX 는 포기(25 §3) |
 | **P0** | IAP Google 토큰 압축 옵션 | `template/bridge/dist/index.js` `purchase()` | Poptale 0.28.21+102 |
 | **P0** | Adbrix provider | `template/plugins/adbrix/`, `13-MARKETING.md §4` 절차 | Poptale 1.1.13+181 (DFINERY) |
 | **P0** | Amplitude 이벤트 스펙 | `template/bridge/dist/index.js` `track()` | `app_*/push_*/sns_*/iap_*` lowercase snake_case (Poptale 1.1.8+175) |
@@ -137,7 +136,7 @@ P0 = 10주 안에 반드시. P1 = Poptale 마이그 직전. P2 = 이후.
 | 1 | 신규 프로토타입의 **slug / appName / 번들 ID / 도메인** | `apps/<slug>/app.config.json` 작성 |
 | 2 | **macOS CI 러너 vs 사내 맥** | iOS 빌드 리드타임·비용 |
 | 3 | App Store / Play Console 계정 소유 — `aipia-team` org 또는 별도 법인? | 스토어 업로드 권한 |
-| 4 | Kakao/Naver Developer 앱 — Poptale 기존 앱에 키 해시 추가 vs 신규 앱 분리 | 검토 후 즉시 등록 |
+| 4 | Kakao/Naver Developer 앱 — Poptale 기존 앱에 커스텀 스킴 redirect 추가 vs 신규 앱 분리 (키 해시는 네이티브 SDK 전용이라 불필요) | 검토 후 즉시 등록 |
 | 5 | 백엔드 IAP `verifyEndpoint` 듀얼 호환 작업 일정 | Poptale Phase C 진입 가능 시점 |
 
 ---
@@ -155,7 +154,7 @@ P0 = 10주 안에 반드시. P1 = Poptale 마이그 직전. P2 = 이후.
 | 빌드/CI/시크릿 | [`08-DEPLOY.md`](./08-DEPLOY.md) |
 | Poptale 레퍼런스 config | [`apps/poptale/app.config.json`](../apps/poptale/app.config.json), [`apps/poptale-dev/app.config.json`](../apps/poptale-dev/app.config.json) |
 | AppChannel shim 사용 | `template/integration/harness-adapter.js` 의 `installAppChannelShim()` |
-| 네이티브 플러그인 작업 사양 | `template/plugins/{kakao,naver,adbrix,whatap}/SPEC.md` |
+| 네이티브 플러그인 작업 사양 | `template/plugins/{adbrix,whatap}/SPEC.md` (Kakao/Naver 는 2026-09-11 삭제) |
 | Poptale Flutter 동작 정본 | [`aipia-team/poptale-app`](https://github.com/aipia-team/poptale-app) 의 `.claude/docs/app-web-connection.md` |
 
 ---

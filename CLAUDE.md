@@ -113,7 +113,7 @@
 |---|---|
 | [secrets/README.md](secrets/README.md) | 로컬 키 파일 배치 규칙 |
 | [template/plugins/README.md](template/plugins/README.md) | 네이티브 플러그인 작업 개요 |
-| [template/plugins/](template/plugins/) `{kakao,naver,adbrix,whatap}/SPEC.md` | 플러그인별 작업 사양서 |
+| [template/plugins/](template/plugins/) `{adbrix,whatap}/SPEC.md` | 플러그인별 작업 사양서 |
 | [.claude/skills/](.claude/skills/) `*/SKILL.md` | 자동화 스킬 정의 (하네스가 경로로 로드 — 옮기지 마라) |
 
 ---

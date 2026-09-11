@@ -457,6 +457,6 @@ config 스키마 상세는 이 문서 §6.
 
 - ✅ **검증됨(빌드·업로드)**: Android `assembleDebug` 빌드(전 기능 + 8 소셜 + IAP + 안전영역 등), **iOS `.ipa` 생성과 TestFlight 업로드만**(fastlane `ios build`/`ios beta`, match 서명 — 앱 내부 기능은 아래), (레퍼런스 백엔드는 2026-09-11 삭제 — 백엔드는 하네스 밖이다).
 - 🔧 **구현됨, 실기기 검증 전**: iOS APNs 수신 · NSE 실행 · 유니버설 링크(AASA) 연결, Adbrix 디퍼드 딥링크 최초 실행 수신. **업로드 성공은 기능 동작을 보장하지 않는다.**
-- ⚠️ **미검증**: Kakao/Naver/WhaTap 네이티브 플러그인(`template/plugins/*/SPEC.md` 사양만 있음).
+- ⚠️ **미검증**: WhaTap 네이티브 플러그인(`template/plugins/whatap/SPEC.md` 사양만 있음). Kakao/Naver 네이티브 SDK 는 만들지 않는다 — 소셜 로그인은 브라우저 OAuth/브로커([25 §3](25-AUTH-DELEGATION.md)).
 - ⚠️ **백엔드는 하네스 밖**: §5-3 엔드포인트와 `/iap/verify` 검증은 서비스 BE 가 구현한다(하네스에 레퍼런스 구현을 두지 않는다).
 - 🙋 **사람/외부**: 계정·서명·소셜키·스토어 상품·본인확인 PG (§5). 하네스는 흐름을 열고 받을 뿐.
