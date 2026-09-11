@@ -175,7 +175,7 @@ flowchart TB
 원칙: **시크릿/키는 절대 config·레포에 두지 않는다.** 공개값(clientId, Sentry dsn)만 config.
 </details>
 
-<details><summary><b>5-3. 백엔드 엔드포인트 (레퍼런스: backend/auth-reference)</b></summary>
+<details><summary><b>5-3. 백엔드 엔드포인트 (서비스 BE 가 구현할 것)</b></summary>
 
 | 엔드포인트 | 역할 | 문서 |
 |---|---|---|
@@ -189,8 +189,9 @@ flowchart TB
 | `POST /webhooks/apple` `/webhooks/google` | 환불 회수 | IAP §5 |
 | (성인) 본인확인 콜백 + 상태 | 성인 검증 저장/게이팅 | COMPLIANCE §3 |
 
-중앙 IdP(Keycloak)를 세우는 경로는 **없다** — 코드·`idp/` 디렉터리 모두 #25 에서 제거됐다.
-공급자 토큰 교환은 외부 인증서버가 한다([25-AUTH-DELEGATION.md](25-AUTH-DELEGATION.md)).
+위 표는 **길 B(네이티브 OAuth) 앱**의 표준 경로다. 브로커 앱(팝챗형)은 `/auth/native` 대신 웹이 `start`→`redeem`
+을 타고, 앱이 부르는 것은 signup·logout·withdraw·device 만이다 — [25-AUTH-DELEGATION.md §7](25-AUTH-DELEGATION.md).
+중앙 IdP(Keycloak)를 세우는 경로는 **없다** — 코드·`idp/`·레퍼런스 백엔드(`backend/auth-reference`) 전부 제거됐다.
 </details>
 
 <details><summary><b>5-4. 스토어 콘솔 (사람)</b></summary>
@@ -454,8 +455,8 @@ config 스키마 상세는 이 문서 §6.
 
 ## 9. 현재 상태 / 주의 (정직)
 
-- ✅ **검증됨(빌드·업로드)**: Android `assembleDebug` 빌드(전 기능 + 8 소셜 + IAP + 안전영역 등), **iOS `.ipa` 생성과 TestFlight 업로드만**(fastlane `ios build`/`ios beta`, match 서명 — 앱 내부 기능은 아래), 백엔드 레퍼런스 스모크(게스트/기기/지갑).
+- ✅ **검증됨(빌드·업로드)**: Android `assembleDebug` 빌드(전 기능 + 8 소셜 + IAP + 안전영역 등), **iOS `.ipa` 생성과 TestFlight 업로드만**(fastlane `ios build`/`ios beta`, match 서명 — 앱 내부 기능은 아래), (레퍼런스 백엔드는 2026-09-11 삭제 — 백엔드는 하네스 밖이다).
 - 🔧 **구현됨, 실기기 검증 전**: iOS APNs 수신 · NSE 실행 · 유니버설 링크(AASA) 연결, Adbrix 디퍼드 딥링크 최초 실행 수신. **업로드 성공은 기능 동작을 보장하지 않는다.**
 - ⚠️ **미검증**: Kakao/Naver/WhaTap 네이티브 플러그인(`template/plugins/*/SPEC.md` 사양만 있음).
-- ⚠️ **레퍼런스/스텁**: `backend/auth-reference`(인메모리), `/iap/verify` 검증 로직 → 실 DB·실 검증으로 교체.
-- 🙋 **사람/외부**: 계정·서명·소셜키·스토어 상품·본인확인 PG·IdP 배포 (§5). 하네스는 흐름을 열고 받을 뿐.
+- ⚠️ **백엔드는 하네스 밖**: §5-3 엔드포인트와 `/iap/verify` 검증은 서비스 BE 가 구현한다(하네스에 레퍼런스 구현을 두지 않는다).
+- 🙋 **사람/외부**: 계정·서명·소셜키·스토어 상품·본인확인 PG (§5). 하네스는 흐름을 열고 받을 뿐.

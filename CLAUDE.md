@@ -111,7 +111,6 @@
 
 | 위치 | 내용 |
 |---|---|
-| [backend/auth-reference/README.md](backend/auth-reference/README.md) | 백엔드 레퍼런스 구현 (인메모리 · 학습용) — ⚠️ 제거된 IdP(Keycloak) 경로 기준. 배경 기록 |
 | [secrets/README.md](secrets/README.md) | 로컬 키 파일 배치 규칙 |
 | [template/plugins/README.md](template/plugins/README.md) | 네이티브 플러그인 작업 개요 |
 | [template/plugins/](template/plugins/) `{kakao,naver,adbrix,whatap}/SPEC.md` | 플러그인별 작업 사양서 |

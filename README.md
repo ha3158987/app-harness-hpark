@@ -107,7 +107,6 @@ Appharness/
 ├── build/<slug>/                # 생성된 Capacitor 프로젝트 (gitignore)
 ├── scripts/                     # generate-app.mjs, doctor.mjs
 │   └── lib/config.mjs           #   스키마 + AIPIA_DEFAULTS + aipiaPreset()
-├── backend/auth-reference/      # 인증+IAP 백엔드 레퍼런스 (Node, in-memory)
 ├── fastlane/                    # 빌드/업로드 lane
 ├── .github/workflows/release.yml # CI 자동배포
 └── .claude/skills/              # 자동화 스킬(new-app, integrate-web, build-*, ...)

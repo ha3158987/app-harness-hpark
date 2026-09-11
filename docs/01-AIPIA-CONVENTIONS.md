@@ -146,7 +146,7 @@ updated: 2026-09-11
 - **`auth.idp` 는 금지 키다.** `auth.idp.issuer` 든 `auth.idp: {}` 든 **키가 있기만 하면** `loadConfig` 가
   `err()` 로 **빌드를 멈춘다**. 남아 있으면 지우고 `auth.oauth` 로 옮겨라.
 - → 상세 규약(시퀀스·config 예시·provider 추가 절차)은 [25-AUTH-DELEGATION.md](./25-AUTH-DELEGATION.md).
-  [10-AUTH.md](./10-AUTH.md) 의 Keycloak 절은 **배경 기록**이다 — 따라 하지 마라.
+  [10-AUTH.md](./10-AUTH.md) 의 Keycloak 절과 레퍼런스 백엔드는 2026-09-11 에 삭제됐다.
 
 ---
 

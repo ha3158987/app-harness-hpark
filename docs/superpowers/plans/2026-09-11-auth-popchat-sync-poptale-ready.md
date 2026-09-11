@@ -240,7 +240,7 @@
 | **C2** docs/02 §6 | ✅ `oauthReturnScheme` 키 + 필드 메모 | `docs/02-GUIDE.md` |
 | docs/06 | ✅ §2 브로커 행 · §3 브로커 로그인 패턴(골격 + 참조 구현) | `docs/06-INTEGRATION.md` |
 | **D1′** docs/01 §3 (Q3 승인) | ✅ "두 형태" 표 신설, 3-2 두 경로 병기. K-market 4종은 네이티브 앱 기본으로 한정 | `docs/01-AIPIA-CONVENTIONS.md` |
-| **A3** (Q1 배너) | ✅ 상단 배너 + CLAUDE.md §4 행 | `backend/auth-reference/README.md`, `CLAUDE.md` |
+| **A3** (Q1 배너 → **삭제**로 변경, 같은 날) | ✅ `backend/auth-reference/` 삭제 · docs/10 §5 IdP/Keycloak 절 삭제 · 02/25/01/README/ONBOARDING/CLAUDE.md 참조 정리 — "하네스에는 유효한 코드만" 결정 | (삭제) |
 | **B9 · B10** | ✅ 주석·우선순위 주석 | `scripts/lib/auth-setup.mjs`, `template/plugins/README.md` |
 | CLAUDE.md §2 | ✅ 01/02/06/10/25 최종 수정 2026-09-11 | `CLAUDE.md` |
 

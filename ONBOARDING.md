@@ -40,7 +40,7 @@
 | `features` | push/deepLink/biometric/camera/share/forceUpdate/secureStorage/localNotification/haptics/clipboard/geolocation | GUIDE §6 |
 | `navigation` | 셸 내부탐색 허용 도메인 | GUIDE §6 |
 | `marketing` | AppsFlyer(어트리뷰션) 등 | docs/13-MARKETING.md |
-| `auth` | 소셜 로그인 + 중앙 IdP(SSO) | docs/10-AUTH.md |
+| `auth` | 로그인 — 브로커(팝챗형) / 네이티브 OAuth(poptale형) | docs/25-AUTH-DELEGATION.md |
 | `iap` | 인앱결제(디지털 재화) | docs/11-IAP.md |
 | `monitoring` | 크래시 리포트(Sentry) | — |
 

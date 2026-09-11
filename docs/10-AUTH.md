@@ -9,18 +9,18 @@ updated: 2026-09-11
 
 # AUTH — 인증 / SSO 가이드
 
-> 🚫 **이 문서의 IdP 관련 절은 더 이상 동작하지 않습니다 — 따라 하지 마세요.**
+> 🚫 **자체 IdP(Keycloak) 경로는 코드·문서에서 제거됐습니다.** 인증 정본은 25 입니다.
 >
 > **기본 인증 규약은 [`25-AUTH-DELEGATION.md`](25-AUTH-DELEGATION.md)(외부 인증서버 위탁)** 이고,
 > 하네스로 만드는 모든 앱이 그 경로를 따릅니다.
 >
 > 자체 IdP(Keycloak) 모드는 **코드에서 제거됐습니다**(#25) — 브릿지의 IdP 분기 · `isIdpMode()` ·
 > `DEFAULT_AUTH.idp` · `idp/` 디렉터리가 모두 사라졌고, `auth.idp` 가 남아 있는 config 는
-> **빌드가 멈춥니다.** 따라서 아래 두 절은 **배경 기록**일 뿐입니다:
-> - §3 의 **공급자별 토큰 교환표** — 교환은 인증서버가 한다
-> - §5 의 **Keycloak 설치 체크리스트** — 세울 IdP 가 없다
+> **빌드가 멈춥니다.** 이 문서의 IdP 설정·Keycloak 체크리스트 절과 레퍼런스 백엔드(`backend/auth-reference`)도
+> 2026-09-11 에 삭제했습니다 — 배경은 25 §8.
+> §3 의 **공급자별 토큰 교환표는 길 B(자체 BE 가 공급자 토큰을 교환하는 앱, poptale)에만** 해당합니다.
 >
-> 반면 **게스트 로그인 · 회원탈퇴 · 기기/세션 관리 · 딥링크 복귀**를 다루는 절은 지금도 유효합니다.
+> **게스트 로그인 · 회원탈퇴 · 기기/세션 관리 · 딥링크 복귀**를 다루는 절은 두 형태 모두에 유효합니다.
 
 이 하네스의 로그인은 **"인증은 WebView 밖에서, 복귀는 딥링크로, 토큰 교환은 백엔드에서"** 라는
 네이티브 앱 표준 패턴을 따른다. 임베디드 WebView 안에서 OAuth 를 돌리면 Google 등이 차단하기
@@ -288,72 +288,13 @@ await AppBridge.logout();
 (단, 한 앱의 WebView 안에서 서브도메인 간 이동일 때. `allowedDomains` 에 `*.aipia.co.kr` 포함 필요.)
 
 ### 케이스 B — 패밀리 "앱"이 여러 개 (각각 별도 앱/스토어 등록)
-하네스에선 **사이트 1개 = 앱 1개**(별도 app.config.json/startUrl/번들ID). 그런데 **앱마다 WebView
-쿠키 저장소가 분리**돼 있어서, **쿠키만으로는 앱 A 로그인이 앱 B 로 안 넘어간다.** ❌
-→ 이건 쿠키가 아니라 **중앙 인증 서버(IdP)** 가 필요한 "진짜 SSO" 영역이다.
+하네스에선 **사이트 1개 = 앱 1개**(별도 app.config.json/startUrl/번들ID). **앱마다 WebView 쿠키 저장소가
+분리**돼 있어서 쿠키만으로는 앱 A 로그인이 앱 B 로 안 넘어간다. ❌
 
-**해결: 중앙 OIDC IdP (`auth.aipia.co.kr`) 를 둔다.**
-```
-각 패밀리 앱의 login() →  authorizeUrl = https://auth.aipia.co.kr/authorize  (구글 직접이 아니라)
-   → 중앙 IdP 가 구글/카카오 등으로 페더레이션 + 마스터 세션 보유
-   → 앱에 code 발급 → 각 앱 백엔드가 IdP 와 교환 → 각 사이트 세션쿠키
-```
-- 한 번 중앙 IdP 에 로그인하면, **다른 패밀리 앱도 시스템 브라우저의 IdP 세션을 재사용**해
-  로그인 화면을 건너뛴다(시스템 브라우저 쿠키 공유 — 이게 모바일 SSO 의 표준).
-- **하네스 준비 완료(중앙 IdP 모드)**: config 에 `auth.idp` 를 넣으면 앱은 IdP 하나만 바라본다.
-  패밀리 앱들은 `clientId` 만 바꿔 같은 패턴을 복붙.
-- **IdP 자체(=`auth.aipia.co.kr`)는 당신이 자기 서버에 설치**(Keycloak 권장; 외부 SaaS 아님 — PostgreSQL
-  깔듯 내 서버에 설치). 소셜 8개 페더레이션·토큰발급·세션은 IdP 가 담당.
-
-### 중앙 IdP 모드 config (패밀리 앱 복붙 템플릿)
-```jsonc
-"auth": {
-  "providers": ["email","apple","google","naver","kakao","facebook","x","threads"],
-  "idp": {
-    "issuer": "https://auth.aipia.co.kr/realms/aipia",  // OIDC issuer (Keycloak realm)
-    "clientId": "aipia-novel-app",                       // 이 앱의 IdP 클라이언트 (앱마다 다르게)
-    "hintParam": "kc_idp_hint",                          // Keycloak: 특정 소셜로 바로 점프
-    "hints": { "google":"google","kakao":"kakao","naver":"naver","apple":"apple",
-               "facebook":"facebook","x":"twitter","threads":"threads" }
-  },
-  "sessionEndpoint": "https://novel.aipia.co.kr/auth/native",
-  "signupEndpoint":  "https://novel.aipia.co.kr/auth/signup",
-  "logoutEndpoint":  "https://novel.aipia.co.kr/auth/logout"
-}
-```
-- `idp` 가 있으면 브릿지는 `login('kakao')` 를 **IdP authorize + `kc_idp_hint=kakao`** 로 보냄 →
-  사용자는 곧장 카카오로, 인증 후 IdP 가 마스터 세션 발급 → 앱은 code 만 받음. **네이티브 소셜 버튼 UX 유지.**
-- `oauth` 블록(직접 모드)은 `idp` 가 있으면 무시된다. 둘 중 하나만.
-- redirectUri 기본값 `<appId>://oauth/<provider>` 은 그대로(generate-app 이 스킴 등록).
-
-### 중앙 IdP 일 때 백엔드가 단순해짐
-직접 모드에선 백엔드가 공급자 8곳과 각각 토큰 교환해야 했지만, **IdP 모드에선 백엔드는 IdP 한 곳하고만**
-대화한다(§3-1 의 공급자별 교환 표 불필요):
-1. 앱이 준 `authorizationCode`+`codeVerifier` 를 **IdP 토큰 엔드포인트**(`{issuer}/protocol/openid-connect/token`)
-   에 이 앱 클라이언트의 secret 으로 교환 → IdP 가 `id_token` 발급.
-2. `id_token`(JWT) 을 IdP 공개키(JWKS)로 검증 → 사용자 식별 → 세션쿠키 발급(이하 §3 동일).
-
-### Keycloak 설정 체크리스트 (자기 서버에 설치)
-1. **배포**: `auth.aipia.co.kr` 에 Keycloak(Docker) + PostgreSQL. HTTPS 필수.
-2. **Realm 생성**: 예 `aipia` (= 패밀리 전체의 사용자 풀).
-3. **Identity providers(소셜 페더레이션)** 등록:
-   - Google/Facebook/Apple/X(Twitter): Keycloak 기본 제공 — clientId/secret 입력.
-   - **Naver/Kakao**: "OpenID Connect / OAuth2" 커스텀 IdP 로 추가(authorize/token/userinfo URL 입력).
-     별칭(alias)을 위 `hints` 값과 맞춘다(`kakao`,`naver`).
-4. **Clients(앱) 등록**: 패밀리 앱마다 1개(`aipia-novel-app`, `aipia-game-app` …).
-   - Public client + **PKCE(S256)** 활성.
-   - Valid redirect URIs: `<appId>://oauth/*` (네이티브) + `https://<each-site>/auth/*/callback` (웹).
-   - 백엔드용으로 confidential client(secret) 를 따로 둘지 결정(서버 교환용).
-5. **클레임 매핑**: `email`, `sub`(고유 ID) 가 id_token 에 들어가게.
-6. 각 소셜 공급자 콘솔의 redirect 에 **Keycloak 의 브로커 콜백**도 등록:
-   `https://auth.aipia.co.kr/realms/aipia/broker/<alias>/endpoint`.
-
-> Logto/FusionAuth 로 바꿔도 하네스 config 는 `issuer`/`authorizeUrl`/`hintParam` 만 그 제품 값으로
-> 바꾸면 된다(브릿지 코드 변경 0). Keycloak 이 아니면 `hintParam` 이 다를 수 있음(없으면 IdP 로그인
-> 화면에서 사용자가 소셜 선택).
-
-> 정리: **서브도메인 패밀리면 지금 바로 SSO 됨. 별도 앱 패밀리면 중앙 IdP 설치 + config 에 `auth.idp`
-> 한 블록.** 하네스는 이미 IdP 모드를 지원한다(브릿지 `_oauth2`).
+이 문제를 **하네스가 중앙 IdP(Keycloak)를 세워 풀려던 경로는 #25 에서 코드에서 제거됐고, 그 절도
+2026-09-11 에 이 문서에서 지웠다** — 되살리지 않는다. 지금 답은 [`25-AUTH-DELEGATION.md`](25-AUTH-DELEGATION.md)
+§8 "SSO 는 어떻게 되나": 브로커(A′)·길 B 모두 **IdP 수준 SSO 는 없고 계정 공유만 된다**(같은 인증서버가
+같은 사용자 식별자를 준다). 공급자 세션은 브라우저에 남아 두 번째 앱의 재로그인은 무마찰이다.
 
 ## 6. 기기 / 세션 관리 — 누가 담당하나
 
