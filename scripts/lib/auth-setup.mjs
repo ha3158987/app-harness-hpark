@@ -12,8 +12,9 @@
 //   storeBlockers — 스토어 요건. generate-app 은 dev 경고 / --release 중단,
 //                   doctor 는 요약 한 줄로만 낸다(헬스체크는 빌드 게이트가 아니다).
 
-// 인증: 네이티브 SDK 가 필요한 공급자만 플러그인 설치. 나머지(google/naver/kakao/facebook/x/threads)는
-// 시스템 브라우저 OAuth2(PKCE)로 처리 → 추가 플러그인 불필요(@capacitor/browser 는 base).
+// 인증: 네이티브 SDK 가 필요한 공급자만 플러그인 설치. 나머지(google/naver/kakao/facebook/x/threads/
+// line/discord)는 시스템 브라우저 OAuth2(PKCE)로 처리 → 추가 플러그인 불필요(@capacitor/browser 는 base).
+// 브로커 앱(providers 비움 + oauthReturnScheme)은 공급자 OAuth 를 앱이 아예 돌지 않으므로 플러그인 0개.
 export const AUTH_NATIVE_PLUGINS = {
   apple: ['@capacitor-community/apple-sign-in'], // iOS 네이티브 Sign in with Apple
 };

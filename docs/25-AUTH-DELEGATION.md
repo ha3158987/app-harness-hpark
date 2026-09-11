@@ -4,7 +4,7 @@ title: AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-08-27
+updated: 2026-09-11
 ---
 
 # AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
@@ -12,8 +12,12 @@ updated: 2026-08-27
 **하네스로 만드는 모든 앱의 기본 인증 방식이다.** 서비스가 이미 운영 중인 외부 인증서버에
 인증을 위탁하고, 하네스는 자격증명을 **운반만** 한다.
 
-첫 적용은 **팝챗(characterchat) + poptale-auth** 이고, 이후 앱은 **config 만 바꿔 같은 경로**를 따른다.
-앱 코드는 표준 OAuth 라 인증서버가 무엇이든 동일하다.
+첫 적용은 **팝챗(characterchat) + poptale-auth** 이고, 이후 앱(팝테일 글로벌)은 **config 만 바꿔 같은 경로**를 따른다.
+
+> ✅ **2026-09-03 확정 · 2026-09-11 문서 반영 — 팝챗 앱은 브로커(§3 A′)다.** 앱이 공급자와 직접 OAuth 를
+> 돌지 않고(길 B 미사용), 서비스 BE 의 `start` 를 인앱 브라우저로 열어 인증서버가 커스텀 스킴으로 돌려준
+> `code` 를 앱 WebView 가 상환한다. 하네스 배선은 `auth.oauthReturnScheme: true` 하나(#34). 신규 앱의
+> 기본도 이 형태다. 길 B 는 poptale(국내)·aipia 가 쓴다. §3·§4·§7 은 두 형태를 나눠 적었다.
 
 > **IdP 를 자체 구축하는 경로(Keycloak)는 레거시다.** 신규 앱은 쓰지 않는다 — [`10-AUTH.md`](10-AUTH.md).
 > 우리가 IdP 를 지으려던 이유는 "IdP 가 없어서" 였는데, 이제 운영 중인 것이 있으므로 지을 이유가 없다.
@@ -64,20 +68,47 @@ updated: 2026-08-27
 
 ---
 
-## 3. 앱이 인증서버에 닿는 세 가지 경로
+## 3. 앱이 인증서버에 닿는 경로
 
-| 경로 | 흐름 | 하네스 변경 |
+| 경로 | 흐름 | 하네스 배선 |
 |---|---|---|
-| **A · 웹 리다이렉트** | 브라우저 → 인증서버 authorize → 공급자 → `returnUrl?code=` | 없음(웹 전용) |
-| **B · 앱 직접 OAuth** | 앱 → **공급자와 직접** OAuth → 딥링크 복귀 → 자격증명을 서비스 BE 로 | **기존 `login()` 그대로** |
-| **C · 네이티브 SDK** | 앱 → 공급자 네이티브 SDK → 토큰을 서비스 BE 로 | Apple 은 이미 구현됨 |
+| **A · 웹 리다이렉트** | 브라우저 → 서비스 BE `start` → 인증서버 authorize → 공급자 → `returnUrl?code=` → 웹이 상환 | 없음(브라우저 전용) |
+| **A′ · 브로커 (앱)** | 앱이 서비스 BE 의 `start?platform=app` 을 **인앱 브라우저**로 열기 → 인증서버 → 공급자 → 인증서버가 `<appId>://oauth/callback?code=` 로 redirect → **앱 WebView 가 `code` 를 서비스 BE 에 상환** | `auth.oauthReturnScheme: true`. `login()` **미사용** |
+| **B · 앱 직접 OAuth** | 앱 → **공급자와 직접** OAuth(PKCE) → 딥링크 복귀 → 자격증명을 서비스 BE(`sessionEndpoint`)로 | `login()` · `auth.providers` · `auth.oauth.<p>.clientId` |
+| **C · 네이티브 SDK** | 앱 → 공급자 네이티브 SDK → 토큰을 서비스 BE 로 | iOS Apple 만 구현 |
 
-### 주경로는 B 다
+### 어느 앱이 어느 길인가
 
-`login()` 이 만드는 `{ ok, authorizationCode, codeVerifier, redirectUri, state }` 가
-**길 B 가 필요로 하는 형태 그대로**다. 표준 OAuth 라 인증서버 규약에 의존하지 않으므로,
-**인증서버가 바뀌어도 앱 코드가 같다** — 바뀌는 건 자격증명을 받는 BE 엔드포인트 하나뿐이다.
-범용 상속 관점에서 A 보다 우월하다.
+| 앱 | 경로 | 이유 |
+|---|---|---|
+| **팝챗(characterchat·-dev)** · **팝테일 글로벌(신규)** | **A′ 브로커** | 앱이 공급자 clientId 를 들면 인증서버 것과 갈릴 때 **같은 사람이 웹·앱 두 계정이 된다** — 코드상 양쪽 다 정상으로 보여 끝까지 안 드러나는 사고다. 2026-09-03 확정. 인증서버가 `returnUrl` 에 커스텀 스킴을 받아 준다(auth 팀 확정) |
+| poptale · poptale-dev · aipia | **B** | 자체 BE 가 공급자 자격증명을 받는 기존 구조. 변경 없음 |
+
+**신규 앱의 기본은 A′ 다.** 길 B 는 표준 OAuth 라 인증서버에 독립적이지만, 위 계정 분열 위험을 앱 쪽
+clientId 관리로 떠안는다. A′ 는 그 위험이 구조적으로 없고, 앱은 복귀 스킴 하나만 등록한다.
+
+### A′ 의 규약 — 앱 · 웹 · 인증서버가 맞춰야 할 것
+
+- **복귀 스킴은 `<appId>://oauth/callback`** — host 는 `oauth` 로 고정한다. 웹이 라우팅 딥링크(https)와
+  OAuth 복귀를 **이 host 로 가른다.** 인증서버 `returnUrl` 화이트리스트에 dev(`<appId>.dev://…`)·prod 각각
+  등록한다(사람 작업 — `new-app` 스킬이 안내한다).
+- **config**: `auth.providers: []` + `auth.oauthReturnScheme: true`. `sessionEndpoint`·`oauth`·`guestEndpoint` 는
+  **넣지 않는다**(상환은 웹이 한다). `signupEndpoint`·`logoutEndpoint`·`deleteEndpoint`·`deviceEndpoint`·
+  `deviceUnregisterEndpoint` 는 그대로 쓴다 — §7 샘플.
+- **인앱 브라우저(②)로 연다**(아래). 상환은 **앱 WebView 가 직접** 한다 — 브라우저에서 상환하면 세션 쿠키가
+  브라우저에 구워지고 앱은 로그아웃으로 남는다.
+- **하네스는 브로커 로그인 헬퍼를 제공하지 않는다**(결정 2026-09-11). 복귀 대기·취소 판정·상환·결과 판정은
+  BE 계약과 얽혀 §1 원칙상 웹 소유다. **참조 구현은 팝챗 웹** `character-chatbot-web/src/lib/harness/adapter.ts`
+  의 `awaitOAuthReturn` · `brokeredSignIn` · `isOAuthCallbackUrl` · `redeemOrphanOAuthReturn` · `signInOutcome`
+  (+ 같은 폴더 `*.test.ts`)이다. 새 앱은 이 파일을 복사해 BE 경로만 맞춘다 — [`06-INTEGRATION.md`](06-INTEGRATION.md) §3 골격.
+- **브릿지 최소 버전은 §6 호환 매트릭스** — 인앱 브라우저·취소 판정은 `1.5.0-beta.2`, `rememberLastLogin` 브로커
+  허용은 `1.5.0-beta.4`. 웹은 메서드 존재 여부로 폴백한다(참조 구현이 그렇게 되어 있다).
+
+### 길 B 가 남아 있는 이유
+
+`login()` 이 만드는 `{ ok, authorizationCode, codeVerifier, redirectUri, state }` 는 표준 OAuth 라 인증서버
+규약에 의존하지 않는다 — poptale 처럼 **자체 BE 가 공급자 자격증명을 직접 받는 서비스**에는 이 길이 맞다.
+브릿지의 `login()` 반환 필드는 제거·개명하지 않는다(설치본이 쓴다).
 
 ### 브라우저는 세 종류다 — ②를 쓴다 (실기기 확인)
 
@@ -104,24 +135,39 @@ updated: 2026-08-27
 > 돌아왔으면 취소" 판정을 그대로 두면 사용자가 창을 닫아도 신호가 없어 **타임아웃까지
 > 스피너가 돈다.** 브릿지의 `onBrowserClosed()` 가 그 신호다.
 >
-> ⚠️ 브릿지의 **네이티브 OAuth 경로(`_oauth2`)는 아직 ③이다.** 같은 노출이 있지만
-> 운영 앱(poptale) 로그인이 걸려 있어 실기기 확인 전에는 바꾸지 않는다.
+> ⚠️ 브릿지의 **네이티브 OAuth 경로(`_oauth2`, 길 B)는 아직 ③이다.** 같은 노출이 있지만
+> 운영 앱(poptale) 로그인이 걸려 있어 실기기 확인 전에는 바꾸지 않는다. A′ 는 웹 참조 구현이 ②를 쓴다.
 
-### C 는 iOS Apple 만
+### C 는 iOS Apple 만 — 그리고 길 B 앱에서만
 
-Apple 네이티브 로그인은 이미 구현돼 있고(`applesignin` 엔타이틀먼트 자동 주입 포함) iOS 심사
-4.8 상 사실상 의무다. 카카오·네이버 네이티브 SDK 는 **레포에 사양서만 있고 구현이 없다** —
-"카카오톡 앱으로 점프"는 현재 불가하고 시스템 브라우저 로그인만 된다. UX 기대치를 여기 맞춘다.
-
-### A 를 앱에서 쓰려면 — 지금은 하지 않는다
-
-인증서버의 `returnUrl` 은 open redirect 방지를 위한 화이트리스트 대상이라 커스텀 스킴을
-받지 못할 수 있다. 그 경우 복귀 방식 세 가지(`scheme` / `universal-link` / `web-bounce`)를
-config 로 고르는 `broker` 모드가 필요해진다. **길 B 가 막혔다는 확인이 오기 전에는 착수하지 않는다.**
+Apple 네이티브 로그인은 길 B 앱에서 `providers` 에 `apple` 이 있을 때 쓰이고(`applesignin` 엔타이틀먼트
+자동 주입) iOS 심사 4.8 상 사실상 의무다. **A′ 브로커 앱은 애플도 웹 경로로 처리하므로 엔타이틀먼트를
+선언하지 않는다**(`usesNativeApple` 이 복귀 스킴 판정과 분리돼 있다 — #34). 카카오·네이버 네이티브 SDK 는
+**레포에 사양서만 있고 구현이 없다** — "카카오톡 앱으로 점프"는 현재 불가하고 브라우저 로그인만 된다.
+UX 기대치를 여기 맞춘다.
 
 ---
 
-## 4. 웹과의 계약 — 이 다섯 개가 전부다
+## 4. 웹과의 계약 — 앱 형태마다 다르다
+
+### A′ 브로커 앱 (팝챗 · 팝테일 글로벌) — 팝챗 웹이 실제로 쓰는 표면
+
+```js
+AppBridge.onDeepLink(fn)                          // 복귀 `<appId>://oauth/callback?code=|error=` 수신. 라우팅 딥링크와 host('oauth') 로 구분
+AppBridge.openExternal(startUrl)                  // ② 인앱 브라우저. { system:true } 는 ③ — onBrowserClosed 가 없는 옛 브릿지 폴백에만
+AppBridge.closeInAppBrowser()                     // 복귀·실패·취소 뒤 창 닫기 (1.5.0-beta.2+)
+AppBridge.onBrowserClosed(fn)                     // 취소 판정의 유일한 근거 (1.5.0-beta.2+). 없으면 onPause×onResume 폴백
+AppBridge.rememberLastLogin(p) / getLastLogin()   // 기록·조회. beta.4+ 는 브로커 앱도 통과 — beta.3 이하는 setPref('last_login_provider', p) 로 직접
+AppBridge.completeSignup(body, { reload:false })  // 가입 확정 — 화면 전환은 웹이 한다
+AppBridge.logout({ reload:false })                // 기기 토큰 해제 → 시큐어 토큰 삭제 → logoutEndpoint. 웹은 자기 BE 로그아웃도 따로 부른다(설정 유무를 모르므로 — 멱등)
+AppBridge.deleteAccount({ reload:false })         // 기기 토큰 해제 → deleteEndpoint({ deviceId }). body 를 못 실으므로 부가 데이터(탈퇴 사유 등)는 웹이 **앞서** 별도 요청
+```
+
+**`login()` 은 호출하지 않는다** — 브로커 앱 config 에 `providers` 가 없어 `provider-not-enabled` 를 돌려준다.
+상환(`POST /auth/social/redeem`)·이메일 로그인·결과 판정은 전부 웹이 한다. 아래 "pass-through" 절은
+**이 형태에 해당하지 않는다**(`completeSignup` 의 예약 이름 `ok`·`backend` 두 개만 본다).
+
+### B 네이티브 OAuth 앱 (poptale · aipia)
 
 ```js
 AppBridge.login(provider)             // → { ok, reason?, ...BE 응답 — 단 예약 이름은 브릿지가 이긴다 }
@@ -131,12 +177,17 @@ AppBridge.getLastLogin()              // → { provider } | null
 AppBridge.logout() / deleteAccount()
 ```
 
-⚠️ **`getLastLogin()` 의 짝을 빼먹지 마라.** 길 B(앱이 자체 OAuth 를 도는 구성)는
-`login()` 을 지나지 않으므로 **자동 기록이 일어나지 않는다.** 이메일도 같다 —
+⚠️ **`getLastLogin()` 의 짝을 빼먹지 마라.** A′ 브로커 앱은 `login()` 을 지나지 않으므로
+**자동 기록이 일어나지 않는다.** 이메일도 같다 —
 `login('email')` 은 기록 전에 `email-handled-by-web` 으로 빠진다. 웹이
 `rememberLastLogin()` 을 부르지 않으면 `getLastLogin()` 이 영원히 `null` 이고,
 **오류 없이 "마지막 로그인" 배지만 안 뜬다.** 브라우저에서는 웹이 자체 localStorage 로
 처리해 되는 것처럼 보여 **앱에서만 안 되는 버그**로 나타난다(팝챗 실측).
+
+> ⚠️ **`1.5.0-beta.3` 이하의 `rememberLastLogin()` 은 브로커 앱에서 항상 `provider-not-enabled` 다** —
+> 게이트가 `auth.providers` 만 봤다. 그래서 팝챗 웹은 같은 키 `last_login_provider` 에 `setPref` 로 직접 쓴다.
+> `beta.4` 부터는 `providers` 가 비어 있고 `oauthReturnScheme` 이 true 면 하네스가 아는 10종(`AuthProvider`)을
+> 그대로 받는다(그 밖은 `unknown-provider`). 웹은 메서드 결과가 `provider-not-enabled` 면 `setPref` 로 폴백해도 된다.
 
 **보장해야 할 것**
 
@@ -207,6 +258,8 @@ BE 판정이 아니다.
 - **재가입 제한 · 중복가입 판정 · CI** — 서비스 정책
 - **세션 정책**(만료·동시 로그인·원격 로그아웃) — 하네스는 의도적으로 안 가진다.
   `deviceId` 라는 **연결고리만** 제공한다
+- **브로커 로그인의 상환·결과 판정**(`/auth/social/redeem`, `signupRequired`/`signupToken` 해석, 취소·실패 문구) —
+  BE 계약이다. 하네스는 인앱 브라우저·딥링크·닫힘 이벤트라는 **OS 수단만** 준다(결정 2026-09-11, §3 A′)
 
 ---
 
@@ -252,6 +305,21 @@ npm view @aipia-team/harness-bridge dist-tags
 **publish 는 되돌릴 수 없다**(같은 버전 재발행 불가). 올리기 전에 `npm test` 통과 +
 `npm publish --dry-run` 으로 tarball 내용을 확인하고, 사람 확인을 받는다.
 
+### 브릿지 버전 호환 매트릭스 — 웹이 무엇을 기대할 수 있나
+
+앱 셸은 웹보다 늦게 배포된다. 웹은 아래 표를 보고 **메서드 존재 여부로 폴백**해야 한다(팝챗 참조 구현이 그렇다).
+
+| 버전 | PR | 들어간 것 | A′ 브로커 앱에 미치는 것 |
+|---|---|---|---|
+| `1.4.0` (`latest`) | — | 인증 없음 | 브로커 로그인 불가 |
+| `1.5.0-beta.0` | #27 | `login` · `completeSignup` · `getLastLogin` · `logout` · `deleteAccount` · `line`·`discord` | `completeSignup/logout/deleteAccount` 사용 가능. 딥링크 보류분이 **재생**돼 첫 로그인이 실패하는 결함 있음 |
+| `1.5.0-beta.1` | #40 | 딥링크 보류분 1회 배달 + TTL · `onPause` · 로그아웃 정리(기기 토큰 해제·보류 딥링크 폐기) | 첫 시도 실패 교대 현상 해소. 취소 판정은 ③ + `onPause`×`onResume` |
+| `1.5.0-beta.2` | #42 | `closeInAppBrowser` · `onBrowserClosed` | **인앱 브라우저(②) 가능.** 없으면 웹은 ③ 폴백 |
+| `1.5.0-beta.3` | #45 | `rememberLastLogin` | 브로커 앱에서는 `provider-not-enabled` → `setPref` 우회 필요 |
+| `1.5.0-beta.4` | — | `rememberLastLogin` 브로커 허용(`unknown-provider` 게이트) · `capabilities.auth` 가 브로커 앱도 true | 우회 제거 가능 |
+
+`latest` 태그는 안정판 `1.4.0` 에 둔다(위 publish 규칙).
+
 ### 무엇이 앱 재빌드를 필요로 하는가 — 브릿지 JS 는 아니다
 
 셸이 원격 웹을 로드하므로(`server.url = startUrl`) **브릿지 JS 는 웹 번들에 실려 나간다.**
@@ -267,11 +335,31 @@ npm view @aipia-team/harness-bridge dist-tags
 
 ---
 
-## 7. config — 위탁 모드에서는 `oauth` 직접 모드를 쓴다
+## 7. config — 두 형태
+
+### A′ 브로커 앱 (팝챗 실값 형태 — `apps/characterchat*/app.config.json`)
 
 ```jsonc
 "auth": {
-  // 아래는 팝챗 기준. line·discord 는 H-1(완료)로 허용목록에 들어가 지금은 그냥 넣으면 된다.
+  "providers": [],                 // 비운다 — 수단 목록은 웹/BE 가 갖는다
+  "oauthReturnScheme": true,       // <appId>:// 복귀 스킴만 등록 (#34). providers 와 독립
+  // 상환은 웹이 하므로 sessionEndpoint · oauth · guestEndpoint 는 넣지 않는다
+  "signupEndpoint":           "https://<api>/auth/signup",
+  "logoutEndpoint":           "https://<api>/auth/logout",
+  "deleteEndpoint":           "https://<api>/auth/withdraw",       // 스토어 필수 — 브로커 앱에도 게이트가 걸린다
+  "deviceEndpoint":           "https://<api>/api/push/register",
+  "deviceUnregisterEndpoint": "https://<api>/api/push/unregister"
+}
+```
+
+`new-app` 스킬은 `aipiaPreset({ slug, appName, authMode: 'broker' })` 로 이 모양을 만든다
+(`scripts/lib/config.mjs`). 팝테일 글로벌은 팝챗 BE 계약을 그대로 쓴다(2026-09-11 확정) — 호스트만 바뀐다.
+⚠️ 팝챗 prod 호스트 `api.chat.poptale.ai` 는 **미확인 추정치**로 남아 있다(§9).
+
+### B 네이티브 OAuth 앱 (poptale · aipia)
+
+```jsonc
+"auth": {
   "providers": ["email","kakao","naver","line","google","apple","facebook","discord"],
 
   // 길 B — 공급자 OAuth 를 앱이 직접 돈다. secret 은 넣지 않는다(인증서버가 보유).
@@ -395,8 +483,8 @@ provider 가 0개이고 `admin/admin` 하드코딩이라 **데모 수준**이었
 | `H-2` | ✅ | 미완료 신호에 서비스가 쓰는 필드명 추가(`_finishLogin`) |
 | `H-3` | ✅ | 응답 pass-through — 미지 필드를 버리지 않는다 |
 | `H-4` | ✅ | config 검증 강화 — 프리셋·`authorizeUrl` 둘 다 없는 provider 탐지, 스토어 요건을 릴리즈 빌드에서 `exit 1` 로 |
-| `H-5` | ✅ | `apps/characterchat*/app.config.json` — `auth` 블록 신설 + features 3개 활성. **dev 슬러그 먼저** |
-| `H-6` | — | `broker` 모드 — **조건부. 지금 하지 않는다**(§3) |
+| `H-5` | ✅ | `apps/characterchat*/app.config.json` — `auth` 블록 신설 + features 3개 활성. **dev 슬러그 먼저** → **#34 에서 브로커 형태로 전환**(providers 비움 · oauth·sessionEndpoint 제거 · `oauthReturnScheme`) |
+| `H-6` | ✅ | `broker` 모드 — **#34 `auth.oauthReturnScheme`(2026-09-04).** 팝챗이 이 모드로 확정. 복귀 방식은 커스텀 스킴 하나(인증서버가 `returnUrl` 로 받아 줌) — universal-link/web-bounce 는 필요 없어져 만들지 않았다 |
 | `H-7` | ✅ | 문서 갱신 — [`10-AUTH.md`](10-AUTH.md) 에 세 경로 병렬 기술 |
 
 ### 구현이 설계와 달라진 점 — 실제로 들어간 것
@@ -422,19 +510,21 @@ provider 가 0개이고 `admin/admin` 하드코딩이라 **데모 수준**이었
   (`dev.api.poptale.ai` → `api.poptale.ai`)를 쓴다. **사람이 확인해야 한다.**
 - **`H-5` dev 슬러그의 `deviceEndpoint` 는 기존 `/api/push/register` 를 유지했다** — 계획 샘플의
   `/auth/device` 는 오기였다. §7 의 샘플은 일반형이므로 실제 앱 config 와 다르다.
-- ⚠️ **`H-5` 이후 `characterchat` 태그 릴리즈는 CI 에서 실패한다** — 소셜 8종의 `clientId` 가
-  전부 `null` 이라 `--release` 게이트가 막는다. **게이트 의도대로다.** 콘솔에서 발급받아
-  채우기 전에는 릴리즈가 나가지 않는다.
+- **`H-6` 브로커 전환 뒤 `characterchat` 은 clientId 게이트를 타지 않는다** — `providers` 가 비어 있어
+  `authSetup` 이 clientId·Apple 4.8 을 검사하지 않고, 탈퇴 게이트만 남는다(`test/oauth-return-scheme.test.mjs`).
+  종전의 "clientId 전부 null 이라 릴리즈가 막힌다" 는 길 B 시절 얘기다.
 
-### 인증서버 팀에 확인할 것
+### 인증서버·BE 팀에 확인할 것 (2026-09-11 갱신)
 
-1. 앱이 공급자와 직접 돈 자격증명을 받는 BE 경로가 존속하는가 → `H-6` 착수 여부
-2. 앱이 쓸 공급자 clientId 가 인증서버가 쓰는 것과 **같은가** — provider 각각.
-   갈리면 같은 사람이 웹·앱에서 다른 계정이 된다
-3. 각 공급자 콘솔에 **커스텀 스킴 redirect URI** 를 등록해줄 수 있는가
-4. 새로 추가할 provider 의 **등록된 scope 값**
+1. ✅ 앱 경로는 **브로커로 확정**됐다(§3 A′). 대신 서비스 BE 의 `POST /auth/social/native`(앱 자격증명 중계)는
+   앱이 더 이상 부르지 않는다 — 존치 여부는 BE 팀이 정한다(팝챗 웹 `be-auth-contract.md` §3 참조)
+2. ~~앱 clientId 가 인증서버 것과 같은가~~ → **해당 없음.** 브로커 앱은 clientId 를 들지 않는다 — 그게 전환 이유다.
+   길 B 앱(poptale)에는 여전히 유효
+3. ✅ 인증서버 `returnUrl` 화이트리스트에 **커스텀 스킴**(`<appId>://oauth/callback`, dev·prod 각각)을 받아
+   준다(auth 팀 확정). 새 앱마다 등록 요청이 필요하다 — `new-app` 스킬이 안내
+4. 새로 추가할 provider 의 **등록된 scope 값**(길 B 앱만)
 5. 상환 응답의 provider 식별자 **대소문자** — 서비스 DB 의 unique 제약과 어긋나면 계정이 갈린다
-6. **세션 응답이 §4 의 예약 이름을 쓰지 않는지** — 특히 `idToken` · `session` · `backend` ·
+6. (길 B 앱만) **세션 응답이 §4 의 예약 이름을 쓰지 않는지** — 특히 `idToken` · `session` · `backend` ·
    `ok` · `provider` · `authorizationCode` · `codeVerifier` · `redirectUri` · `state` · `native`.
    쓰면 웹에 그 값이 도착하지 않는다(플랫폼·공급자별로 다르게 깨져서 더 찾기 어렵다).
    그리고 `isNew` · `needsProfile` 은 **문자열·숫자가 아니라 진짜 boolean** 으로 보내야 한다 —

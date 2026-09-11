@@ -4,7 +4,7 @@ title: INTEGRATION — 프론트엔드 통합 가이드
 category: 앱추가
 audience: 개발자
 status: active
-updated: 2026-05-30
+updated: 2026-09-11
 ---
 
 # INTEGRATION — 프론트엔드 통합 가이드
@@ -47,7 +47,8 @@ if (AppBridge.isNative) { /* 앱 */ } else { /* 브라우저 */ }
 | 영역 | 메서드 |
 |---|---|
 | 코어 | `ready()`, `isNative`, `platform`, `capabilities`, `config` |
-| 로그인/SSO | `login(provider)`, `logout()`, `completeSignup(profile)`, `rememberLastLogin(provider)`, `getLastLogin()`, `deleteAccount()` |
+| 로그인/SSO | `login(provider)`(네이티브 OAuth 앱), `logout()`, `completeSignup(profile)`, `rememberLastLogin(provider)`, `getLastLogin()`, `deleteAccount()` |
+| 브로커 로그인(앱이 `login()` 을 안 쓰는 팝챗형) | `onDeepLink(fn)` + `openExternal(startUrl)` + `closeInAppBrowser()` + `onBrowserClosed(fn)`(취소) + `onPause/onResume`(옛 브릿지 폴백) — 25-AUTH-DELEGATION.md §4 |
 | 인앱결제 | `getProducts()`, `purchase(id)`, `restorePurchases()` |
 | 공유/링크 | `share()`, `openExternal(url,{system})` |
 | 푸시/알림 | `registerPush()`, `scheduleNotification()`, `cancelNotification()` |
@@ -71,6 +72,24 @@ if (r.isNew || r.needsProfile) {
   await AppBridge.completeSignup(profile);
 }
 ```
+
+### 브로커 로그인 — 앱이 공급자와 직접 OAuth 를 돌지 않는 앱 (25-AUTH-DELEGATION.md §3 A′)
+`login()` 대신 **서비스 BE 의 start 를 인앱 브라우저로 열고, 딥링크로 돌아온 code 를 웹이 상환**한다.
+하네스는 이 헬퍼를 제공하지 않는다(상환·결과 판정이 BE 계약이라 웹 소유 — 2026-09-11 결정).
+**참조 구현**: 팝챗 `character-chatbot-web/src/lib/harness/adapter.ts` 의 `awaitOAuthReturn` · `brokeredSignIn` ·
+`isOAuthCallbackUrl` · `redeemOrphanOAuthReturn` · `signInOutcome`(+ 같은 폴더의 `*.test.ts`). 새 앱은 이 파일을
+복사해 BE 경로(`/auth/social/{p}/start`, `/auth/social/redeem`)만 맞춘다. 골격:
+```js
+const off = AppBridge.onDeepLink((url) => {           // 1) 열기 **전에** 리스너 등록
+  const u = new URL(url);
+  if (u.host !== 'oauth' || !(u.searchParams.has('code') || u.searchParams.has('error'))) return; // 라우팅 딥링크
+  off(); AppBridge.closeInAppBrowser();
+  redeem(u.searchParams.get('code'));                 // 2) 상환은 앱 WebView 가 — 쿠키가 여기 구워진다
+});
+const offClosed = AppBridge.onBrowserClosed(() => setTimeout(cancel, 2500)); // 3) 창 닫힘 = 취소(유예 2.5s)
+await AppBridge.openExternal(startUrl);               // 4) 인앱 브라우저(②). {system:true} 는 쓰지 않는다
+```
+콜드스타트로 온 복귀(대기 중인 로그인이 없음)는 라우팅 핸들러가 상환해야 code 가 버려지지 않는다(참조 구현 `redeemOrphanOAuthReturn`).
 
 ### 인앱결제 — 웹/앱 가격 분기 (11-IAP.md)
 ```js

@@ -4,7 +4,7 @@ title: AIPIA-CONVENTIONS — 전사 앱 컨벤션 (정본)
 category: 시작
 audience: 개발자
 status: active
-updated: 2026-08-27
+updated: 2026-09-11
 ---
 
 # AIPIA-CONVENTIONS — 전사 앱 컨벤션 (정본)
@@ -101,16 +101,24 @@ updated: 2026-08-27
 
 ---
 
-## 3. 인증 — K-Market 4 Socials
+## 3. 인증 — 두 형태가 있다
 
-AIPIA 모든 앱의 기본 인증 제공자 세트:
+| 형태 | 누가 | 앱 config | provider 목록의 정본 |
+|---|---|---|---|
+| **브로커**(A′) — 앱은 복귀 스킴만, 공급자 OAuth 는 서비스 BE → 인증서버 | **팝챗 · 팝테일 글로벌 · 신규 앱 기본** | `"auth": { "providers": [], "oauthReturnScheme": true }` | **웹/BE**(`GET /auth/terms`) — 앱은 갖지 않는다 |
+| **네이티브 OAuth**(B) — 앱이 공급자와 직접 | poptale 국내 · aipia | `"auth": { "providers": [...], "oauth": { "<p>": { "clientId" } } }` | 앱 config `auth.providers` |
+
+→ [25-AUTH-DELEGATION.md §3](./25-AUTH-DELEGATION.md). 아래 §3-1 의 "K-market 4종" 은 **네이티브 OAuth 앱**의
+기본값이다. 브로커 앱은 이메일 포함 여부·소셜 종수를 앱이 정하지 않는다(팝챗은 이메일 + 소셜 8종).
+
+### 네이티브 OAuth 앱의 기본 — K-Market 4 Socials
 
 ```jsonc
 "auth": { "providers": ["apple", "google", "kakao", "naver"] }
 ```
 
 - 🅰️ Poptale Flutter: `google_sign_in`, `kakao_flutter_sdk_user`, `flutter_naver_login`, `sign_in_with_apple`
-- **이메일/비밀번호 제공 안 함** (소셜 only) — Poptale 정책.
+- **이메일/비밀번호 제공 안 함** (소셜 only) — Poptale 정책. (브로커 앱인 팝챗·팝테일 글로벌은 이메일을 제공한다 — 웹이 폼으로)
 - 🅰️ 1.0.1+143: 카카오·네이버는 **JWT 전체** 를 백엔드에 전달 (token-only → full-jwt 전환).
 - 백엔드 엔드포인트는 `<api-domain>/api/v2/auth/...` 패턴 (🅰️🅱️ 확인됨).
 
@@ -128,10 +136,12 @@ AIPIA 모든 앱의 기본 인증 제공자 세트:
 
 ### 3-2. 인증은 외부 인증서버 위탁이 기본 (자체 IdP 모드는 제거됨)
 
-- **기본 경로**: 앱이 **시스템 브라우저로 공급자와 직접 OAuth**(길 B)를 돌고, 받은 자격증명을 서비스의
-  **외부 인증서버에 위탁**해 검증·세션 발급을 맡긴다. 하네스는 자격증명을 **운반만** 한다.
-- 배선은 공급자별 **`auth.oauth.<provider>.clientId`**. `clientId` 는 공개값이라 config 에 둔다
-  (secret 은 넣지 않는다 — 인증서버가 보유).
+- **두 경로 모두 외부 인증서버 위탁**이다. 하네스는 자격증명(또는 code)을 **운반만** 한다.
+  - 브로커(A′, 신규 기본): 앱은 서비스 BE 의 `start` 를 인앱 브라우저로 열고, 인증서버가 `<appId>://oauth/callback`
+    으로 돌려준 code 를 웹이 상환한다. 앱 config 에 clientId 가 **없다** — 인증서버 것과 갈려 같은 사람이
+    두 계정이 되는 사고가 구조적으로 없다. 배선은 `auth.oauthReturnScheme: true` 하나.
+  - 네이티브 OAuth(B): 앱이 시스템 브라우저로 공급자와 직접 OAuth 를 돌고 자격증명을 서비스 BE 로 보낸다.
+    배선은 공급자별 **`auth.oauth.<provider>.clientId`**(공개값 — config 에 둔다. secret 은 인증서버가 보유).
 - **자체 IdP(Keycloak) 모드는 PR #25 에서 코드에서 제거됐다.** `idp/` 디렉터리도 없고 브릿지에 IdP 분기도 없다.
 - **`auth.idp` 는 금지 키다.** `auth.idp.issuer` 든 `auth.idp: {}` 든 **키가 있기만 하면** `loadConfig` 가
   `err()` 로 **빌드를 멈춘다**. 남아 있으면 지우고 `auth.oauth` 로 옮겨라.

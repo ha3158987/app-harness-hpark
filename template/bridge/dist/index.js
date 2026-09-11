@@ -13,6 +13,16 @@ const Native = registerPlugin('AppBridge', {
 
 // features → capabilities 파생. 웹은 이 플래그만 보고 분기한다.
 // 새 기능을 추가하면 (1) 여기 (2) 대응 메서드 (3) CAP_METHOD 매핑 세 곳을 같이 갱신.
+// 인증 capability — "이 앱이 로그인·가입·탈퇴를 하는가". 두 형태가 있다:
+//   · 네이티브 OAuth 앱: auth.providers 가 채워져 있다(login() 이 공급자와 직접 돈다)
+//   · 브로커 앱: providers 는 비어 있고 auth.oauthReturnScheme 만 true 다(앱은 서비스 BE 의
+//     start 를 인앱 브라우저로 열고 복귀 code 를 웹이 상환한다 — completeSignup/logout/
+//     deleteAccount 는 그대로 쓴다). providers 만 보면 이 앱이 auth:false 로 나와 거짓 capability 다.
+function deriveAuthCapability(auth) {
+  const providers = (auth && auth.providers) || [];
+  return providers.length > 0 || !!(auth && auth.oauthReturnScheme === true);
+}
+
 function deriveCapabilities(features) {
   const f = features || {};
   const flag = (v) => !!(v === true || (v && typeof v === 'object' && v.enabled));
@@ -111,8 +121,7 @@ class AppBridgeImpl {
         .then((cfg) => {
           this.config = cfg;
           this.capabilities = deriveCapabilities(cfg && cfg.features);
-          const authProviders = (cfg && cfg.auth && cfg.auth.providers) || [];
-          this.capabilities.auth = authProviders.length > 0;
+          this.capabilities.auth = this._authCapability(cfg && cfg.auth);
           const iapProducts = (cfg && cfg.iap && cfg.iap.products) || [];
           this.capabilities.iap = iapProducts.length > 0;
           // ATT 는 iOS 전용. Android 에서 capability 를 켜두면 웹이 헛되이 사전화면을 띄운다.
@@ -130,6 +139,10 @@ class AppBridgeImpl {
     }
     return this._readyPromise;
   }
+
+  // ready() 가 쓰는 인증 capability 판정. 메서드로 두는 이유는 테스트가 Native.getConfig()
+  // 를 갈아끼울 수 없어 ready() 경로를 직접 태우지 못하기 때문이다(다른 _ 메서드와 같은 규약).
+  _authCapability(auth) { return deriveAuthCapability(auth); }
 
   // capability 가 켜졌는데 대응 메서드가 없으면 경고(향후 기능 추가 시 거짓 약속 방지).
   _validateCapabilities() {
@@ -1034,9 +1047,22 @@ class AppBridgeImpl {
     await this.ready();
     const auth = (this.config && this.config.auth) || {};
     const providers = auth.providers || [];
-    // login() 과 **같은 기준**으로 막는다. 여기서 통과시키면 getLastLogin() 이 나중에
-    // 이 앱이 그리지도 않는 수단을 돌려주고, 호출부는 없는 버튼에 배지를 달려 한다.
-    if (!providers.includes(provider)) return { ok: false, reason: 'provider-not-enabled' };
+    // 두 종류의 앱이 있다 — 게이트가 다르다.
+    //   · 네이티브 OAuth 앱(providers 가 채워짐): login() 과 **같은 기준**으로 막는다. 여기서
+    //     통과시키면 getLastLogin() 이 이 앱이 그리지도 않는 수단을 돌려주고, 호출부는 없는
+    //     버튼에 배지를 달려 한다.
+    //   · 브로커 앱(providers 비어 있음 + oauthReturnScheme): 수단 목록을 **앱이 갖지 않는다**
+    //     (웹/BE 가 정한다 — docs/25 §1 "운반만 하고 해석하지 않는다"). providers 로 막으면
+    //     이 API 가 그 앱에서 영원히 거절돼 웹이 같은 키에 setPref 로 직접 쓰게 된다(팝챗
+    //     실측) — 키 이름이 두 레포에 박히고 다음 앱이 또 흉내낸다. 그래서 브로커 앱은
+    //     **모양만** 검사한다: 하네스가 아는 10종(프리셋 9종 + email) 중 하나인가.
+    const brokered = providers.length === 0 && auth.oauthReturnScheme === true;
+    if (brokered) {
+      const known = provider === 'email' || Object.prototype.hasOwnProperty.call(OAUTH_PRESETS, provider);
+      if (typeof provider !== 'string' || !known) return { ok: false, reason: 'unknown-provider' };
+    } else if (!providers.includes(provider)) {
+      return { ok: false, reason: 'provider-not-enabled' };
+    }
     try {
       await this.setPref('last_login_provider', provider);
       return { ok: true };

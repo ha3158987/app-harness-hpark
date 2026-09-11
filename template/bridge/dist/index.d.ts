@@ -273,6 +273,13 @@ export interface AppBridgeSDK {
    * null 이라 "마지막 로그인" 배지가 렌더될 수 없다.
    *
    * 기록 시점은 호출부가 정한다(소셜=누를 때 · 이메일=성공 후). 실패해도 던지지 않는다.
+   *
+   * 게이트는 앱 형태에 따라 다르다:
+   *   · 네이티브 OAuth 앱(`auth.providers` 가 채워짐) — 목록에 없는 수단은 `provider-not-enabled`.
+   *   · 브로커 앱(`providers: []` + `auth.oauthReturnScheme: true`) — 수단 목록은 웹/BE 가 갖는다.
+   *     하네스가 아는 10종(`AuthProvider`) 이면 통과, 그 밖은 `unknown-provider`.
+   *     (1.5.0-beta.3 이하는 브로커 앱에서 항상 `provider-not-enabled` 였다 — 그 버전에서는
+   *     같은 키 `last_login_provider` 에 `setPref` 로 직접 써야 한다.)
    */
   rememberLastLogin(provider: AuthProvider): Promise<{ ok: boolean; reason?: string }>;
 

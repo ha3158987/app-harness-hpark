@@ -4,7 +4,7 @@ title: GUIDE — Appharness 마스터 가이드
 category: 시작
 audience: 전체
 status: active
-updated: 2026-09-07
+updated: 2026-09-11
 ---
 
 # GUIDE — Appharness 마스터 가이드
@@ -233,10 +233,13 @@ flowchart TB
   "navigation": { "allowedDomains": ["aipia.co.kr", "*.aipia.co.kr"], "externalInBrowser": true },
   "marketing": { "attribution": { "provider": "appsflyer", "deferredDeepLink": true } },
   "auth": { "providers": ["email","apple","google","naver","kakao","facebook","x","threads","line","discord"],
-    // 공급자 OAuth 를 앱이 직접 돈다. secret 은 넣지 않는다(백엔드/인증서버 전용).
+    // 공급자 OAuth 를 앱이 직접 돈다(네이티브 OAuth 앱). secret 은 넣지 않는다(백엔드/인증서버 전용).
     // "idp" 키는 넣지 마라 — 빈 객체라도 빌드가 멈춘다(#25 에서 제거).
     "oauth": { "google": { "clientId": "xxxx.apps.googleusercontent.com" },
                "apple":  { "clientId": "<APPLE_SERVICE_ID>" } },
+    // 브로커 앱(팝챗형): providers 를 **비우고** 이 키만 true — 네이티브 OAuth 없이 복귀 스킴
+    // `<appId>://` 만 등록한다. 이때 oauth · sessionEndpoint · guestEndpoint 는 넣지 않는다(25 §3 A′).
+    "oauthReturnScheme": false,
     "sessionEndpoint": "...", "signupEndpoint": "...", "logoutEndpoint": "...",
     "deleteEndpoint": "...", "guestEndpoint": "...", "deviceEndpoint": "...",
     // 로그아웃·탈퇴에서 그 기기 푸시토큰을 계정에서 떼는 URL. 없으면 해제를 건너뛰므로
@@ -264,7 +267,12 @@ flowchart TB
   배열이면 prefix 매칭(예: `['/recommend','/detail/','/viewer']`).
 - `features.viewer.captureBlock`: 지정 경로 prefix 에서만 화면 캡쳐 차단. SPA 라우팅 자동 감지는
   `harness-adapter.autoBlockCaptureOnPaths()` 로.
-- `auth.oauth.<provider>.clientId` 가 유일한 경로다. **`auth.idp` 는 금지 키** — 빈 객체(`{}`)라도
+- `auth.oauthReturnScheme`(기본 `false`): **providers 와 독립**이다. `true` 면 providers 가 비어도 OAuth
+  복귀 커스텀 스킴을 네이티브에 등록한다 — 브로커 로그인 앱(팝챗·팝테일 글로벌)용. providers 가 비어
+  있지 않으면 이 값과 무관하게 스킴은 등록된다. 브로커 앱도 **탈퇴 게이트(`deleteEndpoint`)는 그대로**
+  걸린다(`scripts/lib/auth-setup.mjs`, `scripts/lib/config.mjs:92`).
+- 네이티브 OAuth 앱에서는 `auth.oauth.<provider>.clientId` 가 유일한 경로다(브로커 앱은 `oauth` 블록을
+  갖지 않는다). **`auth.idp` 는 금지 키** — 빈 객체(`{}`)라도
   `loadConfig` 가 모든 빌드에서 멈춘다(`scripts/lib/config.mjs:296-299`). 자체 IdP 모드는 #25 에서
   제거됐다 — [25-AUTH-DELEGATION.md §8](25-AUTH-DELEGATION.md).
 - `auth.providers` 허용값 10종: `email · apple · google · naver · kakao · facebook · x · threads ·

@@ -1,5 +1,11 @@
 # auth-reference — 인증 백엔드 레퍼런스
 
+> 🚫 **배경 기록이다 — 따라 만들지 마라.** 이 구현은 **자체 IdP(Keycloak) 모드** 전제인데, 그 모드는
+> PR #25 에서 하네스 코드에서 제거됐다(`auth.idp` 는 금지 키). 현행 인증 규약은
+> [`docs/25-AUTH-DELEGATION.md`](../../docs/25-AUTH-DELEGATION.md) 이고, 팝챗형 브로커 앱의 BE 계약은
+> `character-chatbot-web/docs/be-auth-contract.md` 가 정본이다. 세션 쿠키 발급·온보딩 분기 같은
+> **경로 무관한 부분만** 참고용으로 남긴다. (결정 2026-09-11: 삭제 대신 배너)
+
 하네스 브릿지(`AppBridge.login`)와 중앙 IdP(Keycloak) 사이를 잇는 **백엔드 최소 구현**.
 학습/참고용(인메모리)이며, `../../docs/10-AUTH.md` 규약과 1:1 대응한다. 실제 서비스는 DB/세션스토어로 교체.
 

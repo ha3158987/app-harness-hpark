@@ -4,7 +4,7 @@ title: AUTH — 인증 / SSO 가이드
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-08-27
+updated: 2026-09-11
 ---
 
 # AUTH — 인증 / SSO 가이드
@@ -33,18 +33,23 @@ updated: 2026-08-27
 | | 경로 | 누가 쓰나 | 브라우저에 남는 세션 |
 |---|---|---|---|
 | **A** | 웹 리다이렉트 — 브라우저가 BE 를 거쳐 공급자로 | 웹 | 공급자 세션(+ 서비스 쿠키) |
-| **B** | **앱 직접 OAuth** — 앱이 시스템 브라우저로 공급자와 직접 | **팝챗 앱(주경로)** | 공급자 세션 |
-| **C** | 네이티브 SDK — 카카오톡 앱 등으로 점프 | 팝테일 앱 | 없음 |
+| **A′** | **브로커** — 앱이 BE 의 `start` 를 **인앱 브라우저**로 열고, 인증서버가 `<appId>://oauth/callback?code=` 로 돌려준 code 를 **앱 WebView 가 상환** | **팝챗 앱 · 신규 앱 기본**(팝테일 글로벌) | 인앱 브라우저는 공용 브라우저와 쿠키를 공유 — 공급자 세션 유지 |
+| **B** | **앱 직접 OAuth** — 앱이 시스템 브라우저로 공급자와 직접 | poptale 계열(자체 BE) | 공급자 세션 |
+| **C** | 네이티브 SDK — 카카오톡 앱 등으로 점프 | (Flutter 팝테일의 현행 UX — 하네스 미구현) | 없음 |
 
-**팝챗 앱은 길 B 를 쓴다.** `openExternal({ system: true })` 가 `@capacitor/app-launcher` 로
-실제 Safari·Chrome 을 열므로(`template/bridge/dist/index.js:195-198`) 공급자 세션이 브라우저에
-남아 다른 패밀리 앱의 재로그인이 무마찰이다.
-자세한 규약은 [`25-AUTH-DELEGATION.md`](25-AUTH-DELEGATION.md) 에 있다.
+**팝챗 앱은 A′(브로커)를 쓴다 — 앱이 공급자와 직접 OAuth 를 돌지 않는다(2026-09-03 확정).**
+앱이 공급자 clientId 를 들면 인증서버 것과 갈릴 때 같은 사람이 웹·앱 두 계정이 되는데, 코드상
+양쪽 다 정상으로 보여 끝까지 안 드러난다. config 는 `auth.providers: []` + `auth.oauthReturnScheme: true`
+이고 브릿지 `login()` 은 호출하지 않는다. 규약·참조 구현은 [`25-AUTH-DELEGATION.md`](25-AUTH-DELEGATION.md) §3·§4.
+
+**길 B(poptale)** 에서는 `openExternal({ system: true })` 가 `@capacitor/app-launcher` 로 실제 Safari·Chrome 을
+열므로 공급자 세션이 브라우저에 남아 다른 패밀리 앱의 재로그인이 무마찰이다. 아래 §1~§3 은 이 길 B 의
+규약이다 — **브로커 앱에는 `sessionEndpoint` 도 공급자별 교환표도 해당하지 않는다.**
 
 > ⚠️ **길 C 는 이 하네스에 구현이 없다.** iOS 네이티브 Sign in with Apple 만 구현돼 있고,
 > `template/plugins/kakao/` · `template/plugins/naver/` 에는 **`SPEC.md` 만 있고 코드가 없다.**
-> 지금 하네스로 만든 앱에서 **"카카오톡 앱으로 점프"는 불가**하고, 카카오·네이버도 시스템
-> 브라우저 OAuth(길 B)로 돈다. 위 표의 C 행은 팝테일(Flutter)의 현행 UX 이지 하네스가 이미
+> 지금 하네스로 만든 앱에서 **"카카오톡 앱으로 점프"는 불가**하고, 카카오·네이버도 브라우저
+> OAuth(길 B 또는 A′)로 돈다. 위 표의 C 행은 팝테일(Flutter)의 현행 UX 이지 하네스가 이미
 > 할 수 있는 일이 아니다 — UX 기대치를 여기 맞춰라.
 
 ---

@@ -64,16 +64,16 @@
 
 | # | 문서 | 카테고리 | 대상 독자 | 상태 | 최종 수정 | 내용 |
 |---|---|---|---|---|---|---|
-| 01 | [AIPIA-CONVENTIONS](docs/01-AIPIA-CONVENTIONS.md) | 시작 | 개발자 | active | 2026-08-19 | 전사 표준 정본 — 번들ID·도메인·SDK·이벤트명 |
-| 02 | [GUIDE](docs/02-GUIDE.md) | 시작 | 전체 | active | 2026-09-07 | 하네스 동작 방식 + config 스키마 정본 |
+| 01 | [AIPIA-CONVENTIONS](docs/01-AIPIA-CONVENTIONS.md) | 시작 | 개발자 | active | 2026-09-11 | 전사 표준 정본 — 번들ID·도메인·SDK·이벤트명 |
+| 02 | [GUIDE](docs/02-GUIDE.md) | 시작 | 전체 | active | 2026-09-11 | 하네스 동작 방식 + config 스키마 정본 |
 | 03 | [STRATEGY](docs/03-STRATEGY.md) | 전략 | 전체 | active | 2026-05-30 | 왜 이 구조인가 — 결정과 이유 |
 | 04 | [NEW-APP-CHECKLIST](docs/04-NEW-APP-CHECKLIST.md) | 앱추가 | 배포담당자 | active | 2026-08-20 | 사람이 직접 할 콘솔·계정 작업 전부 |
 | 05 | [SETUP](docs/05-SETUP.md) | 앱추가 | 개발자 | active | 2026-05-30 | 환경·키 단계별 준비 |
-| 06 | [INTEGRATION](docs/06-INTEGRATION.md) | 앱추가 | 개발자 | active | 2026-05-30 | 프론트 통합 — bridge·어댑터·API |
+| 06 | [INTEGRATION](docs/06-INTEGRATION.md) | 앱추가 | 개발자 | active | 2026-09-11 | 프론트 통합 — bridge·어댑터·API |
 | 07 | [HOWTO-DEPLOY](docs/07-HOWTO-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-09-07 | 배포 실전 절차 (진입점) |
 | 08 | [DEPLOY](docs/08-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-09-07 | CI/CD·시크릿·서명 상세 |
 | 09 | [CREDENTIALS](docs/09-CREDENTIALS.md) | 빌드배포 | 배포담당자 | active | 2026-09-04 | 자격증명 단일 출처 |
-| 10 | [AUTH](docs/10-AUTH.md) | 기능연동 | 개발자 | active | 2026-05-30 | 로그인·SSO·탈퇴·백엔드 규약 |
+| 10 | [AUTH](docs/10-AUTH.md) | 기능연동 | 개발자 | active | 2026-09-11 | 로그인·SSO·탈퇴·백엔드 규약 |
 | 11 | [IAP](docs/11-IAP.md) | 기능연동 | 전체 | active | 2026-06-01 | 인앱결제·가격분기·백엔드 검증 |
 | 12 | [PUSH-NOTIFICATIONS](docs/12-PUSH-NOTIFICATIONS.md) | 기능연동 | 개발자 | active | 2026-08-10 | FCM 셋업 — 키·확장·발송 규약 |
 | 13 | [MARKETING](docs/13-MARKETING.md) | 기능연동 | 개발자 | active | 2026-06-01 | 어트리뷰션·분석·CRM SDK |
@@ -88,7 +88,7 @@
 | 22 | [NATIVE_FEATURES_PLAN](docs/22-NATIVE_FEATURES_PLAN.md) | 마이그레이션 | 개발자 | reference | 2026-08-19 | characterchat 네이티브 기능 조사 스냅샷 |
 | 23 | [FORCE-UPDATE](docs/23-FORCE-UPDATE.md) | 기능연동 | 개발자 | active | 2026-08-21 | 강제 업데이트 — Remote Config 콘솔 셋업 |
 | 24 | [MMP-CONSOLE-SETUP](docs/24-MMP-CONSOLE-SETUP.md) | 기능연동 | 개발자 | active | 2026-08-21 | 어트리뷰션 콘솔·스토어 신고 절차 |
-| 25 | [AUTH-DELEGATION](docs/25-AUTH-DELEGATION.md) | 기능연동 | 개발자 | active | 2026-08-27 | **인증 정본** — 외부 인증서버 위탁 규약 |
+| 25 | [AUTH-DELEGATION](docs/25-AUTH-DELEGATION.md) | 기능연동 | 개발자 | active | 2026-09-11 | **인증 정본** — 외부 인증서버 위탁 규약 |
 
 **상태** — `active`: 현행 문서, 순서대로 읽는다 · `reference`: 수시 조회용, 처음부터 읽을 필요 없다
 
@@ -111,7 +111,7 @@
 
 | 위치 | 내용 |
 |---|---|
-| [backend/auth-reference/README.md](backend/auth-reference/README.md) | 백엔드 레퍼런스 구현 (인메모리 · 학습용) |
+| [backend/auth-reference/README.md](backend/auth-reference/README.md) | 백엔드 레퍼런스 구현 (인메모리 · 학습용) — ⚠️ 제거된 IdP(Keycloak) 경로 기준. 배경 기록 |
 | [secrets/README.md](secrets/README.md) | 로컬 키 파일 배치 규칙 |
 | [template/plugins/README.md](template/plugins/README.md) | 네이티브 플러그인 작업 개요 |
 | [template/plugins/](template/plugins/) `{kakao,naver,adbrix,whatap}/SPEC.md` | 플러그인별 작업 사양서 |

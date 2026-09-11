@@ -13,14 +13,27 @@ description: 하네스에 새 웹 서비스를 앱으로 추가한다. apps/<slu
 - `appName`, `appId` (역도메인 형식, 예 `com.yourco.servicea`)
 - `startUrl`
 - 켤 기능 (push / deepLink / deferredDeepLink / biometric ...)
+- **인증 모드** (`docs/25-AUTH-DELEGATION.md` §3) — 둘 중 하나. 모르면 **`broker`** 를 권한다:
+  - `broker` — 팝챗형. 앱은 복귀 스킴만 등록하고 공급자 OAuth 는 서비스 BE → 인증서버가 돈다.
+    `auth.providers` 는 비우고 `auth.oauthReturnScheme: true`. clientId 를 앱이 들지 않는다.
+  - `native` — poptale형. 앱이 공급자와 직접 OAuth. `auth.providers` + `auth.oauth.<p>.clientId`.
 
 ## 절차
 1. `docs/02-GUIDE.md` §6 의 `app.config.json` 스키마(정본)를 기준으로 삼는다.
-2. `apps/<slug>/` 생성, `app.config.json` 작성. 기능은 사용자가 명시 안 한 건 안전한 기본값
+2. 시작 보일러플레이트는 `scripts/lib/config.mjs` 의 `aipiaPreset` 으로 뽑는다 — 인증 블록을 손으로
+   조립하지 마라(브로커 앱에 `sessionEndpoint`·`oauth` 를 남기면 쓰지도 않는 clientId 누락이 릴리즈를 막는다):
+   ```bash
+   node -e "import('./scripts/lib/config.mjs').then(m => console.log(JSON.stringify(m.aipiaPreset({ slug: '<slug>', appName: '<이름>', authMode: 'broker' }), null, 2)))"
+   ```
+   그 출력에서 `appId`·`startUrl`·엔드포인트 호스트 등 사용자가 준 값으로 덮어쓴다.
+3. `apps/<slug>/` 생성, `app.config.json` 작성. 기능은 사용자가 명시 안 한 건 안전한 기본값
    (`push:false`, `deepLink:false` 등)으로 두고, 어떤 값으로 채웠는지 사용자에게 요약 보고.
-3. `apps/<slug>/icon.png`, `splash.png` 자리 안내. 없으면 사용자에게 1024² 아이콘 /
+   **단 `broker` 면 `deepLink`·`secureStorage` 는 반드시 `true`** — 복귀 스킴이 딥링크다.
+4. `apps/<slug>/icon.png`, `splash.png` 자리 안내. 없으면 사용자에게 1024² 아이콘 /
    2732² 스플래시 소스를 요청 (placeholder를 만들지 말 것 — 사용자 제공 전까지 비워둔다).
-4. `appId` 중복 여부를 `apps/*/app.config.json` 전체에서 확인.
+5. `appId` 중복 여부를 `apps/*/app.config.json` 전체에서 확인.
+6. `broker` 면 사람 작업을 함께 안내한다 — 인증서버(poptale-auth) `returnUrl` 화이트리스트에
+   `<appId>://oauth/callback` (dev 는 `<appId>.dev://oauth/callback`) 등록 요청. 이게 없으면 앱 로그인 복귀가 안 된다.
 
 ## 출력
 - `apps/<slug>/app.config.json`

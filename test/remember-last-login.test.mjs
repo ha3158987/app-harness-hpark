@@ -92,5 +92,51 @@ test('login: 성공하면 그 수단이 기록된다(기록 지점은 rememberLa
   await AppBridge.login('naver');
 
   assert.deepEqual(calls, ['naver']);
-  Object.assign(AppBridge, { rememberLastLogin: ORIG.rememberLastLogin });
+  // 인스턴스 own property 로 덧씌웠으므로 지워야 프로토타입 메서드가 돌아온다.
+  // (ORIG 에 없는 키를 Object.assign 하면 undefined 가 얹혀 뒤 테스트가 전부 죽는다 — 실제로 그랬다.)
+  delete AppBridge.rememberLastLogin;
+  delete AppBridge._oauth2;
+  delete AppBridge._finishLogin;
+});
+
+// ── 브로커 앱 (providers: [] + oauthReturnScheme) ─────────────────────────────
+// 팝챗은 앱이 공급자와 직접 OAuth 를 돌지 않는다 — 수단 목록을 앱이 갖지 않는다.
+// 그 앱에서 providers 로 막으면 이 API 가 영원히 거절돼 웹이 같은 키에 setPref 로
+// 직접 쓰게 된다(실제로 그랬다). 키가 두 레포에 박히고 다음 앱이 또 흉내낸다.
+
+const BROKER = { providers: [], oauthReturnScheme: true };
+
+test('rememberLastLogin(브로커): providers 가 비어도 하네스가 아는 수단은 기록된다', async () => {
+  trackPrefs();
+  AppBridge.config = { auth: BROKER };
+
+  assert.deepEqual(await AppBridge.rememberLastLogin('kakao'), { ok: true });
+  assert.deepEqual(await AppBridge.getLastLogin(), { provider: 'kakao' });
+  assert.deepEqual(await AppBridge.rememberLastLogin('email'), { ok: true });
+  assert.deepEqual(await AppBridge.getLastLogin(), { provider: 'email' });
+});
+
+test('rememberLastLogin(브로커): 모르는 값은 거절한다 — 모양만 검사한다', async () => {
+  const store = trackPrefs();
+  AppBridge.config = { auth: BROKER };
+
+  assert.deepEqual(await AppBridge.rememberLastLogin('tiktok'), { ok: false, reason: 'unknown-provider' });
+  assert.deepEqual(await AppBridge.rememberLastLogin(undefined), { ok: false, reason: 'unknown-provider' });
+  // OAUTH_PRESETS 의 상속 속성이 새지 않는다(hasOwnProperty 로 봐야 한다).
+  assert.deepEqual(await AppBridge.rememberLastLogin('toString'), { ok: false, reason: 'unknown-provider' });
+  assert.equal(store.has(KEY), false);
+});
+
+test('rememberLastLogin: providers 가 비어 있어도 브로커 플래그가 없으면 종전대로 거절한다', async () => {
+  trackPrefs();
+  AppBridge.config = { auth: { providers: [] } };
+
+  assert.deepEqual(await AppBridge.rememberLastLogin('kakao'), { ok: false, reason: 'provider-not-enabled' });
+});
+
+test('capabilities.auth: 브로커 앱도 인증을 하는 앱이다', () => {
+  assert.equal(AppBridge._authCapability({ providers: [], oauthReturnScheme: true }), true);
+  assert.equal(AppBridge._authCapability({ providers: ['kakao'] }), true);
+  assert.equal(AppBridge._authCapability({ providers: [] }), false);
+  assert.equal(AppBridge._authCapability(undefined), false);
 });

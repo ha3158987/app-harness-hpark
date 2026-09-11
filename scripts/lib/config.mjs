@@ -526,10 +526,22 @@ export const AIPIA_DEFAULTS = Object.freeze({
     appChannelCompat: true,                               // 기존 웹 무수정 이전 위해
   },
 
-  // K-market 4 socials (이메일/비밀번호 미제공) 🅰️
+  // 네이티브 OAuth 앱(authMode:'native')의 기본 — K-market 4 socials (이메일/비밀번호 미제공) 🅰️
+  // 브로커 앱(authMode:'broker')은 provider 목록을 앱이 갖지 않는다(웹/BE 가 정한다) — 아래 brokerEndpoints.
   auth: {
     providers: ['apple', 'google', 'kakao', 'naver'],
     apiBasePathSuffix: '/api/v2',                         // <api-domain>/api/v2/auth/*
+  },
+
+  // 브로커 앱(팝챗형) 이 부르는 서비스 BE 엔드포인트 — 서비스 BE 가 인증서버(poptale-auth) 의
+  // 게이트웨이인 구조(docs/25 §3 A′). 팝테일 글로벌은 팝챗 BE 계약을 **그대로** 쓴다(2026-09-11 확정).
+  // 앱(브릿지)이 직접 부르는 것만 있다 — start · redeem · login/email 은 웹이 부르므로 config 에 없다.
+  brokerEndpoints: {
+    authSignup:           '/auth/signup',
+    authLogout:           '/auth/logout',
+    authDelete:           '/auth/withdraw',
+    authDevice:           '/api/push/register',
+    authDeviceUnregister: '/api/push/unregister',
   },
 
   // IAP — Google purchase token 압축 기본 ON (🅰️ Poptale 0.28.21+102)
@@ -574,19 +586,30 @@ export const AIPIA_DEFAULTS = Object.freeze({
   },
 });
 
+const AUTH_MODES = ['native', 'broker'];
+
 /**
  * AIPIA 패턴으로 신규 앱 config 의 보일러플레이트를 만들어 준다.
  * new-app 스킬이 이걸 호출해서 시작 config 를 만들고, 사람은 차이가 나는 부분만 덮어쓴다.
  * 시크릿/외부 발급값은 채우지 않는다(엔드포인트 URL 같은 공개값만).
  *
- * @param {{ slug: string, appName: string }} opts
+ * @param {{ slug: string, appName: string, authMode?: 'native'|'broker' }} opts
+ *   authMode — 인증 형태(docs/25-AUTH-DELEGATION.md §3).
+ *     · 'native'(기본 · 하위호환): 앱이 공급자와 직접 OAuth. providers K-market 4종 + oauth clientId 자리 +
+ *       sessionEndpoint(/api/v2/auth/native). poptale 계열.
+ *     · 'broker': 앱은 복귀 스킴만 등록하고(oauthReturnScheme) 공급자 OAuth 는 서비스 BE → 인증서버가 돈다.
+ *       providers 는 비어 있고 oauth · sessionEndpoint · guestEndpoint 가 없다. 팝챗 · 팝테일 글로벌.
+ *       **신규 앱은 이쪽이 기본이어야 한다** — 기본값이 'native' 인 것은 기존 호출자 호환 때문이다.
  *
  * 인증은 항상 **외부 인증서버 위탁**이다(docs/25-AUTH-DELEGATION.md). Keycloak 등 자체 IdP 는
  * 쓰지 않기로 확정됐으므로 이 프리셋은 `auth.idp` 를 어떤 경우에도 내보내지 않는다.
  * @returns {object} app.config.json 시작 보일러플레이트
  */
-export function aipiaPreset({ slug, appName, ...rest }) {
+export function aipiaPreset({ slug, appName, authMode = 'native', ...rest }) {
   if (!SLUG_RE.test(slug)) throw new Error(`slug "${slug}" 형식 오류`);
+  if (!AUTH_MODES.includes(authMode)) {
+    throw new Error(`authMode "${authMode}" 미지원. 가능: ${AUTH_MODES.join(' | ')} (docs/25-AUTH-DELEGATION.md §3)`);
+  }
   // 예전 시그니처의 idp 인자를 조용히 무시하면 호출자의 의도가 사라진다 — 명시적으로 막는다.
   if ('idp' in rest) {
     throw new Error(
@@ -605,6 +628,29 @@ export function aipiaPreset({ slug, appName, ...rest }) {
   const oauth = Object.fromEntries(
     providers.filter((p) => p !== 'email').map((p) => [p, { clientId: null }]),
   );
+  // 브로커 앱은 sessionEndpoint · oauth · guestEndpoint 를 **갖지 않는다** — 넣으면 authSetup 이
+  // "브릿지가 세션 발급을 자동화하지 못한다" 류의 경고를 내고, 사람은 그걸 채우려 clientId 를 찾게 된다.
+  const auth = authMode === 'broker'
+    ? {
+        providers: [],
+        oauthReturnScheme: true,
+        signupEndpoint:  `https://${apiProd}${D.brokerEndpoints.authSignup}`,
+        logoutEndpoint:  `https://${apiProd}${D.brokerEndpoints.authLogout}`,
+        deleteEndpoint:  `https://${apiProd}${D.brokerEndpoints.authDelete}`,
+        deviceEndpoint:  `https://${apiProd}${D.brokerEndpoints.authDevice}`,
+        deviceUnregisterEndpoint: `https://${apiProd}${D.brokerEndpoints.authDeviceUnregister}`,
+      }
+    : {
+        providers,
+        sessionEndpoint: `https://${apiProd}${D.backendEndpoints.authNative}`,
+        signupEndpoint:  `https://${apiProd}${D.backendEndpoints.authSignup}`,
+        logoutEndpoint:  `https://${apiProd}${D.backendEndpoints.authLogout}`,
+        deleteEndpoint:  `https://${apiProd}${D.backendEndpoints.authDelete}`,
+        guestEndpoint:   `https://${apiProd}${D.backendEndpoints.authGuest}`,
+        deviceEndpoint:  `https://${apiProd}${D.backendEndpoints.authDevice}`,
+        deviceUnregisterEndpoint: `https://${apiProd}${D.backendEndpoints.authDeviceUnregister}`,
+        oauth,
+      };
   return {
     slug,
     appName: appName || slug,
@@ -624,17 +670,7 @@ export function aipiaPreset({ slug, appName, ...rest }) {
       externalInBrowser: true,
     },
     marketing: { ...D.marketing },
-    auth: {
-      providers,
-      sessionEndpoint: `https://${apiProd}${D.backendEndpoints.authNative}`,
-      signupEndpoint:  `https://${apiProd}${D.backendEndpoints.authSignup}`,
-      logoutEndpoint:  `https://${apiProd}${D.backendEndpoints.authLogout}`,
-      deleteEndpoint:  `https://${apiProd}${D.backendEndpoints.authDelete}`,
-      guestEndpoint:   `https://${apiProd}${D.backendEndpoints.authGuest}`,
-      deviceEndpoint:  `https://${apiProd}${D.backendEndpoints.authDevice}`,
-      deviceUnregisterEndpoint: `https://${apiProd}${D.backendEndpoints.authDeviceUnregister}`,
-      oauth,
-    },
+    auth,
     iap: {
       verifyEndpoint: `https://${apiProd}${D.backendEndpoints.iapVerify}`,
       googleTokenCompression: D.iap.googleTokenCompression,
