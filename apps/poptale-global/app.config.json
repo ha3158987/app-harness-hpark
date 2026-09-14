@@ -33,7 +33,7 @@
     "deviceEndpoint": null,
     "deviceUnregisterEndpoint": null
   },
-  "iap": { "verifyEndpoint": "https://dev.api.poptale.ai/api/v2/iap/verify", "googleTokenCompression": true, "products": [] },
+  "iap": { "verifyEndpoint": null, "googleTokenCompression": true, "products": [] },
   "marketing": { "attribution": { "provider": null }, "analytics": { "provider": "amplitude" }, "crm": { "provider": null }, "autoCapture": true },
   "monitoring": { "crash": { "provider": "crashlytics", "dsn": null, "environment": "development" }, "apm": { "provider": null } },
   "firebase": {
