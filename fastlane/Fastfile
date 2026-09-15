@@ -90,6 +90,12 @@ end
 # archive 가 실패한다.
 IOS_NSE_TARGET = 'NotificationService'
 
+# match 의 만료 인증서 자동 갱신(renew_expired_certs)이 **CLI 옵션으로 복원된** 버전.
+# 2.220 에 들어왔다가 비활성화됐고(2.236 까지는 runner 안에서 false 고정이라 옵션 자체가
+# 없다), 2.237 에서 opt-in 으로 되돌아왔다. 이보다 낮은 fastlane 에 이 키를 넘기면
+# "Could not find option" 으로 lane 이 통째로 죽으므로, 넘기기 전에 버전을 본다.
+MATCH_RENEW_MIN_VERSION = '2.237.0'
+
 # 확장은 **별개 번들 id** 를 갖고, 따라서 **별개 프로비저닝 프로파일**이 필요하다.
 # 이걸 빼면 릴리즈가 두 군데서 깨진다:
 #   1. archive — 확장 타깃이 자동서명에 남아 수동서명 앱과 섞인다
@@ -224,13 +230,15 @@ platform :ios do
     UI.success("TestFlight 업로드 완료 (#{slug}). 외부 배포/심사 제출은 App Store Connect 에서 직접.")
   end
 
-  # App ID 에서 capability(딥링크=Associated Domains / 푸시 / Apple 로그인 등)를 켠 뒤,
-  # 그 변경을 반영해 appstore 프로비저닝 프로파일을 재생성한다. CI 의 match 는 readonly 라
-  # 스스로 못 고치므로, 이 lane 을 로컬에서 1회 돌린 뒤 CI(release)를 iOS 로 재실행한다.
+  # appstore 프로비저닝 프로파일을 재생성한다. CI 의 match 는 readonly 라 스스로 못 고치므로,
+  # 이 lane 을 로컬에서 1회 돌린 뒤 CI(release)를 iOS 로 재실행한다. 쓰는 상황은 셋:
+  #   1) App ID 에서 capability(딥링크=Associated Domains / 푸시 / Apple 로그인 등)를 켠 뒤
+  #   2) 새 앱·알림 확장의 프로파일을 처음 만들 때
+  #   3) **배포 인증서가 만료돼 새로 발급해야 할 때** (아래 renew_expired_certs 주석 참고)
   #   /opt/homebrew/bin/fastlane ios regen_profile slug:<slug>
   # (기본 rbenv fastlane 은 시스템 Ruby+LibreSSL → .p8 파싱이 'invalid curve name' 으로 깨짐.
   #  반드시 Homebrew fastlane 절대경로로 실행. ASC 키는 before_all 이 secrets/asc_api_key.p8 로 폴백.)
-  desc 'App ID capability 변경 후 appstore 프로파일 재생성(readonly off + force). 로컬 전용.'
+  desc 'appstore 프로파일 재생성 — capability 변경·인증서 만료 후(readonly off + force). 로컬 전용.'
   lane :regen_profile do |options|
     slug = require_slug(options)
     app_id = app_config(slug)['appId']
@@ -264,7 +272,37 @@ platform :ios do
     end
 
     ids = include_ext ? [app_id, ios_ext_app_id(app_id)] : app_id
-    match(type: 'appstore', app_identifier: ids, readonly: false, force: true)
+
+    # **배포 인증서가 만료된 경우까지 여기서 처리한다.** 이 옵션이 없으면(기본 false)
+    # match 는 만료된 인증서를 만나는 순간 프로파일을 만들기도 전에 죽는다:
+    #   Your certificate '<ID>.cer' is not valid, please check end date and renew it if necessary
+    # 그러면 이 lane 을 정본으로 가리키는 문서 전부가 막다른 길이 된다 — 실제로 2026-09
+    # 인증서 만료 때 담당자가 이 lane 을 못 쓰고 raw match 명령을 손으로 조립해야 했다.
+    #
+    # renew_expired_certs 는 **만료됐을 때만** 동작한다(정상이면 무동작). 하는 일은
+    # 만료된 .cer/.p12 를 match 저장소에서 지우고 새 인증서를 발급해 커밋하는 것.
+    # 옛 인증서를 애플 포털에서 revoke 하지는 않는다 — 인증서 슬롯이 모자라면 `match nuke`.
+    #
+    # ⚠️ 인증서는 **팀 전체가 공유한다.** 이 lane 이 인증서를 갈아끼우면 다른 앱의 프로파일도
+    #    같이 무효가 되므로, 만료 상황에서는 **앱마다 이 lane 을 한 번씩** 돌려야 한다.
+    #    그리고 두 사람이 동시에 돌리면 인증서가 2장으로 갈라져 서명이 깨진다 — 한 사람이
+    #    순차로 돌릴 것.
+    renew_opts = {}
+    if Gem::Version.new(Fastlane::VERSION) >= Gem::Version.new(MATCH_RENEW_MIN_VERSION)
+      renew_opts[:renew_expired_certs] = true
+    else
+      # 옛 fastlane 에서는 조용히 넘어가지 않고 **미리 크게 알린다.** 만료 상황이면 어차피
+      # 아래 match 가 죽는데, 그때 뜨는 건 인증서 에러뿐이라 "그래서 뭘 하라는 건지"가 없다.
+      UI.important(
+        "fastlane #{Fastlane::VERSION} 에는 만료 인증서 자동 갱신이 없습니다 " \
+        "(renew_expired_certs — #{MATCH_RENEW_MIN_VERSION} 이상 필요).\n" \
+        "인증서가 만료된 상태라면 바로 아래에서 이렇게 멈춥니다:\n" \
+        "  Your certificate '<ID>.cer' is not valid, please check end date and renew it if necessary\n" \
+        "그때는 fastlane 을 올리고 다시 실행하세요:  brew upgrade fastlane"
+      )
+    end
+
+    match({ type: 'appstore', app_identifier: ids, readonly: false, force: true }.merge(renew_opts))
     UI.success("프로파일 재생성 완료: #{Array(ids).join(', ')} — 이제 CI(release)를 iOS 로 재실행하세요.")
   end
 end

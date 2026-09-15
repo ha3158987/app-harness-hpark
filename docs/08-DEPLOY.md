@@ -166,6 +166,32 @@ error: Provisioning profile "match AppStore <appId>" doesn't include the Associa
 > **로컬 `.env` 의 `APP_STORE_CONNECT_API_KEY_KEY` 는 비어 있어도 된다** — `before_all` 이 `secrets/asc_api_key.p8` 로 자동 폴백한다. (빈 키 본문을 그대로 넘기면 이것도 `invalid curve name` 원인이다.)
 > match repo **push 인증(403)** 이 나면: 그 저장소에 쓰기 권한 있는 계정으로 keychain 로그인돼 있거나, `MATCH_GIT_BASIC_AUTHORIZATION`(base64 `user:token`) 을 `.env` 에 추가.
 
+### 배포 인증서(Apple Distribution)가 만료됐을 때
+
+인증서는 **팀 전체가 공유**하고, 프로파일은 그 인증서를 품고 있다. 따라서 인증서가 만료되면
+**모든 앱의 프로파일이 한꺼번에 무효**가 되고 CI 는 이렇게 죽는다:
+
+```
+Your certificate '<ID>.cer' is not valid, please check end date and renew it if necessary
+```
+
+`regen_profile` 이 인증서 갱신까지 같이 한다(`renew_expired_certs`) — 만료된 `.cer`/`.p12` 를
+match 저장소에서 지우고 새 인증서를 발급해 커밋한다. **fastlane 2.237 이상이 필요하다**
+(2.236 이하엔 옵션 자체가 없다 — lane 이 시작할 때 경고로 알려준다).
+
+```bash
+brew upgrade fastlane                                  # 2.237 미만이면 먼저
+/opt/homebrew/bin/fastlane ios regen_profile slug:<slug>
+```
+
+> ⚠️ **앱이 여러 개면 한 사람이 순차로** 돌린다. 인증서는 1장을 공유하므로, 두 사람이
+> 동시에 돌리면 **각자 새 인증서를 만들어** 프로파일이 서로 다른 인증서로 갈라진다.
+> 그러면 CI 는 한쪽 인증서만 집어 나머지 앱 서명이 깨진다.
+> 첫 번째 실행이 match 저장소에 **push 된 것을 확인한 뒤** 다음 앱을 돌릴 것.
+>
+> 옛 인증서는 애플 포털에서 revoke 되지 않는다(만료분은 인증서 슬롯을 차지하지 않는다).
+> 슬롯이 정말 모자라면 그때만 `fastlane match nuke distribution` 을 쓴다 — 전부 지우므로 최후수단.
+
 ---
 
 ## 7. 프로덕션 게이트 (수동)
@@ -187,6 +213,8 @@ error: Provisioning profile "match AppStore <appId>" doesn't include the Associa
 | 수동 실행했는데 **iOS(또는 Android) 잡이 skipped** | `platform` 입력이 한쪽만(예: `android`) — **skip 은 실패가 아니라 "안 돌린 것"** | 양쪽이면 `platform=both`, iOS 만이면 `ios` 로 재실행 |
 | iOS `build_app`: *"…doesn't include the Associated Domains capability"* | capability 를 엔타이틀먼트에만 추가하고 App ID/프로파일에 미반영 | §6 — 포털에서 capability 체크 + 로컬 `regen_profile` + CI 재실행 |
 | 로컬 fastlane: **`invalid curve name`** | (a) 시스템 Ruby+LibreSSL 로 실행 (b) `.env` 의 ASC `.p8` 키 본문이 빈 값 | (a) `/opt/homebrew/bin/fastlane` 로 실행 (b) `secrets/asc_api_key.p8` 배치(자동 폴백) |
+| iOS: *"Your certificate '<ID>.cer' is not valid…"* | 배포 인증서 만료 — 팀 공유라 **모든 앱**이 같이 막힌다 | §6 — fastlane 2.237+ 로 올리고 앱마다 `regen_profile` **순차** 실행 |
+| iOS: *"Could not find option 'renew_expired_certs'"* | fastlane 2.236 이하 | `brew upgrade fastlane` |
 | iOS: *No profile for '<appId>' / profile not found* | match repo 에 그 app_identifier 프로파일이 아직 없음(최초 미생성) | 로컬에서 `fastlane match appstore --app_identifier <appId>` 1회 생성 |
 | Android `beta`: keystore/서명 실패 | keystore 시크릿 4종 미설정 | §4 Android 시크릿(`ANDROID_KEYSTORE_*`, `ANDROID_KEY_*`) 등록 |
 
