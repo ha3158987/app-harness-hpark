@@ -192,6 +192,18 @@ brew upgrade fastlane                                  # 2.237 미만이면 먼�
 > 옛 인증서는 애플 포털에서 revoke 되지 않는다(만료분은 인증서 슬롯을 차지하지 않는다).
 > 슬롯이 정말 모자라면 그때만 `fastlane match nuke distribution` 을 쓴다 — 전부 지우므로 최후수단.
 
+### 서명 인증서의 출처는 match 저장소 하나뿐이다
+
+CI 는 **빈 키체인만 만들고**, 인증서를 내려받아 설치하는 것은 match 가 한다. 워크플로가
+키체인 이름·비밀번호를 `MATCH_KEYCHAIN_NAME` / `MATCH_KEYCHAIN_PASSWORD` 로 넘기므로,
+match 가 개인키를 넣은 뒤 **partition list 까지 직접 설정**한다. 이게 있어야 `codesign` 이
+승인 팝업 없이 서명한다.
+
+> **인증서 p12 를 GitHub 시크릿에 따로 두지 말 것.** 2026-09-15 이전에는 `IOS_DIST_P12_BASE64`
+> 시크릿에 개인키를 중복 보관했는데, 인증서를 갱신하자 시크릿이 조용히 낡아
+> 프로파일(새 인증서) ↔ 키체인(옛 인증서)이 어긋났다. 결과는 `codesign` 이 뜨지도 않을
+> 승인 팝업을 기다리며 **6시간 매달리다 잡 타임아웃**. 출처가 하나면 갱신이 저절로 따라온다.
+
 ---
 
 ## 7. 프로덕션 게이트 (수동)
@@ -215,6 +227,7 @@ brew upgrade fastlane                                  # 2.237 미만이면 먼�
 | 로컬 fastlane: **`invalid curve name`** | (a) 시스템 Ruby+LibreSSL 로 실행 (b) `.env` 의 ASC `.p8` 키 본문이 빈 값 | (a) `/opt/homebrew/bin/fastlane` 로 실행 (b) `secrets/asc_api_key.p8` 배치(자동 폴백) |
 | iOS: *"Your certificate '<ID>.cer' is not valid…"* | 배포 인증서 만료 — 팀 공유라 **모든 앱**이 같이 막힌다 | §6 — fastlane 2.237+ 로 올리고 앱마다 `regen_profile` **순차** 실행 |
 | iOS: *"Could not find option 'renew_expired_certs'"* | fastlane 2.236 이하 | `brew upgrade fastlane` |
+| iOS CI 가 **서명 단계에서 멈춰 6시간 뒤 cancelled** | `codesign` 이 키체인 승인 팝업을 기다림 — 개인키의 partition list 미설정 | 서명 인증서 출처는 **match 저장소 하나뿐**이어야 한다(§6). 잡에 `timeout-minutes` 도 걸려 있다 |
 | iOS: *No profile for '<appId>' / profile not found* | match repo 에 그 app_identifier 프로파일이 아직 없음(최초 미생성) | 로컬에서 `fastlane match appstore --app_identifier <appId>` 1회 생성 |
 | Android `beta`: keystore/서명 실패 | keystore 시크릿 4종 미설정 | §4 Android 시크릿(`ANDROID_KEYSTORE_*`, `ANDROID_KEY_*`) 등록 |
 

@@ -243,6 +243,10 @@ jobs:
     needs: resolve
     if: ${{ needs.resolve.outputs.platform == 'ios' || needs.resolve.outputs.platform == 'both' }}
     runs-on: macos-latest
+    # macOS 러너는 분당 요금이 10배다. 서명이 매달리면(키체인 승인 팝업 대기 등) 잡이
+    # **기본 6시간**을 다 태우고 죽는다 — 실제로 2026-09-15 에 그렇게 6시간을 날렸다.
+    # 정상 빌드는 20분 안쪽이므로 넉넉히 잡아도 60분이면 충분하다.
+    timeout-minutes: 60
     env:
       SLUG: ${{ needs.resolve.outputs.slug }}
     steps:
@@ -299,10 +303,21 @@ jobs:
             echo "::notice::GOOGLE_SERVICE_INFO_PLIST_B64_* 시크릿 없음 — iOS FCM 미사용으로 진행"
           fi
 
-      - name: 배포 인증서 키체인 주입 (match 빈암호 p12 macOS 이슈 우회)
-        env:
-          IOS_DIST_P12_BASE64: ${{ secrets.IOS_DIST_P12_BASE64 }}
-          IOS_DIST_P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+      # 서명 인증서의 **출처는 match 저장소 한 곳뿐이다.** 여기서는 빈 키체인만 만들어
+      # 그 이름과 비밀번호를 match 에 넘긴다 — 인증서를 내려받아 설치하는 건 match 가 한다.
+      #
+      # 왜 이렇게 바꿨나(2026-09-15): 예전에는 이 스텝이 `IOS_DIST_P12_BASE64` 시크릿의
+      # p12 를 직접 주입했다. 그래서 인증서가 **match 저장소와 GitHub 시크릿 두 곳**에
+      # 존재했고, 인증서를 갱신하면 시크릿이 조용히 낡았다. 실제로 그날 인증서를 갱신하자
+      # 프로파일은 새 인증서를 가리키는데 시크릿은 옛 인증서라, match 가 새 개인키를
+      # login.keychain 에 넣으면서 비번을 몰라 partition list 설정에 실패했고
+      # (`Could not configure imported keychain item ... to prevent UI permission popup`)
+      # codesign 이 뜨지도 않을 승인 팝업을 기다리며 6시간을 매달렸다.
+      #
+      # ⚠️ 비밀번호를 **빈 문자열로 두지 않는다.** 빈 비번은 이 레포가 과거에 겪은
+      #    `security` 실패의 원인이었다(예전 스텝 이름에 남아 있던 "빈암호 p12 이슈").
+      #    fastlane 의 setup_ci 가 빈 비번을 쓰므로 그걸 쓰지 않고 여기서 직접 만든다.
+      - name: 서명용 임시 키체인 준비 (인증서는 match 가 저장소에서 받아 설치)
         run: |
           set -e
           KC="$RUNNER_TEMP/app-signing.keychain-db"
@@ -310,11 +325,11 @@ jobs:
           security create-keychain -p "$KC_PW" "$KC"
           security set-keychain-settings -lut 21600 "$KC"
           security unlock-keychain -p "$KC_PW" "$KC"
-          echo "$IOS_DIST_P12_BASE64" | base64 -d > "$RUNNER_TEMP/dist.p12"
-          security import "$RUNNER_TEMP/dist.p12" -P "$IOS_DIST_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KC" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
-          echo "✅ 배포 인증서(개인키) 키체인 주입 완료 — build_app 서명용"
+          echo "::add-mask::$KC_PW"
+          echo "MATCH_KEYCHAIN_NAME=$KC"     >> "$GITHUB_ENV"
+          echo "MATCH_KEYCHAIN_PASSWORD=$KC_PW" >> "$GITHUB_ENV"
+          echo "✅ 임시 키체인 준비 완료 — match 가 여기에 인증서를 설치하고 partition list 를 잡는다"
 
       - name: 인증서 저장소 SSH 키 (deploy key 읽기전용, 개인토큰 미사용)
         env:
