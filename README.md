@@ -93,8 +93,11 @@ Appharness/
 ├── docs/02-GUIDE.md / ONBOARDING.md / docs/06-INTEGRATION.md / docs/10-AUTH.md / docs/11-IAP.md / ...
 ├── apps/<slug>/app.config.json  # 앱 정의(단일 진실 공급원) + icon.png/splash.png
 │   ├── aipia/                   #   AIPIA 본 앱 레퍼런스
+│   ├── characterchat/           #   팝챗 prod (com.aipia.characterchat)
+│   ├── characterchat-dev/       #   팝챗 dev  (com.aipia.characterchat.dev)
 │   ├── poptale/                 #   Poptale prod (com.aipia.poptale)
-│   └── poptale-dev/             #   Poptale dev  (com.aipia.poptale.dev)
+│   ├── poptale-dev/             #   Poptale dev  (com.aipia.poptale.dev)
+│   └── poptale-global/          #   Poptale 글로벌 (com.aipia.poptale.global)
 ├── template/
 │   ├── src/                     # 오프라인/에러 폴백 셸
 │   ├── bridge/                  # 공유 브릿지 (Capacitor 플러그인 + JS SDK + 타입)
@@ -151,7 +154,7 @@ Appharness/
 - **iOS — `.ipa` 생성과 TestFlight 업로드만 검증** — fastlane `ios build`(.ipa, match) / `ios beta` 동작. 앱 내부 기능은 아래 참고
 - 백엔드 레퍼런스 스모크(게스트/기기/지갑)
 - `aipiaPreset()` 자동 생성 → loadConfig 검증 통과
-- 5개 앱 config (`aipia`, `characterchat`, `characterchat-dev`, `poptale`, `poptale-dev`) doctor 오류 0
+- 6개 앱 config (`aipia`, `characterchat`, `characterchat-dev`, `poptale`, `poptale-dev`, `poptale-global`) doctor 오류 0
 
 ### 구현됨, 실기기 검증 전 🔧
 - **iOS 실기기 기능** — APNs 수신 · NSE 실행 · 유니버설 링크(AASA) 연결. **빌드/업로드 성공이 기능 동작을 보장하지 않는다**
