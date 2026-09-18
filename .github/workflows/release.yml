@@ -98,7 +98,10 @@ jobs:
         with: { node-version-file: '.nvmrc' }
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '21' }
-      - uses: android-actions/setup-android@v3
+      # v3 는 기본 packages 가 'tools platform-tools' 인데, Google 이 구식 'tools' 패키지를
+      # SDK 저장소에서 내려 `Failed to find package 'tools'` 로 죽는다(2026-09-07 이후 회귀).
+      # v4 는 기본값이 'platform-tools' 로 바뀌었다 — 그게 이 문제의 수정이다.
+      - uses: android-actions/setup-android@v4
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3' }
       # 플러그인은 Fastfile 이 직접 require 한다(번들러 미사용 → Pluginfile 자동로드 안 됨).
