@@ -48,5 +48,11 @@
     "camera": { "required": false, "purpose": "Attach photos to support inquiries" }
   },
   "ios": { "teamId": "3W889GYPRK", "usesNonExemptEncryption": false },
-  "android": { "sha256CertFingerprints": ["47:ED:07:74:BC:AF:08:DE:82:80:70:10:C3:32:52:31:51:35:F4:4D:1B:C2:AA:1D:2F:3E:F4:1F:66:6F:43:DA"] }
+  "android": {
+    "sha256CertFingerprints": [
+      "47:ED:07:74:BC:AF:08:DE:82:80:70:10:C3:32:52:31:51:35:F4:4D:1B:C2:AA:1D:2F:3E:F4:1F:66:6F:43:DA",
+      "ED:F7:89:37:E4:5A:40:DA:6F:F2:55:50:5F:C3:42:B8:7B:4D:FC:D0:37:A5:BF:51:DA:E4:29:E7:8F:B9:CF:86",
+      "34:55:81:42:CF:96:88:50:E6:46:75:E7:34:A8:EF:DC:86:3E:DC:5E:71:EB:A0:FD:FF:90:5A:BB:76:7E:BD:7C"
+    ]
+  }
 }
