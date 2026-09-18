@@ -28,10 +28,11 @@
   "auth": {
     "providers": [],
     "oauthReturnScheme": true,
-    "logoutEndpoint": null,
-    "deleteEndpoint": null,
-    "deviceEndpoint": null,
-    "deviceUnregisterEndpoint": null
+    "signupEndpoint": "https://prod.api.poptale-global.ai/auth/signup",
+    "logoutEndpoint": "https://prod.api.poptale-global.ai/auth/logout",
+    "deleteEndpoint": "https://prod.api.poptale-global.ai/auth/withdraw",
+    "deviceEndpoint": "https://prod.api.poptale-global.ai/api/push/register",
+    "deviceUnregisterEndpoint": "https://prod.api.poptale-global.ai/api/push/unregister"
   },
   "iap": { "verifyEndpoint": null, "googleTokenCompression": true, "products": [] },
   "marketing": { "attribution": { "provider": null }, "analytics": { "provider": "amplitude" }, "crm": { "provider": null }, "autoCapture": true },
