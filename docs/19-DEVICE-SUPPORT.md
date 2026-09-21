@@ -144,8 +144,10 @@ updated: 2026-07-24
 → 그래서 아래 `var(..., env(...))` 패턴이 어떤 앱에서든 동작한다. **bare `env()` 단독 사용은 피하고 이 패턴을 써라.**
 
 ```css
-/* 노치/펀치홀/제스처바: 플러그인이 주입한 변수 사용(Android env() 불안정 보완) */
-.header { padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); }
+/* 노치/펀치홀/제스처바: 플러그인이 주입한 변수 사용(Android env() 불안정 보완).
+   ★ 인셋을 그대로 주는 건 **자기 여백이 없는 요소**일 때만이다.
+     헤더·탭바처럼 이미 padding 을 가진 바는 바로 아래 항목을 따라라. */
+.screen-top { padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); }
 .footer { padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
 
 /* 100vh 금지 → dvh (주소창/키보드로 높이 변함) */
@@ -153,6 +155,30 @@ updated: 2026-07-24
 
 /* 해상도/DPI: 고정 px 대신 반응형 단위 + 이미지 srcset/WebP */
 ```
+
+- **이미 여백이 있는 바에 인셋을 통째로 더하지 마라 — 가장 흔한 실수다.** 헤더·탭바는 거의 항상
+  자기 상하 패딩을 갖는다. 거기에 인셋을 그대로 더하면 두 여백이 쌓여 바가 부푼다. 노치를 피하는 데
+  실제로 더 필요한 양은 **`인셋 − 그 바가 이미 가진 여백`** 뿐이다.
+  ```css
+  /* 바깥 바가 노치 보정을, 안쪽 내용 행이 원래 여백을 갖는 구조 */
+  :root {
+    --bar-pad-y: 12px;  /* 내용 행이 이미 가진 상하 여백 */
+    --bar-h: 64px;      /* 인셋 0(웹) 기준 바 높이 */
+    /* 부족한 만큼만 민다. 인셋 0 인 웹에서는 0 → 웹 레이아웃은 변하지 않는다. */
+    --bar-safe-pad: max(0px, calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) - var(--bar-pad-y)));
+    /* 바가 화면 상단에서 실제로 차지하는 총 높이 */
+    --bar-inset: calc(var(--bar-safe-pad) + var(--bar-h));
+  }
+  .bar      { padding-top: var(--bar-safe-pad); }
+  .bar__row { padding-block: var(--bar-pad-y); }
+  ```
+  **왜 이렇게까지 하냐**: 팝챗이 인셋을 통째로 더했다가 다이내믹 아일랜드 기기에서 헤더가 126pt 까지
+  부풀었다(인셋 62 + 헤더 64). 섬은 51pt 에서 끝나므로 로고까지 **34pt 가 빈 띠**로 남았고, 같은 기기의
+  iOS 네이티브 내비게이션 바는 106pt 였다. 위 방식으로 114pt 가 됐다(시뮬레이터 실측 2026-09,
+  17 Pro·17·Air·16e·iPad mini 전 기기에서 정확히 `pad-y` 만큼 축소, 웹은 변화 0).
+- **바 아래에 무언가를 앉힐 땐 `env() + 숫자` 를 새로 쓰지 말고 위 `--bar-inset` 같은 총합 값을 써라.**
+  스페이서·플로팅 버튼·시트가 각자 `env() + 64px` 를 하드코딩하면, 바 높이나 노치 보정 규칙을 바꿀 때
+  그 값들만 홀로 어긋난다. 화면 가장자리에 붙는 플로팅 컨트롤처럼 **바와 무관한** 것만 인셋을 직접 쓴다.
 - **상단 중앙 카메라 컷아웃**: `safe-area-inset-top` 이 콘텐츠를 그 아래로 밀어줌 → 최상단 중앙(상태바 존)에
   탭 타깃 두지 말 것.
 - **폴더블(갤럭시 Z)**: `window.addEventListener('resize')` / `matchMedia` 로 펼침·접힘 레이아웃 전환. 고정 종횡비 가정 금지.

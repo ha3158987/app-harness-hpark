@@ -75,7 +75,7 @@ updated: 2026-09-03
 | pull-to-refresh | 웹 또는 셸 | |
 | 화면전환 효과 | **웹 (View Transitions API)** | Safari 18+/Chrome 126+ 네이티브 지원, 미지원 시 폴백 |
 | 네비게이션 도메인 화이트리스트 | 셸 | 허용 도메인 외 외부 링크는 시스템 브라우저로 |
-| 세이프에어리어 | 웹 CSS `env(safe-area-inset-*)` | 노치/Dynamic Island/제스처바 |
+| 세이프에어리어 | 웹 CSS `env(safe-area-inset-*)` | 노치/Dynamic Island/제스처바. **이미 여백이 있는 헤더·탭바에 인셋을 통째로 더하지 말 것** — 규칙은 [19-DEVICE-SUPPORT §4b](./19-DEVICE-SUPPORT.md#4b-디스플레이-다양성-대응-레시피-해상도종횡비컷아웃폴더블) |
 | 에셋 포맷 정책 | 팀 룰 | 무거운 모션은 video/Lottie, 가벼운 건 WebP |
 
 ## D. 콘텐츠 타입별 적합도 (우리 서비스 기준)
