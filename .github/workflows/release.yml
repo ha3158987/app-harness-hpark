@@ -98,7 +98,10 @@ jobs:
         with: { node-version-file: '.nvmrc' }
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '21' }
-      - uses: android-actions/setup-android@v3
+      # v3 는 기본 packages 가 'tools platform-tools' 인데, Google 이 구식 'tools' 패키지를
+      # SDK 저장소에서 내려 `Failed to find package 'tools'` 로 죽는다(2026-09-07 이후 회귀).
+      # v4 는 기본값이 'platform-tools' 로 바뀌었다 — 그게 이 문제의 수정이다.
+      - uses: android-actions/setup-android@v4
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3' }
       # 플러그인은 Fastfile 이 직접 require 한다(번들러 미사용 → Pluginfile 자동로드 안 됨).
@@ -225,7 +228,11 @@ jobs:
           echo "### 설치 링크 (QR 그대로 사용)" >> "$GITHUB_STEP_SUMMARY"
           echo "$URL" >> "$GITHUB_STEP_SUMMARY"
 
+      # Play 업로드가 실패한 순간이 AAB 가 **가장 필요한** 때다(콘솔에서 손으로 올려야 하므로).
+      # if 가 없으면 그때 이 스텝이 통째로 건너뛰어져 받을 파일이 남지 않는다 — 실제로
+      # 2026-09-18 poptale-global 첫 업로드(권한 오류)에서 그렇게 잃었다.
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
         with:
           name: ${{ env.SLUG }}-aab
           path: build/${{ env.SLUG }}/android/app/build/outputs/bundle/release/*.aab
