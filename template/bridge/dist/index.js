@@ -42,6 +42,10 @@ function deriveCapabilities(features) {
     auth: false, // config.auth.providers 로 ready() 에서 채움 (features 가 아니라 별도 블록)
     iap: false,  // config.iap.products 로 ready() 에서 채움
     att: false,  // config.tracking.att.enabled 로 ready() 에서 채움 (iOS 전용)
+    // 뷰어 UX(캐프차단·밝기). features.viewer 는 {captureBlock:{enabled,paths}, brightness:{enabled}} 형태라
+    // flag() 로 안 잡히므로 직접 판정. 둘 중 하나라도 켜져 있으면 뷰어 capability.
+    viewer: !!(f.viewer && typeof f.viewer === 'object' &&
+      ((f.viewer.captureBlock && f.viewer.captureBlock.enabled) || (f.viewer.brightness && f.viewer.brightness.enabled))),
   };
 }
 
@@ -85,6 +89,7 @@ const CAP_METHOD = {
   auth: 'login',
   iap: 'purchase',
   att: 'requestTracking',
+  viewer: 'setBrightness',
 };
 
 class AppBridgeImpl {
@@ -1726,6 +1731,37 @@ class AppBridgeImpl {
     if (!store) return { ok: false, reason: 'iap-unavailable' };
     try { await store.restorePurchases(); return { ok: true }; }
     catch { return { ok: false, reason: 'restore-failed' }; }
+  }
+
+  // ── 콘텐츠 보호 / 뷰어 UX ────────────────────────────────────────────────
+  // 코어 네이티브 브릿지(AppBridgePlugin)에 구현. features.viewer(캡처차단·밝기) 를 켠 앱에서만 동작.
+  // 밝기는 시스템 밝기와 독립(창 단위). 웹/미지원 환경에선 조용히 no-op.
+
+  /** 화면 캡쳐/스크린샷 방지 on/off. 보통 뷰어 경로 진입/이탈 시 토글(autoBlockCaptureOnPaths 헬퍼).
+   *  Android=창 FLAG_SECURE(스크린샷·최근앱 썸네일·화면녹화 차단). iOS=OS 미지원(스크린샷 차단 불가) → no-op. */
+  async blockCapture(enabled) {
+    if (this.isNative && this.capabilities.viewer) {
+      try { await Native.blockCapture({ enabled: enabled !== false }); } catch { /* 미지원 native → 무시 */ }
+    }
+  }
+
+  /** 뷰어 밝기(시스템과 독립, 창 단위). 0.0~1.0, 음수=시스템 밝기로 복귀. */
+  async setBrightness(value) {
+    if (this.isNative && this.capabilities.viewer) {
+      try { await Native.setBrightness({ value: typeof value === 'number' ? value : -1 }); } catch { /* 무시 */ }
+    }
+  }
+
+  /** 현재 적용된 뷰어 밝기(0.0~1.0). 미설정/미지원이면 null. */
+  async getBrightness() {
+    if (this.isNative && this.capabilities.viewer) {
+      try {
+        const res = await Native.getBrightness();
+        const v = res && typeof res.value === 'number' ? res.value : -1;
+        return v < 0 ? null : v;
+      } catch { return null; }
+    }
+    return null;
   }
 
   // ── 마케팅 SDK ─────────────────────────────────────────────────────────

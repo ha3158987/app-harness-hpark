@@ -18,7 +18,10 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "getConfig", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "saveImageToGallery", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openAppSettings", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "openAppSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "blockCapture", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setBrightness", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getBrightness", returnType: CAPPluginReturnPromise)
     ]
 
     /**
@@ -128,6 +131,40 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
                         call.reject("사진 추가 권한이 거부되었습니다")
                     }
                 }
+            }
+        }
+    }
+
+    // ── Content protection / Viewer UX ─────────────────────────────────────
+    // Brightness is real (UIScreen). Screenshot blocking is NOT available via any public iOS API
+    // (unlike Android FLAG_SECURE), so blockCapture resolves as a no-op — screen-recording blur is a follow-up.
+
+    private var savedBrightness: CGFloat?
+
+    @objc func blockCapture(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
+    @objc func setBrightness(_ call: CAPPluginCall) {
+        let value = call.getDouble("value") ?? -1.0
+        DispatchQueue.main.async {
+            if value < 0 {
+                if let s = self.savedBrightness { UIScreen.main.brightness = s }
+                self.savedBrightness = nil
+            } else {
+                if self.savedBrightness == nil { self.savedBrightness = UIScreen.main.brightness }
+                UIScreen.main.brightness = CGFloat(max(0.0, min(1.0, value)))
+            }
+            call.resolve()
+        }
+    }
+
+    @objc func getBrightness(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if self.savedBrightness == nil {
+                call.resolve(["value": -1])
+            } else {
+                call.resolve(["value": Double(UIScreen.main.brightness)])
             }
         }
     }

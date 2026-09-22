@@ -26,4 +26,10 @@ export class AppBridgeWeb extends WebPlugin {
   async openAppSettings() {
     return { opened: false, reason: 'not-native' };
   }
+
+  // Viewer UX — the browser has no screen-capture block / device brightness control.
+  // Silent no-ops so code that calls the plugin proxy directly (bypassing the isNative gate) never throws.
+  async blockCapture() { return; }
+  async setBrightness() { return; }
+  async getBrightness() { return { value: -1 }; }
 }
