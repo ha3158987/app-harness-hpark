@@ -1,0 +1,87 @@
+{
+  "slug": "poptale-v2-dev",
+  "appName": "팝테일 V2 DEV",
+  "appId": "com.aipia.poptale.v2.dev",
+  "startUrl": "https://dev.poptale.ai",
+  "version": { "name": "2.0.0", "code": 1 },
+  "theme": {
+    "primary": "#000000",
+    "statusBarStyle": "light",
+    "background": "#000000"
+  },
+  "assets": { "icon": "icon.png", "splash": "splash.png" },
+  "features": {
+    "push": true,
+    "pushPolicy": {
+      "allowedPaths": ["/recommend", "/for-you", "/detail/", "/viewer", "/event", "/my/notice", "/my/inquiry", "/info/notice", "/info/inquiry"]
+    },
+    "deepLink": true,
+    "deferredDeepLink": { "enabled": false, "provider": null },
+    "biometric": false,
+    "share": true,
+    "camera": true,
+    "forceUpdate": { "enabled": false, "minVersionUrl": null },
+    "secureStorage": true,
+    "localNotification": true,
+    "haptics": true,
+    "clipboard": true,
+    "geolocation": false,
+    "darkMode": true,
+    "appChannelCompat": false,
+    "viewer": {
+      "captureBlock": { "enabled": true, "paths": ["/viewer"] },
+      "brightness": { "enabled": true }
+    }
+  },
+  "navigation": {
+    "allowedDomains": ["dev.poptale.ai", "dev.api.poptale.ai", "dev.book.poptale.ai", "*.poptale.ai"],
+    "externalInBrowser": true
+  },
+  "marketing": {
+    "attribution": { "provider": "adbrix", "deferredDeepLink": false },
+    "analytics": { "provider": "amplitude" },
+    "crm": { "provider": null },
+    "autoCapture": true
+  },
+  "auth": {
+    "providers": [],
+    "oauthReturnScheme": true,
+    "signupEndpoint": "https://dev.api.poptale.ai/api/v2/auth/signup",
+    "logoutEndpoint": "https://dev.api.poptale.ai/api/v2/auth/logout",
+    "deleteEndpoint": "https://dev.api.poptale.ai/api/v2/auth/delete",
+    "deviceEndpoint": "https://dev.api.poptale.ai/api/v2/auth/device"
+  },
+  "iap": {
+    "verifyEndpoint": "https://dev.api.poptale.ai/api/v2/iap/verify",
+    "googleTokenCompression": true,
+    "products": [
+      { "id": "coin_100", "storeId": "com.aipia.poptale.dev.coin100", "type": "consumable" },
+      { "id": "coin_500", "storeId": "com.aipia.poptale.dev.coin500", "type": "consumable" }
+    ]
+  },
+  "monitoring": {
+    "crash": { "provider": "crashlytics", "dsn": null, "environment": "development" },
+    "apm": { "provider": null }
+  },
+  "firebase": {
+    "enabled": true,
+    "project": {
+      "dev": "dev-aipia-poptale",
+      "stage": "stage-aipia-poptale",
+      "prod": "aipia-poptale"
+    },
+    "fcm": true,
+    "remoteConfig": true,
+    "analytics": true,
+    "crashlytics": true
+  },
+  "legal": {
+    "privacyUrl": "https://dev.poptale.ai/privacy",
+    "termsUrl": "https://dev.poptale.ai/terms",
+    "ageVerifyUrl": null
+  },
+  "permissions": {
+    "notifications": { "required": false, "purpose": "신작/이벤트/구매 알림 수신" },
+    "camera": { "required": false, "purpose": "1:1 문의 사진 첨부" }
+  }
+}
