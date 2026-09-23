@@ -348,9 +348,25 @@ class AppBridgeImpl {
       });
       // 콜드스타트로 열렸을 때(launchUrl)도 라우팅
       App.getLaunchUrl().then((res) => {
-        if (res && res.url) this._emitDeepLink(res.url, res);
+        if (res && res.url) this._emitLaunchUrl(res.url, res);
       }).catch(() => {});
     }).catch(() => {});
+  }
+
+  // launch URL 은 **액티비티를 띄운 인텐트**라 앱 수명 내내 같은 값이다. 문서가 새로 뜰 때마다(전체 이동·새로 고침)
+  // 이 값을 다시 흘리면 처음 딥링크가 되풀이된다 — 2026-09-23 에뮬레이터 실측: 딥링크로 켠 뒤 전체 이동할 때마다
+  // 그 화면으로 되돌아갔다. OAuth 복귀로 콜드스타트했다면 이미 소비된 code 를 다시 상환하려 든다.
+  // 그래서 WebView 세션(sessionStorage — 프로세스가 새로 뜨면 비어 있다)당 같은 launch URL 은 한 번만 흘린다.
+  // 실행 중 도착(appUrlOpen)은 이 경로를 타지 않으므로 같은 링크를 다시 눌러도 막히지 않는다.
+  _emitLaunchUrl(url, raw) {
+    const KEY = '__appbridge_launch_url';
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+        if (sessionStorage.getItem(KEY) === url) return;
+        sessionStorage.setItem(KEY, url);
+      }
+    } catch { /* 저장소를 못 쓰면 종전대로 흘린다 */ }
+    this._emitDeepLink(url, raw);
   }
 
   // 등록된 모든 핸들러로 딥링크 분배 + 동선 자동 기록.
