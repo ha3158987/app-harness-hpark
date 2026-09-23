@@ -54,6 +54,11 @@ function deriveCapabilities(features) {
 // 옛 OAuth code 를 받는다(그 code 는 이미 만료·소비돼 로그인이 실패한다).
 const PENDING_DEEP_LINK_TTL_MS = 30_000;
 
+// 같은 딥링크가 이 시간 안에 또 오면 버린다. 콜드스타트 launch URL 은 **두 길**로 온다 — Capacitor 가 보류해 둔
+// appUrlOpen(리스너가 붙는 순간 배달)과 getLaunchUrl. 둘 다 흘리면 웹이 같은 화면을 두 번 쌓아 뒤로를 두 번 눌러야
+// 나간다(2026-09-23 에뮬레이터 실측).
+const DUPLICATE_DEEP_LINK_MS = 3_000;
+
 // 범용 OAuth2(시스템 브라우저) 공급자 프리셋. config.auth.oauth.<provider> 가 덮어쓴다.
 // 비밀키(client secret)는 앱에 없음 — authorization code 를 백엔드가 교환(PKCE).
 const OAUTH_PRESETS = {
@@ -112,6 +117,7 @@ class AppBridgeImpl {
     // ⚠️ 배달되면 즉시 버린다 — 남겨 두면 다음 onDeepLink 등록자에게 다시 배달돼
     //    이미 소비된 OAuth code 가 재생된다(아래 onDeepLink 주석).
     this._pendingDeepLink = null;
+    this._lastEmittedDeepLink = null; // { url, at } — 잇단 같은 딥링크 걸러내기(DUPLICATE_DEEP_LINK_MS)
     // ATT: 시스템 팝업은 유저당 평생 1회만 뜬다(응답 후엔 notDetermined 로 못 돌아옴).
     // 호출부가 실수로 두 곳에서 요청하면 응답 타이밍이 엉켜 잘못된 값이 어트리뷰션 SDK 로 간다
     // (Poptale 실제 사례). 그래서 API 자체를 멱등하게 만든다 — 아래 2개가 그 상태다.
@@ -372,6 +378,10 @@ class AppBridgeImpl {
   // 등록된 모든 핸들러로 딥링크 분배 + 동선 자동 기록.
   // 핸들러가 없으면 보류분으로 남긴다 — 있으면 배달로 끝이고 보관하지 않는다.
   _emitDeepLink(url, raw) {
+    const now = Date.now();
+    const last = this._lastEmittedDeepLink;
+    if (last && last.url === url && now - last.at < DUPLICATE_DEEP_LINK_MS) return;
+    this._lastEmittedDeepLink = { url, at: now };
     this.track('deep_link_open', { url });
     const handlers = this._deepLinkHandlers.slice(); // 배달 중 등록/해제에 안전하게
     if (!handlers.length) {

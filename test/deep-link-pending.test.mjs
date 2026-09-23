@@ -14,6 +14,7 @@ import { AppBridge } from '../template/bridge/dist/index.js';
 afterEach(() => {
   AppBridge.clearPendingDeepLink();
   AppBridge._deepLinkHandlers.length = 0;
+  AppBridge._lastEmittedDeepLink = null;
 });
 
 test('핸들러가 있으면 즉시 배달하고 보류분을 남기지 않는다', () => {
@@ -106,6 +107,7 @@ test('다른 launch URL · 실행 중 도착(appUrlOpen)은 막지 않는다', (
     AppBridge.onDeepLink((url) => seen.push(url));
     AppBridge._emitLaunchUrl('app://deeplink/detail/1', {});
     AppBridge._emitLaunchUrl('app://deeplink/detail/2', {});
+    AppBridge._lastEmittedDeepLink.at -= 10_000; // 몇 초 뒤
     AppBridge._emitDeepLink('app://deeplink/detail/1', {}); // appUrlOpen 경로 — 같은 링크를 다시 눌렀다
     assert.deepEqual(seen, ['app://deeplink/detail/1', 'app://deeplink/detail/2', 'app://deeplink/detail/1']);
   } finally {
@@ -118,4 +120,17 @@ test('sessionStorage 가 없으면 종전대로 흘린다', () => {
   AppBridge.onDeepLink((url) => seen.push(url));
   AppBridge._emitLaunchUrl('app://deeplink/detail/9', {});
   assert.deepEqual(seen, ['app://deeplink/detail/9']);
+});
+
+test('콜드스타트의 두 길(보류 appUrlOpen + getLaunchUrl)로 온 같은 링크는 한 번만 흘린다', () => {
+  const restore = stubSessionStorage();
+  try {
+    const seen = [];
+    AppBridge.onDeepLink((url) => seen.push(url));
+    AppBridge._emitDeepLink('app://deeplink/viewer?contentId=7', {}); // Capacitor 가 보류해 둔 appUrlOpen
+    AppBridge._emitLaunchUrl('app://deeplink/viewer?contentId=7', {}); // getLaunchUrl
+    assert.deepEqual(seen, ['app://deeplink/viewer?contentId=7'], '같은 화면이 두 번 쌓인다');
+  } finally {
+    restore();
+  }
 });
