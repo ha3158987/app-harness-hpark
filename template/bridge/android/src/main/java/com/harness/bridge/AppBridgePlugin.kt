@@ -10,6 +10,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Base64
+import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -160,6 +161,55 @@ class AppBridgePlugin : Plugin() {
             call.resolve(ret)
         } catch (e: Exception) {
             call.reject("갤러리 저장 실패: ${e.message}", e)
+        }
+    }
+
+    // ── Content protection / Viewer UX ─────────────────────────────────────
+    // Enabled only for apps whose config has features.viewer (captureBlock/brightness).
+    // The JS SDK gates on capabilities.viewer; these native methods do the actual work.
+
+    /** Screenshot / screen-recording block via window FLAG_SECURE (also hides the recent-apps thumbnail). */
+    @PluginMethod
+    fun blockCapture(call: PluginCall) {
+        val enabled = call.getBoolean("enabled") ?: true
+        val act = activity ?: run { call.reject("no activity"); return }
+        act.runOnUiThread {
+            if (enabled) {
+                act.window.setFlags(
+                    WindowManager.LayoutParams.FLAG_SECURE,
+                    WindowManager.LayoutParams.FLAG_SECURE
+                )
+            } else {
+                act.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+            call.resolve()
+        }
+    }
+
+    /** Per-window brightness (independent of the system value). value 0.0..1.0; negative restores the system value. */
+    @PluginMethod
+    fun setBrightness(call: PluginCall) {
+        val value = call.getDouble("value") ?: -1.0
+        val act = activity ?: run { call.reject("no activity"); return }
+        act.runOnUiThread {
+            val lp = act.window.attributes
+            lp.screenBrightness =
+                if (value < 0) WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                else value.coerceIn(0.0, 1.0).toFloat()
+            act.window.attributes = lp
+            call.resolve()
+        }
+    }
+
+    /** Current window brightness override, or -1 (JS maps to null) when following the system value. */
+    @PluginMethod
+    fun getBrightness(call: PluginCall) {
+        val act = activity ?: run { call.reject("no activity"); return }
+        act.runOnUiThread {
+            val b = act.window.attributes.screenBrightness
+            val res = JSObject()
+            res.put("value", if (b < 0f) -1.0 else b.toDouble())
+            call.resolve(res)
         }
     }
 }

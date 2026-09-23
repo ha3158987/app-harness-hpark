@@ -379,7 +379,8 @@ export interface AppBridgeSDK {
   restorePurchases(): Promise<{ ok: boolean; reason?: string }>;
 
   // ─── 콘텐츠 보호 / 뷰어 UX ──────────────────────────────────────────────────
-  // 네이티브 구현은 dev 가 채운다(template/plugins/viewer/SPEC.md 참조).
+  // Native impl: core bridge AppBridgePlugin (Android=FLAG_SECURE + window brightness;
+  //   iOS=brightness; iOS screenshot-block is OS-unsupported -> no-op). Active only for apps with features.viewer.
   // 미구현 환경에선 호출이 no-op 가 되도록 모든 메서드는 optional.
   /**
    * 화면 캡쳐/스크린샷 방지 on/off. SPA 경로에 따라 토글하려면
