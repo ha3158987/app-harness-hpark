@@ -4,7 +4,7 @@ title: INTEGRATION — 프론트엔드 통합 가이드
 category: 앱추가
 audience: 개발자
 status: active
-updated: 2026-09-11
+updated: 2026-09-23
 ---
 
 # INTEGRATION — 프론트엔드 통합 가이드
@@ -41,6 +41,35 @@ if (AppBridge.isNative) { /* 앱 */ } else { /* 브라우저 */ }
 - `AppBridge.isNative` : 앱이면 true. **모든 분기는 이걸로**(OS 분기 X).
 - `AppBridge.capabilities` : 켜진 기능 플래그. 예 `if (AppBridge.capabilities.biometric) …`
 - 브라우저에선 네이티브 메서드가 **안전한 폴백**(공유=Web Share, 결제=웹PG 등).
+- `capabilities`·`config` 는 **`ready()` 가 끝나야 채워진다.** 그 전에 부른 `blockCapture()`·`setBrightness()` 등은
+  capability 가 꺼진 것으로 보고 조용히 넘어간다 — 콜드스타트·딥링크로 화면이 먼저 뜨는 경우를 위해 호출부에서
+  `await AppBridge.ready()` 를 먼저 한다(멱등).
+
+## 1b. 플러그인 JS 패키지도 웹에 설치한다 — 빠지면 앱에서 조용히 죽는다
+
+브릿지는 네이티브 기능을 `await import('@capacitor/app')` 처럼 **플러그인 JS 패키지를 동적 import** 해서 부른다.
+셸은 원격 웹을 로드하므로 이 import 는 **웹 번들 안에서** 풀려야 한다. 웹 레포에 패키지가 없거나 번들러가
+제외(webpack `IgnorePlugin`·`externals`)하면 **앱에서도** `Cannot find module` 로 실패하고, 브릿지는 대부분 그 실패를
+삼킨다 — 오류 화면 없이 딥링크·하드웨어 뒤로·인앱 브라우저 로그인이 **아무 반응도 안 하는** 앱이 된다.
+(2026-09-23 팝테일 v2 리더 웹 에뮬레이터 실측: 뒤로 무반응, 커스텀 스킴 딥링크 `No listeners found for event appUrlOpen`,
+SNS 버튼 무반응.) `AppBridge` 자체 메서드(`getConfig`·`blockCapture`·`setBrightness`)는 `@capacitor/core` 만으로 동작한다.
+
+| 쓰는 브릿지 기능 | 웹에 설치할 패키지 |
+|---|---|
+| `onDeepLink` · `onBackButton` · `onResume` · `onPause` · 자동 수집 | `@capacitor/app` |
+| `openExternal`(인앱 브라우저) · `closeInAppBrowser` · `onBrowserClosed` · 브로커 로그인 | `@capacitor/browser` (+ `system:true` 는 `@capacitor/app-launcher`) |
+| `share` · `haptic` · `onKeyboard` · `getDeviceInfo` | `@capacitor/share` · `@capacitor/haptics` · `@capacitor/keyboard` · `@capacitor/device` |
+| `setPref`·`getPref`·`removePref` · `rememberLastLogin`·`getLastLogin` | `@capacitor/preferences` |
+| `registerPush` · `permissionStatus('notifications')` | `@capacitor/push-notifications` (+ iOS 토큰 `@capacitor-community/fcm`) |
+| `secureSet`·`secureGet` · `authenticate` | `@aparajita/capacitor-secure-storage` · `@aparajita/capacitor-biometric-auth` |
+| `scheduleNotification` · `copyToClipboard` · `getNetworkStatus` · `takePhoto` · `getLocation` | `@capacitor/local-notifications` · `@capacitor/clipboard` · `@capacitor/network` · `@capacitor/camera` · `@capacitor/geolocation` |
+| `requestTracking`(iOS) · Remote Config | `capacitor-plugin-app-tracking-transparency` · `@capacitor-firebase/remote-config` |
+
+- 버전은 셸(`build/<slug>/package.json`)과 **같은 메이저**(Capacitor 8)로 맞춘다.
+- 웹 빌드만 신경 쓰는 번들러 설정이 이 패키지들을 통째로 제외하는 실수가 가장 흔하다. 제외는 **설치하지 않은 것만**
+  한다(참조: poptale-web-v2 `next.config.ts` + `src/lib/harness/nativeModules.ts`). 동적 import 라 웹 첫 로드에는 실리지 않는다.
+- 확인: 앱 WebView 콘솔(`chrome://inspect`)에 `Cannot find module '@capacitor/…'` 가 없어야 하고, logcat 에
+  `No listeners found for event appUrlOpen`/`backButton` 이 없어야 한다.
 
 ## 2. API 한눈에
 

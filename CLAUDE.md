@@ -69,7 +69,7 @@
 | 03 | [STRATEGY](docs/03-STRATEGY.md) | 전략 | 전체 | active | 2026-05-30 | 왜 이 구조인가 — 결정과 이유 |
 | 04 | [NEW-APP-CHECKLIST](docs/04-NEW-APP-CHECKLIST.md) | 앱추가 | 배포담당자 | active | 2026-08-20 | 사람이 직접 할 콘솔·계정 작업 전부 |
 | 05 | [SETUP](docs/05-SETUP.md) | 앱추가 | 개발자 | active | 2026-05-30 | 환경·키 단계별 준비 |
-| 06 | [INTEGRATION](docs/06-INTEGRATION.md) | 앱추가 | 개발자 | active | 2026-09-11 | 프론트 통합 — bridge·어댑터·API |
+| 06 | [INTEGRATION](docs/06-INTEGRATION.md) | 앱추가 | 개발자 | active | 2026-09-23 | 프론트 통합 — bridge·어댑터·API |
 | 07 | [HOWTO-DEPLOY](docs/07-HOWTO-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-09-07 | 배포 실전 절차 (진입점) |
 | 08 | [DEPLOY](docs/08-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-09-07 | CI/CD·시크릿·서명 상세 |
 | 09 | [CREDENTIALS](docs/09-CREDENTIALS.md) | 빌드배포 | 배포담당자 | active | 2026-09-04 | 자격증명 단일 출처 |

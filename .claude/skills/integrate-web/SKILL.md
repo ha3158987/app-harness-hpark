@@ -27,6 +27,9 @@ description: 기존 웹 서비스 레포를 하네스에 "연결"한다. 웹 코
    필요한 블록(auth/iap/marketing/monitoring) 채운다. (스키마: docs/02-GUIDE.md §6, docs/10-AUTH.md, docs/11-IAP.md)
 2. **의존성 추가** — 웹 레포에 `@harness/bridge` 추가.
    - 모노레포면 `file:` 경로, 아니면 배포된 패키지/깃 의존성.
+   - **켤 기능의 Capacitor 플러그인 JS 패키지도 같이 설치한다**(`@capacitor/app`·`@capacitor/browser` 등 —
+     docs/06-INTEGRATION.md §1b 표). 브릿지가 이것들을 동적 import 하므로 웹 번들에 없으면 앱에서도 딥링크·뒤로·
+     인앱 브라우저가 조용히 죽는다. 번들러에서 제외(IgnorePlugin/externals)하는 건 **설치하지 않은 패키지만**.
 3. **어댑터 배치** — `template/integration/harness-adapter.js` 를 웹 레포의 적절한 위치
    (예: `src/native/harness-adapter.js`)로 복사. (TS 레포면 타입 주석/`.ts` 로 조정)
 4. **부트스트랩 연결** — 앱 엔트리(예: `main`/`App` 초기화)에서 `initHarness({ onDeepLink })` 1회 호출.
