@@ -1735,7 +1735,8 @@ class AppBridgeImpl {
 
   // ── 콘텐츠 보호 / 뷰어 UX ────────────────────────────────────────────────
   // 코어 네이티브 브릿지(AppBridgePlugin)에 구현. features.viewer(캡처차단·밝기) 를 켠 앱에서만 동작.
-  // 밝기는 시스템 밝기와 독립(창 단위). 웹/미지원 환경에선 조용히 no-op.
+  // 밝기: Android=창 단위(시스템 밝기와 독립). iOS=UIScreen 밝기(=시스템 밝기, 네이티브가 앱 이탈 시 원복·복귀 시 재적용).
+  // 웹/미지원 환경에선 조용히 no-op.
 
   /** 화면 캡쳐/스크린샷 방지 on/off. 보통 뷰어 경로 진입/이탈 시 토글(autoBlockCaptureOnPaths 헬퍼).
    *  Android=창 FLAG_SECURE(스크린샷·최근앱 썸네일·화면녹화 차단). iOS=OS 미지원(스크린샷 차단 불가) → no-op. */
@@ -1745,14 +1746,14 @@ class AppBridgeImpl {
     }
   }
 
-  /** 뷰어 밝기(시스템과 독립, 창 단위). 0.0~1.0, 음수=시스템 밝기로 복귀. */
+  /** 뷰어 밝기. 0.0~1.0, 음수=시스템 밝기로 복귀. Android 는 창 단위, iOS 는 시스템 밝기를 직접 바꾼다(앱 밖에선 네이티브가 원복). */
   async setBrightness(value) {
     if (this.isNative && this.capabilities.viewer) {
       try { await Native.setBrightness({ value: typeof value === 'number' ? value : -1 }); } catch { /* 무시 */ }
     }
   }
 
-  /** 현재 적용된 뷰어 밝기(0.0~1.0). 미설정/미지원이면 null. */
+  /** 마지막으로 setBrightness 로 적용한 뷰어 밝기(0.0~1.0). 미설정/미지원이면 null. (기기 실측값이 아니라 적용값 — iOS 자동 밝기로 흔들리지 않는다) */
   async getBrightness() {
     if (this.isNative && this.capabilities.viewer) {
       try {

@@ -388,10 +388,12 @@ export interface AppBridgeSDK {
    */
   blockCapture?(enabled: boolean): Promise<void> | void;
   /**
-   * 뷰어 밝기 (시스템 밝기와 독립). 0.0~1.0, 음수=시스템값 복귀.
+   * 뷰어 밝기. 0.0~1.0, 음수=시스템값 복귀.
+   * Android=창 단위(시스템과 독립). iOS=시스템 밝기 자체를 바꾸며, 앱이 포그라운드를 벗어나면
+   * 네이티브가 시스템값으로 원복하고 복귀 시 재적용한다.
    */
   setBrightness?(value: number): Promise<void> | void;
-  /** 현재 적용된 뷰어 밝기. setBrightness 호출 후 갱신. */
+  /** 마지막으로 적용한 뷰어 밝기(기기 실측값 아님). setBrightness 호출 후 갱신, 미설정이면 null. */
   getBrightness?(): Promise<number | null>;
 }
 

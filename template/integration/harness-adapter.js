@@ -172,7 +172,7 @@ export async function fetchWallet(url = '/wallet') {
 //      `AppBridge.login('google')` 같은 표준 API 로 라우팅.
 //   3) 앱→웹 방향은 `dispatchAppEvent(detail, 'poptaleApp')` 로 CustomEvent 발사.
 //
-// 기본 라우트는 Poptale 의 누적 규약 추정값(login/logout/purchase/share/external/haptic/track).
+// 기본 라우트는 Poptale 의 누적 규약 추정값(login/logout/purchase/share/external/haptic/track/brightness).
 // 정확한 규약은 각 서비스의 docs/app-web-connection.md 정본을 따라 routes 로 override.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -236,6 +236,12 @@ export function installAppChannelShim(opts = {}) {
       if (!userId) throw new Error('app-channel set-user: userId required');
       const { userId: _u, ...traits } = query;
       return AppBridge.setUser(userId, traits);
+    },
+    // 뷰어 밝기 — 팝테일 웹 `sendBrightnessValue` 가 보내는 `poptale://brightness?value=0.0~1.0`.
+    // 값이 없거나 숫자가 아니면 시스템 밝기로 복귀(-1).
+    'brightness': (path, query) => {
+      const v = Number(path[0] ?? query.value);
+      return AppBridge.setBrightness(Number.isFinite(v) ? v : -1);
     },
     // 'navigate' 는 라우터 책임 — 기본은 no-op. 웹이 routes 로 override 한다.
     'navigate': () => undefined,
