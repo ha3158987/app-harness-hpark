@@ -33,6 +33,19 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async { [weak self] in
             self?.bridge?.webView?.allowsBackForwardNavigationGestures = true
         }
+        // Viewer brightness lifecycle (see setBrightness). UIScreen.brightness IS the system
+        // brightness on iOS, so a viewer value must not leak outside the app: hand the system
+        // value back whenever the app leaves the foreground (home, app switcher, swipe-kill, lock)
+        // and re-apply the viewer value when it comes back.
+        let nc = NotificationCenter.default
+        nc.addObserver(self, selector: #selector(viewerBrightnessSuspend),
+                       name: UIApplication.willResignActiveNotification, object: nil)
+        nc.addObserver(self, selector: #selector(viewerBrightnessResume),
+                       name: UIApplication.didBecomeActiveNotification, object: nil)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     @objc func getConfig(_ call: CAPPluginCall) {
@@ -138,34 +151,66 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     // ── Content protection / Viewer UX ─────────────────────────────────────
     // Brightness is real (UIScreen). Screenshot blocking is NOT available via any public iOS API
     // (unlike Android FLAG_SECURE), so blockCapture resolves as a no-op — screen-recording blur is a follow-up.
+    //
+    // Unlike Android's window-level screenBrightness, UIScreen.main.brightness is the device's
+    // system brightness (Control Center slider moves with it, and the OS keeps it after the app
+    // dies). Device check 2026-09-28 (iPhone 13 Pro, iOS 26.6): swipe-killing the app left the
+    // whole phone dark, and lock/unlock had the OS restore its own value while the plugin still
+    // reported the viewer value. So:
+    //   - savedBrightness  = system value captured when the viewer first set a brightness
+    //   - viewerBrightness = last value the viewer applied; getBrightness returns THIS, not the
+    //     live UIScreen reading (auto-brightness keeps nudging the live value: 0.1 read back as
+    //     0.05–0.2 on device)
+    //   - willResignActive → restore savedBrightness; didBecomeActive → re-apply viewerBrightness
 
     private var savedBrightness: CGFloat?
+    private var viewerBrightness: CGFloat?
 
     @objc func blockCapture(_ call: CAPPluginCall) {
         call.resolve()
     }
 
+    /// value 0.0~1.0 applies a viewer brightness; negative (or missing) hands control back to the system.
     @objc func setBrightness(_ call: CAPPluginCall) {
         let value = call.getDouble("value") ?? -1.0
         DispatchQueue.main.async {
             if value < 0 {
                 if let s = self.savedBrightness { UIScreen.main.brightness = s }
                 self.savedBrightness = nil
+                self.viewerBrightness = nil
             } else {
                 if self.savedBrightness == nil { self.savedBrightness = UIScreen.main.brightness }
-                UIScreen.main.brightness = CGFloat(max(0.0, min(1.0, value)))
+                let v = CGFloat(max(0.0, min(1.0, value)))
+                self.viewerBrightness = v
+                UIScreen.main.brightness = v
             }
             call.resolve()
         }
     }
 
+    /// Last viewer brightness applied via setBrightness, or -1 (JS maps to null) when following the system.
     @objc func getBrightness(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            if self.savedBrightness == nil {
-                call.resolve(["value": -1])
+            if let v = self.viewerBrightness {
+                call.resolve(["value": Double(v)])
             } else {
-                call.resolve(["value": Double(UIScreen.main.brightness)])
+                call.resolve(["value": -1])
             }
         }
+    }
+
+    /// App is leaving the foreground: give the system its brightness back but keep the viewer
+    /// state so the value comes back on resume. Runs on the main thread (UIKit notification).
+    @objc private func viewerBrightnessSuspend() {
+        guard viewerBrightness != nil, let s = savedBrightness else { return }
+        UIScreen.main.brightness = s
+    }
+
+    /// App is back in the foreground: the OS may have changed the system value while we were
+    /// away (lock screen, Control Center), so re-capture it as the restore target, then re-apply.
+    @objc private func viewerBrightnessResume() {
+        guard let v = viewerBrightness else { return }
+        savedBrightness = UIScreen.main.brightness
+        UIScreen.main.brightness = v
     }
 }
