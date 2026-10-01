@@ -7,9 +7,9 @@ description: 사내 테스트용 Android APK 를 빌드해 GCS 공개 버킷의 
 
 스토어를 거치지 않고 **URL 하나로 받아 설치**하는 경로. 링크가 고정이라 **QR 은 한 번 만들면 영구 재사용**한다.
 
-- 버킷: `gs://chat-dev-poptale-dist` (project `poptale-chat`, allUsers 읽기)
-- 고정 링크: `https://storage.googleapis.com/chat-dev-poptale-dist/android/<slug>.apk`
-- QR: `build/<slug>-apk-qr.png` / `.svg` (링크가 안 바뀌므로 **재생성 불필요** — 이미 배포한 QR 그대로 유효)
+- 버킷: `gs://poptale-nonprod-app-dist` (project `poptale-nonprod`, 서울, allUsers 읽기)
+- 고정 링크: `https://storage.googleapis.com/poptale-nonprod-app-dist/android/<slug>.apk`
+- QR: `build/<slug>-apk-qr.png` / `.svg` (링크가 안 바뀌므로 **재생성 불필요**. 단 2026-10-01 버킷을 싱가포르 `chat-dev-poptale-dist` → 서울로 옮겨 링크가 한 번 바뀌었다 — 그 전 QR 은 옛 빌드에 멈춰 있으니 한 번 새로 뿌린다)
 
 ## 절차
 

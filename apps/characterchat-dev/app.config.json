@@ -88,7 +88,7 @@
   "firebase": {
     "enabled": true,
     "project": {
-      "dev": "poptale-chat"
+      "dev": "poptale-nonprod"
     },
     "fcm": true,
     "remoteConfig": true,

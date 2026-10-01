@@ -358,7 +358,7 @@ checkForceUpdate()
 | # | 사항 | 대응 |
 |---|---|---|
 | 1 | **캐시 지연.** RC 는 `minimumFetchInterval` 동안 서버를 다시 찌르지 않는다. poptale 은 prod 12시간(`config.dart:145`). 콘솔에서 눌러도 사용자 반영이 최대 그만큼 늦는다 | 강제 업데이트는 긴급성이 있으므로 **prod 1시간 / debug 0** 을 기본값으로 두고 `firebase.remoteConfig.fetchIntervalSeconds` 로 앱별 조정 가능하게 한다 |
-| 2 | **Firebase 파일 필수.** iOS `GoogleService-Info.plist`, Android `google-services.json` 이 있어야 RC 가 동작 | characterchat-dev 는 이미 `firebase.enabled: true` (FCM, 프로젝트 `poptale-chat`) — **프로젝트를 새로 만들 필요는 없다.** characterchat(prod)은 `firebase` 블록 자체가 없어 신규 설정 필요 |
+| 2 | **Firebase 파일 필수.** iOS `GoogleService-Info.plist`, Android `google-services.json` 이 있어야 RC 가 동작 | characterchat-dev 는 이미 `firebase.enabled: true` (FCM, 프로젝트 `poptale-nonprod` — 2026-10-01 싱가포르 `poptale-chat` 에서 이전) — **프로젝트를 새로 만들 필요는 없다.** characterchat(prod)은 `firebase` 블록 자체가 없어 신규 설정 필요 |
 | 3 | **앱 재빌드 필요.** 플러그인이 추가되므로 config 만 바꿔서는 안 되고 iOS/Android 재빌드가 있어야 한다 | 첫 배선 시 1회. 이후 값 변경은 재빌드 불필요(그게 RC 의 목적) |
 
 **RC 파라미터 규약 (Firebase 콘솔에 만들 키)**
@@ -388,7 +388,7 @@ checkForceUpdate()
   "enabled": true,
   "remoteConfig": true,                    // ← 브릿지가 이 플래그를 실제로 소비하게 만든다(현재는 미소비)
   "remoteConfigFetchIntervalSeconds": 3600,
-  "project": { "dev": "poptale-chat", "prod": "<prod 프로젝트>" }
+  "project": { "dev": "poptale-nonprod", "prod": "<prod 프로젝트>" }
 }
 ```
 
