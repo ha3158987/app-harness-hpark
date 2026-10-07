@@ -18,7 +18,8 @@
     "primary": "#000000",
     "statusBarStyle": "light",
     "background": "#000000",
-    "splashBackground": "#0e8af2",
+    "splashBackground": "#f4f9ff",
+    "splashBackgroundDark": "#0b1420",
     "splashDuration": 2500
   },
   "features": {
