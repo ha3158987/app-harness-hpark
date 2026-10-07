@@ -1711,26 +1711,33 @@ function patchNativeVersion(buildDir, cfg) {
 // 시스템 기본(밝은) 배경이 나오는 버그가 있어, 여기서 배경색 + 전용 아이콘을 주입한다.
 //   배경색  = theme.splashBackground || theme.background
 //   아이콘  = apps/<slug>/splash_icon.png(투명 권장) 있으면 사용, 없으면 런처 foreground
+//   다크    = theme.splashBackgroundDark → values-night, apps/<slug>/splash_icon-dark.png → drawable-night
+//             (iOS 다크는 @capacitor/assets 가 splash-dark.png 로 처리한다)
 function patchAndroidSplash(buildDir, cfg) {
   const resDir = join(buildDir, 'android', 'app', 'src', 'main', 'res');
   const stylesFile = join(resDir, 'values', 'styles.xml');
   if (!existsSync(stylesFile)) return;
   const splashBg = cfg.theme.splashBackground || cfg.theme.background;
 
-  // 1) colors.xml 에 splashBackground 등록(없으면 생성, 있으면 갱신)
-  const colorsFile = join(resDir, 'values', 'colors.xml');
-  let colors = existsSync(colorsFile)
-    ? readFileSync(colorsFile, 'utf8')
-    : '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n';
-  if (colors.includes('name="splashBackground"')) {
-    colors = colors.replace(/<color name="splashBackground">[^<]*<\/color>/,
-      `<color name="splashBackground">${splashBg}</color>`);
-  } else {
-    colors = colors.replace('</resources>',
-      `    <color name="splashBackground">${splashBg}</color>\n</resources>`);
-  }
-  mkdirSync(dirname(colorsFile), { recursive: true });
-  writeFileSync(colorsFile, colors);
+  // 1) colors.xml 에 splashBackground 등록(없으면 생성, 있으면 갱신).
+  //    다크 배경은 같은 이름을 values-night 에 두어 OS 가 모드에 맞춰 고르게 한다.
+  const putSplashColor = (dir, color) => {
+    const colorsFile = join(resDir, dir, 'colors.xml');
+    let colors = existsSync(colorsFile)
+      ? readFileSync(colorsFile, 'utf8')
+      : '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n';
+    if (colors.includes('name="splashBackground"')) {
+      colors = colors.replace(/<color name="splashBackground">[^<]*<\/color>/,
+        `<color name="splashBackground">${color}</color>`);
+    } else {
+      colors = colors.replace('</resources>',
+        `    <color name="splashBackground">${color}</color>\n</resources>`);
+    }
+    mkdirSync(dirname(colorsFile), { recursive: true });
+    writeFileSync(colorsFile, colors);
+  };
+  putSplashColor('values', splashBg);
+  if (cfg.theme.splashBackgroundDark) putSplashColor('values-night', cfg.theme.splashBackgroundDark);
 
   // 2) 전용 스플래시 아이콘(투명 배경 권장) 복사. 없으면 런처 foreground 로 폴백.
   let animatedIcon = '@mipmap/ic_launcher_foreground';
@@ -1740,6 +1747,12 @@ function patchAndroidSplash(buildDir, cfg) {
     mkdirSync(dirname(dstIcon), { recursive: true });
     copyFileSync(srcIcon, dstIcon);
     animatedIcon = '@drawable/splash_icon';
+    const srcIconDark = join(ROOT, 'apps', cfg.slug, 'splash_icon-dark.png');
+    if (existsSync(srcIconDark)) {
+      const dstIconDark = join(resDir, 'drawable-night', 'splash_icon.png');
+      mkdirSync(dirname(dstIconDark), { recursive: true });
+      copyFileSync(srcIconDark, dstIconDark);
+    }
   }
 
   // 3) AppTheme.NoActionBarLaunch 에 windowSplashScreen* 주입 (idempotent)
