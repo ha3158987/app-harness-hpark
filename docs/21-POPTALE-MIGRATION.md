@@ -4,7 +4,7 @@ title: POPTALE-MIGRATION — Poptale Flutter → Capacitor 하네스 이전
 category: 마이그레이션
 audience: 전체
 status: active
-updated: 2026-06-01
+updated: 2026-10-07
 ---
 
 # POPTALE-MIGRATION — Poptale Flutter → Capacitor 하네스 이전
@@ -15,6 +15,10 @@ updated: 2026-06-01
 >
 > 📌 **선행 필독**: [`01-AIPIA-CONVENTIONS.md`](./01-AIPIA-CONVENTIONS.md) — 번들ID/도메인/소셜/SDK 등 *전사 표준*.
 > 이 문서는 AIPIA-CONVENTIONS 위에 *Poptale 특이값* 만 다룬다.
+>
+> 🆕 **2026-10-07 — 실제로 가는 길은 §10(V2 경로)이다.** 옛 웹(`poptale-frontend`)에 shim 을 붙이는 §3~§9 대신, 새 리더 웹
+> (`poptale-web-v2`)을 `apps/poptale-v2-dev` 셸에 올려 검증하고, 운영 전환 때 같은 번들(`com.aipia.poptale`)로 교체한다.
+> §1~§9 는 레거시 Flutter 앱과 호환해야 할 항목 목록으로 그대로 유효하다.
 
 ---
 
@@ -153,6 +157,8 @@ P0 = 10주 안에 반드시. P1 = Poptale 마이그 직전. P2 = 이후.
 | 마케팅 SDK (Adbrix·Amplitude·AppsFlyer) | [`13-MARKETING.md`](./13-MARKETING.md) |
 | 빌드/CI/시크릿 | [`08-DEPLOY.md`](./08-DEPLOY.md) |
 | Poptale 레퍼런스 config | [`apps/poptale/app.config.json`](../apps/poptale/app.config.json), [`apps/poptale-dev/app.config.json`](../apps/poptale-dev/app.config.json) |
+| **V2 앱 config (새 리더 웹)** | [`apps/poptale-v2-dev/app.config.json`](../apps/poptale-v2-dev/app.config.json) — §10 |
+| V2 인증 연동(인계 총괄) | poptale-web-v2 `docs/AUTH-IDP-HANDOFF.md` · FE `docs/AUTH-IDP-FE.md` · poptale-backend `docs/auth-idp/README.md` |
 | AppChannel shim 사용 | `template/integration/harness-adapter.js` 의 `installAppChannelShim()` |
 | 네이티브 플러그인 작업 사양 | `template/plugins/{adbrix,whatap}/SPEC.md` (Kakao/Naver 는 2026-09-11 삭제) |
 | Poptale Flutter 동작 정본 | [`aipia-team/poptale-app`](https://github.com/aipia-team/poptale-app) 의 `.claude/docs/app-web-connection.md` |
@@ -176,4 +182,71 @@ autoBlockCaptureOnPaths();                       // /viewer 진입 시 자동 �
 
 ---
 
-**Last Updated**: 2026-06-01
+## 10. V2 경로 — 새 리더 웹(poptale-web-v2) + `apps/poptale-v2-dev` (2026-10-07)
+
+### 무엇이 됐나
+
+| 항목 | 값 |
+|---|---|
+| 앱 | `apps/poptale-v2-dev` · `com.aipia.poptale.v2.dev` · v2.0.0(1) — 레거시 dev 앱(`com.aipia.poptale.dev`)과 나란히 설치된다 |
+| 웹(startUrl) | poptale-web-v2 → Cloud Run `poptale-dev-web`(서울) `https://poptale-dev-web-188609021980.asia-northeast3.run.app` |
+| 인증 | **A′ 브로커**(`providers: []` + `oauthReturnScheme: true`) — 게이트웨이 poptale-backend(`client=poptale`). 앱 복귀 `com.aipia.poptale.v2.dev://oauth/callback`. 정본 [`25-AUTH-DELEGATION.md`](./25-AUTH-DELEGATION.md) §3 "팝테일 V2" |
+| 브릿지 엔드포인트 | V2 웹 같은 오리진 BFF `/api/app/logout` · `/api/app/withdraw` · `/api/app/device` · `/api/app/device/unregister`(쿠키 `pt_session`). `signupEndpoint` 없음 |
+| WebView 이동 허용 | V2 호스트 하나. API 는 fetch 라 무관, 브로커 로그인은 인앱 브라우저라 auth·공급자 도메인 불필요 |
+| 앱 링크 | `navigation.appLinkDomains` = V2 호스트 하나 — 팝챗(`chat.dev.poptale.ai`)과 겹치지 않는다([`02-GUIDE.md`](./02-GUIDE.md) §6) |
+| 켠 기능 | push · deepLink · share · haptics · viewer(캡처 차단 `/viewer` · 밝기) · darkMode. **끈 것**: camera · secureStorage · localNotification · clipboard(V2 가 그 브릿지 API 를 안 쓰고 플러그인 JS 도 번들하지 않는다) |
+| iOS 문구 | camera 를 꺼도 1:1 문의 `<input type=file accept=image/*>` 가 iOS 에서 카메라·사진을 연다 → `ios.usageDescriptions` 로 카메라·사진 보관함 문구만 둔다(없으면 "사진 찍기"에서 앱이 죽는다) |
+| Firebase | `poptale-nonprod`(서울 — 팝챗 dev 와 같은 프로젝트). 레거시 `*-aipia-poptale` 아님 |
+| 브릿지 | `1.5.0-beta.5`(하네스 커밋). V2 웹은 레지스트리가 아니라 `vendor/harness-bridge` 사본 — publish 뒤 교체 절차는 25 §6 |
+
+레거시 Flutter 앱(`com.aipia.poptale`)과 레거시 경로(`user/login/app/{p}`, uuid 웹 OAuth)는 **손대지 않는다**(계약 결정 3).
+운영 전환 때 같은 번들로 교체한다 — 그때 §3 호환성 매트릭스를 다시 본다.
+
+### 정식 도메인으로 옮길 때 — 교체 지점
+
+V2 dev 웹의 정식 도메인(`web.dev.poptale.ai`)은 AWS→GCP 이전 뒤에 붙는다. 그때 `apps/poptale-v2-dev/app.config.json` 에서
+**같은 호스트 문자열 하나**를 아래 9곳에서 일괄 치환한다:
+
+- `startUrl` · `navigation.allowedDomains` · `navigation.appLinkDomains`
+- `auth.logoutEndpoint` · `auth.deleteEndpoint` · `auth.deviceEndpoint` · `auth.deviceUnregisterEndpoint`
+- `legal.privacyUrl` · `legal.termsUrl`
+
+함께 할 것: 새 호스트에 AASA·assetlinks 배포(아래 4) → 인증서버·BE 의 **웹** 복귀 주소(`<새 오리진>/auth/callback`) 갱신
+(앱 스킴 복귀는 그대로) → 앱 재빌드(config 는 바이너리에 구워진다 — 25 §6). 앱 링크는 add-once 라 로컬 `build/` 는 지우고 만든다.
+
+### 남은 외부 작업 (PR #59)
+
+| # | 작업 | 누가 · 어디서 | 이름 · 값 |
+|---|---|---|---|
+| 1 | Firebase 앱 등록 — Android `com.aipia.poptale.v2.dev` · iOS 같은 번들 | Firebase 관리 권한자(`poptale-nonprod`, 박현아) | `google-services.json` · `GoogleService-Info.plist` 받기. iOS 푸시는 APNs 인증 키 업로드 |
+| 2 | GitHub 시크릿·변수 | 레포 관리자 | 시크릿 `GOOGLE_SERVICES_B64_POPTALE_V2_DEV` · `GOOGLE_SERVICE_INFO_PLIST_B64_POPTALE_V2_DEV`(base64). App Distribution·APK 링크를 쓸 때 변수 `FIREBASE_WIF_PROVIDER_POPTALE_V2_DEV` · `FIREBASE_WIF_SERVICE_ACCOUNT_POPTALE_V2_DEV`(같은 프로젝트라 `CHARACTERCHAT_DEV` 값과 같다) · `APK_DIST_BUCKET_POPTALE_V2_DEV`. Adbrix 를 켤 때 `ADBRIX_APP_KEY_POPTALE_V2_DEV` · `ADBRIX_SECRET_KEY_POPTALE_V2_DEV` — [`08-DEPLOY.md`](./08-DEPLOY.md) §4·§10 |
+| 3 | Apple App ID · 프로파일 | Apple Developer | `com.aipia.poptale.v2.dev` + `com.aipia.poptale.v2.dev.NotificationService`, Associated Domains · Push capability → match 프로파일 재생성([`04-NEW-APP-CHECKLIST.md`](./04-NEW-APP-CHECKLIST.md) §C) |
+| 4 | 서명 지문 · `.well-known` | 서명 키 결정 → V2 웹 레포 | SHA-256 2개(업로드 키 + Play 앱 서명 키)를 `android.sha256CertFingerprints` 에 → `node scripts/generate-app.mjs --slug poptale-v2-dev --skip-install` 로 생성한 `build/poptale-v2-dev/well-known/<V2 호스트>/` 의 AASA(`3W889GYPRK.com.aipia.poptale.v2.dev`)·assetlinks 를 V2 웹 `public/.well-known/` 에 **합쳐서** 배포(레거시 Flutter 앱 항목을 지우지 않는다). 지문 전에는 AASA 만 나온다 |
+| 5 | 복귀 주소 등록 | auth 운영자(SQL) · poptale-backend env | `com.aipia.poptale.v2.dev://oauth/callback` 을 `auth_clients.poptale.allowed_redirect_uris` 와 BE 복귀 허용 목록에(정확 일치) |
+| 6 | 아이콘 · 스플래시 | 디자인 → `generate-assets` 스킬 | `apps/poptale-v2-dev/icon.png`(1024²) · `splash.png`(2732²) — 지금 없음(디버그 빌드는 됨) |
+| 7 | iOS 수출 규정 신고값 | 사람 판단 | `ios.usesNonExemptEncryption` 미정 — 정하기 전엔 TestFlight 빌드마다 질문이 뜬다([`07-HOWTO-DEPLOY.md`](./07-HOWTO-DEPLOY.md) §6) |
+| 8 | 브릿지 beta.5 발행 · 웹 반영 | 패키지 쓰기 권한자 | 25 §6 "1.5.0-beta.5 배포" — 팝챗 웹 의존성 갱신 + V2 vendor 사본 교체 |
+
+### 확인 필요 — 실기기에서 본다
+
+- **PortOne/PASS 본인인증**: V2 는 모바일에서 **전체 리다이렉트**(WebView 가 PortOne·통신사 페이지로 이동했다가 V2 로 돌아옴)다.
+  `allowedDomains` 밖 이동은 외부 브라우저로 나가므로, 본인인증이 앱 밖에서 끝나 결과가 앱에 안 돌아올 수 있다.
+  **추측으로 도메인을 넣지 않았다** — 실기기에서 실제로 거치는 호스트를 관찰한 뒤 ① 그 호스트를 `allowedDomains` 에 넣거나
+  ② 본인인증을 인앱 브라우저 + 앱 스킴 복귀로 바꾼다(팝챗은 본인인증을 안 써서 검증된 적 없는 경로다).
+- 브로커 SNS 왕복(인앱 브라우저 → `com.aipia.poptale.v2.dev://oauth/callback` → WebView 상환) · 취소(창 닫기).
+- 브릿지 호출에 `pt_session` 이 실리는지 — 푸시 등록(`/api/app/device`) · 로그아웃 · 탈퇴(2단계).
+- App Links 검증 — `adb shell pm get-app-links com.aipia.poptale.v2.dev` 가 `verified`.
+
+### 손대지 않은 것 (범위 밖)
+
+- **결제(IAP)**: `iap` 블록 그대로. `iap.verifyEndpoint`(`/api/v2/iap/verify`)는 **poptale-backend 에 없다** — 브릿지 `purchase()` 의
+  영수증 검증(`cordova-plugin-purchase` validator)은 지금 실패한다. 하네스 IAP 를 쓰려면 BE 검증 엔드포인트 계약부터 정한다.
+- **ATT**: `tracking` 블록 없음(= `capabilities.att` false → V2 의 사전 안내·`requestTracking` 이 뜨지 않음). 켜려면 함께:
+  ① V2 웹 dependencies 에 `capacitor-plugin-app-tracking-transparency`(지금 번들 제외) ② `tracking.att.enabled` +
+  `usageDescription`(실제 용도 문구, 법무 확인) + `prePermission: true`(V2 가 사전 안내를 직접 그린다) ③ 앱 재빌드.
+- **Adbrix**: config 는 `adbrix` 지만 `@aipia-team/capacitor-adbrix` JS 가 공개 레지스트리에 없어 V2 웹이 번들하지 못한다 →
+  `initMarketing` 은 plugin-missing 으로 끝난다.
+
+---
+
+**Last Updated**: 2026-10-07

@@ -4,7 +4,7 @@ title: AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-09-11
+updated: 2026-10-07
 ---
 
 # AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
@@ -18,6 +18,10 @@ updated: 2026-09-11
 > 돌지 않고(길 B 미사용), 서비스 BE 의 `start` 를 인앱 브라우저로 열어 인증서버가 커스텀 스킴으로 돌려준
 > `code` 를 앱 WebView 가 상환한다. 하네스 배선은 `auth.oauthReturnScheme: true` 하나(#34). 신규 앱의
 > 기본도 이 형태다. 길 B 는 poptale(국내)·aipia 가 쓴다. §3·§4·§7 은 두 형태를 나눠 적었다.
+>
+> ✅ **2026-10-07 — 팝테일 V2(`poptale-v2-dev`)도 A′ 브로커다.** 게이트웨이는 poptale-backend(`client=poptale`),
+> 앱 복귀는 `com.aipia.poptale.v2.dev://oauth/callback`. 팝챗과 다른 점은 브릿지 엔드포인트가 BE 가 아니라
+> **V2 웹의 같은 오리진 BFF** 라는 것 하나다 — §3 "팝테일 V2" 절.
 
 > **IdP 를 자체 구축하는 경로(Keycloak)는 레거시다.** 신규 앱은 쓰지 않는다 — [`10-AUTH.md`](10-AUTH.md).
 > 우리가 IdP 를 지으려던 이유는 "IdP 가 없어서" 였는데, 이제 운영 중인 것이 있으므로 지을 이유가 없다.
@@ -79,10 +83,12 @@ updated: 2026-09-11
 
 ### 어느 앱이 어느 길인가
 
-| 앱 | 경로 | 이유 |
-|---|---|---|
-| **팝챗(characterchat·-dev)** · **팝테일 글로벌(신규)** | **A′ 브로커** | 앱이 공급자 clientId 를 들면 인증서버 것과 갈릴 때 **같은 사람이 웹·앱 두 계정이 된다** — 코드상 양쪽 다 정상으로 보여 끝까지 안 드러나는 사고다. 2026-09-03 확정. 인증서버가 `returnUrl` 에 커스텀 스킴을 받아 준다(auth 팀 확정) |
-| poptale · poptale-dev · aipia | **B** | 자체 BE 가 공급자 자격증명을 받는 기존 구조. 변경 없음 |
+| 앱 | 경로 | 게이트웨이(인증서버를 부르는 서비스 BE) · `client` | 앱 복귀 주소 | 이유 |
+|---|---|---|---|---|
+| **팝챗(characterchat·-dev)** | **A′ 브로커** | character-chatbot-api · `popchat` | `com.aipia.characterchat.dev://oauth/callback`(dev) | 앱이 공급자 clientId 를 들면 인증서버 것과 갈릴 때 **같은 사람이 웹·앱 두 계정이 된다** — 코드상 양쪽 다 정상으로 보여 끝까지 안 드러나는 사고다. 2026-09-03 확정. 인증서버가 `returnUrl` 에 커스텀 스킴을 받아 준다(auth 팀 확정) |
+| **팝테일 글로벌(poptale-global, 신규)** | **A′ 브로커** | 팝챗 BE 계약 그대로(호스트만 다름) · 미정 | `com.aipia.poptale.global://oauth/callback` | 위와 같음 |
+| **팝테일 V2(poptale-v2-dev)** | **A′ 브로커** | **poptale-backend · `poptale`** | **`com.aipia.poptale.v2.dev://oauth/callback`** | 2026-10-07 계약(바다 승인) — 팝챗과 같은 구조. BE 가 유일한 게이트웨이이고 인증서버 토큰은 BE 금고에만 둔다. 레거시 Flutter 앱은 레거시 경로 유지 |
+| poptale · poptale-dev · aipia | **B** | 자체 BE | `<appId>://oauth/<p>` | 자체 BE 가 공급자 자격증명을 받는 기존 구조. 변경 없음 |
 
 **신규 앱의 기본은 A′ 다.** 길 B 는 표준 OAuth 라 인증서버에 독립적이지만, 위 계정 분열 위험을 앱 쪽
 clientId 관리로 떠안는다. A′ 는 그 위험이 구조적으로 없고, 앱은 복귀 스킴 하나만 등록한다.
@@ -103,6 +109,29 @@ clientId 관리로 떠안는다. A′ 는 그 위험이 구조적으로 없고, 
   (+ 같은 폴더 `*.test.ts`)이다. 새 앱은 이 파일을 복사해 BE 경로만 맞춘다 — [`06-INTEGRATION.md`](06-INTEGRATION.md) §3 골격.
 - **브릿지 최소 버전은 §6 호환 매트릭스** — 인앱 브라우저·취소 판정은 `1.5.0-beta.2`, `rememberLastLogin` 브로커
   허용은 `1.5.0-beta.4`. 웹은 메서드 존재 여부로 폴백한다(참조 구현이 그렇게 되어 있다).
+
+### 팝테일 V2 — 팝챗과 같은 구조, 엔드포인트만 V2 웹의 같은 오리진 BFF (2026-10-07)
+
+| 항목 | 팝챗 | 팝테일 V2 (`apps/poptale-v2-dev`) |
+|---|---|---|
+| 웹 | character-chatbot-web (`chat.dev.poptale.ai`) | poptale-web-v2 — Cloud Run `poptale-dev-web` (`https://poptale-dev-web-188609021980.asia-northeast3.run.app`) |
+| 게이트웨이 · `client` | character-chatbot-api · `popchat` | poptale-backend · `poptale` (BE 자체 세션은 그대로, 인증서버 토큰은 BE 금고에만) |
+| SNS 시작(앱) | BE `start?platform=app` 를 인앱 브라우저로 | BE `GET /api/v2/oauth2/authorization/{p}?redirect=com.aipia.poptale.v2.dev://oauth/callback` 를 인앱 브라우저로 — 웹 플래그 `NEXT_PUBLIC_AUTH_IDP=on` 일 때만. off 면 지금의 `/auth/app-start` 경유(레거시 uuid) 그대로 |
+| 상환 | 앱 WebView → BE `POST /auth/social/redeem` | 앱 WebView → V2 BFF(`/api/auth/social/redeem`) → BE `POST /api/v2/user/login/social {userSocialRequestDto:{code}}` |
+| 브릿지 엔드포인트 | BE 호스트(`api.chat.dev.poptale.ai`) — 쿠키 Domain `.dev.poptale.ai` 라 같은 사이트 | **V2 웹 같은 오리진** `/api/app/logout` · `/api/app/withdraw` · `/api/app/device` · `/api/app/device/unregister` |
+| 세션 쿠키 | BE `cc_session` | V2 BFF `pt_session`(httpOnly, V2 호스트) — BE 는 Bearer 전용이라 BFF 가 바꿔 부른다 |
+| `signupEndpoint` | `/auth/signup`(`completeSignup`) | **없음** — V2 는 `completeSignup` 을 안 쓴다(가입은 BFF `/api/auth/signup`). 스토어 게이트는 `deleteEndpoint` 만 본다 |
+
+- 브릿지는 `fetch(endpoint, { credentials:'include' })` 로 부른다 — V2 BFF 는 **Origin 같은 출처 검사**로 CSRF 를 막는다
+  (브릿지는 `x-poptale-bff` 헤더를 못 붙인다). 바디는 브릿지 dist 가 보내는 모양 그대로다(`deleteAccount` = `{ deviceId }`,
+  기기 등록·해제 = `{ pushToken, deviceId, platform }`, 로그아웃 = 바디 없음).
+- 탈퇴는 팝챗과 같은 2단계 — 웹이 `POST /api/app/withdraw/reasons` 로 사유를 먼저 저장하고 `AppBridge.deleteAccount()` 가
+  `/api/app/withdraw` 를 부른다. 공용 계정이라 **팝챗 로그인도 함께 끊긴다**(auth 043 D4 — 탈퇴 화면에서 안내).
+- 사람 작업: 인증서버 `auth_clients.poptale.allowed_redirect_uris` 와 poptale-backend 복귀 허용 목록에
+  `com.aipia.poptale.v2.dev://oauth/callback`(정확 일치) 등록. 남은 외부 작업 전체는 [`21-POPTALE-MIGRATION.md`](21-POPTALE-MIGRATION.md) §10.
+- ⚠️ `--local` 로 만든 앱은 엔드포인트가 **배포 호스트를 그대로** 가리킨다 — 로컬 웹의 세션 쿠키가 실리지 않아 브릿지의
+  로그아웃·탈퇴·기기 등록 호출은 실패한다(웹 자신의 BFF 로그아웃은 된다). 로컬에서 이 셋까지 보려면 엔드포인트를 로컬
+  주소로 바꿔 생성한다(커밋하지 않는다).
 
 ### 길 B 가 남아 있는 이유
 
@@ -316,9 +345,49 @@ npm view @aipia-team/harness-bridge dist-tags
 | `1.5.0-beta.1` | #40 | 딥링크 보류분 1회 배달 + TTL · `onPause` · 로그아웃 정리(기기 토큰 해제·보류 딥링크 폐기) | 첫 시도 실패 교대 현상 해소. 취소 판정은 ③ + `onPause`×`onResume` |
 | `1.5.0-beta.2` | #42 | `closeInAppBrowser` · `onBrowserClosed` | **인앱 브라우저(②) 가능.** 없으면 웹은 ③ 폴백 |
 | `1.5.0-beta.3` | #45 | `rememberLastLogin` | 브로커 앱에서는 `provider-not-enabled` → `setPref` 우회 필요 |
-| `1.5.0-beta.4` | — | `rememberLastLogin` 브로커 허용(`unknown-provider` 게이트) · `capabilities.auth` 가 브로커 앱도 true | 우회 제거 가능 |
+| `1.5.0-beta.4` | #46 | `rememberLastLogin` 브로커 허용(`unknown-provider` 게이트) · `capabilities.auth` 가 브로커 앱도 true | 우회 제거 가능 |
+| `1.5.0-beta.5` | #58 · #60 · #59 | 뷰어 `blockCapture` · `setBrightness` · `getBrightness` + `capabilities.viewer`(#58) · iOS 밝기 라이프사이클(#60 — 네이티브, JS 는 주석만) · **콜드스타트 launch URL 을 WebView 세션당 1회만** · **같은 딥링크 3초 안 재도착은 1회만**(#59) | 전체 이동·새로 고침마다 콜드스타트 OAuth 복귀 `code` 가 다시 흘러 **이미 소비된 code 를 재상환하던 것** 과, launch URL 이 두 길(`appUrlOpen` 보류분 + `getLaunchUrl`)로 와 같은 화면이 두 번 쌓이던 것이 없어진다 |
 
 `latest` 태그는 안정판 `1.4.0` 에 둔다(위 publish 규칙).
+
+> ⚠️ **beta.5 이전에는 서로 다른 세 내용이 모두 `1.5.0-beta.4` 로 불렸다** — 레지스트리 = `7ee042b`(#46, 팝챗 웹 lockfile
+> integrity 로 확정), main = 그 위에 #58·#60(미발행), 팝테일 V2 `vendor/harness-bridge` = PR #59 `5eef54d`(딥링크 가드, #60 주석
+> 없음). 버전 문자열로 내용을 판단하지 말고 `dist/` 3파일 sha256 을 대조한다. beta.5 가 셋을 모두 담는다.
+
+### `1.5.0-beta.5` 배포 — 누가 · 무엇으로 · 그다음 (#59 머지 뒤)
+
+**누가**: `@aipia-team/harness-bridge` 패키지에 쓰기 권한이 있는 사람(GitHub Packages, aipia-team 조직). 지금까지 브릿지
+버전 상향은 박현아가 했다(beta.4 = `4108dee`). **에이전트는 publish 하지 않는다** — 되돌릴 수 없으므로 사람 확인 뒤에.
+
+**권한**: GitHub **classic PAT** — `write:packages`(+ `read:packages`), aipia-team SSO 승인. 사용자 `~/.npmrc` 에만 둔다
+(레포·문서에 토큰을 쓰지 않는다):
+
+```ini
+@aipia-team:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+**명령** (`main` 에 #59 가 들어간 뒤, 레포 루트에서):
+
+```bash
+git checkout main && git pull
+npm test                                             # 전부 통과
+cd template/bridge
+npm view @aipia-team/harness-bridge dist-tags        # latest 가 1.4.0(안정판)인지 먼저 본다
+npm publish --dry-run --tag beta                     # tarball 9파일: dist 3 · android 3 · ios 1 · podspec · package.json
+npm publish --tag beta                               # ⚠️ --tag beta 를 빼면 latest 가 베타로 옮겨간다
+npm view @aipia-team/harness-bridge dist-tags        # { beta: '1.5.0-beta.5', latest: '1.4.0' }
+```
+
+**그다음 — 웹 두 곳을 같은 내용으로 맞춘다** (브릿지 JS 는 웹 번들에 실려 나가므로 **웹 배포만으로** 설치된 앱에 닿는다):
+
+1. **팝챗 웹(character-chatbot-web)** — `npm i @aipia-team/harness-bridge@1.5.0-beta.5`(package.json `^1.5.0-beta.4` →
+   `^1.5.0-beta.5`, lockfile 갱신) → PR → Vercel 배포. lockfile 이 beta.4 로 고정돼 있어 범위만으로는 안 올라간다.
+   이걸 해야 팝챗 앱에도 콜드스타트 OAuth 복귀 재상환 방지가 들어간다.
+2. **팝테일 V2(poptale-web-v2)** — 레지스트리를 쓰지 않는 사본(`vendor/harness-bridge`, `file:` 의존성)이다.
+   `npm pack @aipia-team/harness-bridge@1.5.0-beta.5`(또는 하네스 태그 커밋의 `template/bridge`)에서 `dist/` 3파일을 그대로
+   덮고, `vendor/harness-bridge/package.json` version 과 `README.md` 의 출처 커밋을 고친다. 확인 = 3파일 sha256 이 하네스
+   커밋의 `template/bridge/dist/*` 와 같을 것.
 
 ### 무엇이 앱 재빌드를 필요로 하는가 — 브릿지 JS 는 아니다
 
@@ -355,6 +424,19 @@ npm view @aipia-team/harness-bridge dist-tags
 `new-app` 스킬은 `aipiaPreset({ slug, appName, authMode: 'broker' })` 로 이 모양을 만든다
 (`scripts/lib/config.mjs`). 팝테일 글로벌은 팝챗 BE 계약을 그대로 쓴다(2026-09-11 확정) — 호스트만 바뀐다.
 ⚠️ 팝챗 prod 호스트 `api.chat.poptale.ai` 는 **미확인 추정치**로 남아 있다(§9).
+
+**팝테일 V2(`apps/poptale-v2-dev`)** 는 같은 모양에서 엔드포인트 4개가 V2 웹의 같은 오리진 BFF 이고 `signupEndpoint` 가
+없다(§3 "팝테일 V2" 절):
+
+```jsonc
+"auth": {
+  "providers": [], "oauthReturnScheme": true,
+  "logoutEndpoint":           "https://<V2 웹>/api/app/logout",
+  "deleteEndpoint":           "https://<V2 웹>/api/app/withdraw",
+  "deviceEndpoint":           "https://<V2 웹>/api/app/device",
+  "deviceUnregisterEndpoint": "https://<V2 웹>/api/app/device/unregister"
+}
+```
 
 ### B 네이티브 OAuth 앱 (poptale · aipia)
 

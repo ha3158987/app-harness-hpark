@@ -4,7 +4,7 @@ title: APP-GROWTH-FEATURES — ATT 동의 · 강제 업데이트 · 딥링크/�
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-08-20
+updated: 2026-10-07
 ---
 
 # APP-GROWTH-FEATURES — ATT 동의 · 강제 업데이트 · 딥링크/디퍼드 딥링크
@@ -684,7 +684,7 @@ Firebase"* 로 적혀 있고, 컨벤션 §5 의 *"디퍼드 딥링크가 필요�
 | 레이어 | 담당 | 현재 상태 |
 |---|---|---|
 | `appUrlOpen` 수신 / 콜드스타트 `getLaunchUrl` | **app-harness** | ✅ `dist/index.js:273-295` (poptale 이 고생한 콜드스타트 문제를 이미 처리) |
-| Android App Links intent-filter 주입 | **app-harness** | ✅ `generate-app.mjs` (allowedDomains 기반 자동) |
+| Android App Links intent-filter 주입 | **app-harness** | ✅ `generate-app.mjs` — 호스트 = `navigation.appLinkDomains`, 없으면 `allowedDomains` 전체(2026-10-07, `scripts/lib/app-links.mjs`) |
 | iOS associated-domains 주입 | **app-harness** | ✅ `generate-app.mjs` — ⚠️ pbxproj 연결은 **Xcode 수동** |
 | **AASA / assetlinks 파일 생성** | **app-harness** | ✅ 2026-08-18 추가 — `build/<slug>/well-known/<host>/`. 웹 서빙만 사람이 |
 | 디퍼드 딥링크 수신(어트리뷰션 SDK) | **app-harness** | ✅ AppsFlyer 만 배선 (`:1242-1254`) / Adbrix 는 SPEC 만 |

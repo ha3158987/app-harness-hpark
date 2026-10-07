@@ -4,7 +4,7 @@ title: NEW-APP-CHECKLIST — 사람이 직접 해야 하는 일 전부
 category: 앱추가
 audience: 배포담당자
 status: active
-updated: 2026-08-20
+updated: 2026-10-07
 ---
 
 # NEW-APP-CHECKLIST — 사람이 직접 해야 하는 일 전부
@@ -131,6 +131,10 @@ node scripts/generate-app.mjs --slug <slug> --platform ios   # ① 먼저 프로
 
 `generate-app` 이 파일을 만들어 두면, **웹 레포에 옮기는 건 사람**이 한다.
 
+- [ ] 앱 링크 호스트를 `navigation.appLinkDomains` 에 **명시**했는가 — `.well-known` 을 실제로 서빙할 호스트만, 와일드카드 없이
+      ([02-GUIDE.md](./02-GUIDE.md) §6). 키를 빼면 `allowedDomains` 전체(와일드카드 포함)가 앱 링크가 되어 같은 기기의 다른 앱과
+      링크를 다툰다
+
 ```bash
 node scripts/generate-app.mjs --slug <slug> --skip-install
 # → build/<slug>/well-known/<host>/ 에 2개 파일 생성 (네이티브 빌드 불필요)
@@ -243,6 +247,7 @@ gh workflow run release.yml -f slug=<slug> -f platform=ios -f track=internal
 | `The Capacitor CLI requires NodeJS >=22` | Node 20 | §H-1 |
 | `Unicode Normalization … ASCII-8BIT` | `LANG` 미설정 | §H-1 |
 | 딥링크가 브라우저로 열림 | `.well-known` 미배포 또는 지문 1개 | §D, §F |
+| 링크가 **다른 앱**으로 열림(팝챗↔팝테일) | 두 앱이 같은 호스트를 앱 링크로 주장(`allowedDomains` 의 와일드카드가 그대로 앱 링크) | §F — `navigation.appLinkDomains` 명시 후 `rm -rf build/<slug>` 재생성 |
 | ATT 팝업이 안 뜸 | 기기 전역 추적 설정 OFF / 이미 응답함 / 로그인 전 | [14-ATT-INTEGRATION.md](./14-ATT-INTEGRATION.md) §7 |
 | 기능을 켰는데 플러그인이 안 깔림 | 기존 `build/` 의 package.json 미갱신 | 2026-08-20 수정됨(자동 보강). 그전 버전은 `rm -rf build/<slug>` |
 | config 문구를 바꿨는데 앱에 반영 안 됨 | plist 는 **add-once** — 기존 값은 안 고침 | `rm -rf build/<slug>` 후 재생성 |
@@ -281,3 +286,4 @@ grep -m1 CURRENT_PROJECT_VERSION build/<slug>/ios/App/App.xcodeproj/project.pbxp
 | 날짜 | 변경 |
 |---|---|
 | 2026-08-20 | 최초 작성. characterchat-dev 의 ATT 도입·첫 확장 빌드에서 실제로 막힌 지점을 근거로 정리 |
+| 2026-10-07 | §F 앱 링크 호스트 명시(`navigation.appLinkDomains`) · §J "링크가 다른 앱으로 열림" |

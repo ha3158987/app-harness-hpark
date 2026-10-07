@@ -4,7 +4,7 @@ title: DEPLOY — 빌드 후 자동 배포 (CI/CD)
 category: 빌드배포
 audience: 배포담당자
 status: active
-updated: 2026-09-07
+updated: 2026-10-07
 ---
 
 # DEPLOY — 빌드 후 자동 배포 (CI/CD)
@@ -142,7 +142,7 @@ iOS 빌드 실패의 대부분은 **코드 서명 3자 불일치**다:
 
 | config | 요구 iOS capability |
 |---|---|
-| `features.deepLink: true` (+ `navigation.allowedDomains`) | **Associated Domains** (유니버설 링크) |
+| `features.deepLink: true` (+ `navigation.appLinkDomains`, 없으면 `allowedDomains`) | **Associated Domains** (유니버설 링크) |
 | `features.push: true` | Push Notifications |
 | 소셜 로그인(Apple) | Sign in with Apple |
 
