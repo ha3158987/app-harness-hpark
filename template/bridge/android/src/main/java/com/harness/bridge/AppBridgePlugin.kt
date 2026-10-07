@@ -39,6 +39,8 @@ class AppBridgePlugin : Plugin() {
      */
     override fun load() {
         super.load()
+        // load() 는 Bridge 생성 중(첫 로드 전, 메인 스레드)에 불린다 → 시작부터 오프라인이어도 잡힌다.
+        bridge?.let { it.setWebViewClient(OfflineShellWebViewClient(it)) }
         val act = activity ?: return
         // theme.statusBarStyle: "light" = 밝은 배경용 '어두운 아이콘'(appearanceLight=true), "dark" = '흰 아이콘'.
         val lightBars = readStatusBarStyle() != "dark"

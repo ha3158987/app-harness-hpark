@@ -30,8 +30,11 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
      * 되돌아갈 수단이 없다. Capacitor 기본값은 off 라 여기서 켠다. (Android 는 브릿지 onBackButton 이 처리)
      */
     override public func load() {
+        // 오프라인 셸 — load() 는 WebView 생성 뒤·첫 로드 전에 불리므로 여기서 감싸야 시작부터 오프라인이어도 잡힌다.
+        installOfflineShell()
         DispatchQueue.main.async { [weak self] in
             self?.bridge?.webView?.allowsBackForwardNavigationGestures = true
+            self?.installOfflineShell() // load() 시점에 WebView 가 아직 없던 경우의 보강(이미 설치됐으면 무시)
         }
         // Viewer brightness lifecycle (see setBrightness). UIScreen.brightness IS the system
         // brightness on iOS, so a viewer value must not leak outside the app: hand the system
@@ -46,6 +49,17 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+
+    /// navigationDelegate 는 weak 라 프록시를 여기서 붙잡아 둔다.
+    private var offlineShellProxy: OfflineShellNavigationProxy?
+
+    private func installOfflineShell() {
+        guard offlineShellProxy == nil, let bridge = bridge, let webView = bridge.webView,
+              let original = webView.navigationDelegate else { return }
+        let proxy = OfflineShellNavigationProxy(target: original, bridge: bridge)
+        offlineShellProxy = proxy
+        webView.navigationDelegate = proxy
     }
 
     @objc func getConfig(_ call: CAPPluginCall) {

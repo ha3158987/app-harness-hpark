@@ -81,7 +81,7 @@
 | 15 | [APP-GROWTH-FEATURES](docs/15-APP-GROWTH-FEATURES.md) | 기능연동 | 개발자 | active | 2026-08-20 | 성장 기능 설계·결정 기록 |
 | 16 | [COMPLIANCE](docs/16-COMPLIANCE.md) | 정책 | 기획자 | active | 2026-05-30 | 권한 고지·개인정보·성인인증 |
 | 17 | [DATA-COLLECTION](docs/17-DATA-COLLECTION.md) | 정책 | 기획자 | active | 2026-05-30 | 스토어 개인정보 양식 정답지 |
-| 18 | [APP-FEATURES](docs/18-APP-FEATURES.md) | 레퍼런스 | 전체 | reference | 2026-09-03 | 지원 기능 + 패키지 버전 |
+| 18 | [APP-FEATURES](docs/18-APP-FEATURES.md) | 레퍼런스 | 전체 | reference | 2026-10-07 | 지원 기능 + 패키지 버전 |
 | 19 | [DEVICE-SUPPORT](docs/19-DEVICE-SUPPORT.md) | 레퍼런스 | 개발자 | reference | 2026-07-24 | 기기·OS 지원 매트릭스 |
 | 20 | [REFERENCES](docs/20-REFERENCES.md) | 레퍼런스 | 개발자 | reference | 2026-05-30 | 외부 1차 소스 링크 |
 | 21 | [POPTALE-MIGRATION](docs/21-POPTALE-MIGRATION.md) | 마이그레이션 | 전체 | active | 2026-06-01 | Poptale Flutter → 하네스 이전 인계 |

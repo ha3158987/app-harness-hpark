@@ -1,0 +1,67 @@
+# 네이티브 컴파일 확인 — 브릿지 플러그인(Kotlin·Swift)·셸·생성기가 바뀐 PR 에서만 돈다.
+#
+# 왜: test.yml 은 Node 테스트뿐이라 Kotlin/Swift 가 깨져도 PR 이 초록이다. 지금까지는 태그 릴리즈(release.yml)에서야
+#     처음 컴파일됐다 — 그때 깨지면 스토어 배포가 막힌다. 여기서는 서명·업로드 없이 디버그/시뮬레이터 빌드만 한다.
+# 앱: characterchat — Firebase·푸시·소셜 키가 없어 시크릿 없이 두 플랫폼 모두 빌드된다.
+# 비용: macOS 러너는 분당 $0.062(Linux 의 10배). 경로 필터로 네이티브 변경 PR 에만 돈다.
+name: native-build
+
+on:
+  pull_request:
+    paths:
+      - 'template/bridge/android/**'
+      - 'template/bridge/ios/**'
+      - 'template/bridge/*.podspec'
+      - 'template/src/**'
+      - 'scripts/generate-app.mjs'
+      - '.github/workflows/native-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: native-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SLUG: characterchat
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+      - uses: android-actions/setup-android@v4
+      - run: npm ci
+      - name: Capacitor 프로젝트 생성(디버그)
+        run: node scripts/generate-app.mjs --slug "$SLUG" --platform android
+      - name: assembleDebug
+        working-directory: build/${{ env.SLUG }}/android
+        run: ./gradlew assembleDebug --console=plain
+
+  ios:
+    runs-on: macos-26
+    # 서명이 없어 매달릴 일은 없지만 macOS 분당 요금 때문에 짧게 잡는다.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: 최신 Xcode 선택
+        run: |
+          LATEST="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$LATEST" ]; then sudo xcode-select -s "$LATEST/Contents/Developer"; fi
+          xcodebuild -version
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: npm }
+      - run: npm ci
+      - name: Capacitor 프로젝트 생성(디버그)
+        run: node scripts/generate-app.mjs --slug "$SLUG" --platform ios
+      - name: 시뮬레이터 빌드(서명 없음)
+        working-directory: build/${{ env.SLUG }}/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO build | tail -40
+          test "${PIPESTATUS[0]}" -eq 0
