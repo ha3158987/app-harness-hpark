@@ -55,8 +55,8 @@ if (!slug) die('--slug 필요. 예: node scripts/publish-apk.mjs --slug characte
 const variant = flag('variant', 'debug');
 if (!['debug', 'release'].includes(variant)) die(`--variant 는 debug|release (받은 값: ${variant})`);
 
-const PROJECT = flag('project', process.env.APK_DIST_PROJECT || 'poptale-chat');
-const BUCKET = flag('bucket', process.env.APK_DIST_BUCKET || 'chat-dev-poptale-dist');
+const PROJECT = flag('project', process.env.APK_DIST_PROJECT || 'poptale-nonprod');
+const BUCKET = flag('bucket', process.env.APK_DIST_BUCKET || 'poptale-nonprod-app-dist');
 const OBJECT = flag('name', `android/${slug}.apk`);
 const URL = `https://storage.googleapis.com/${BUCKET}/${OBJECT}`;
 
@@ -140,7 +140,7 @@ catch { exists = false; }
 if (!exists) {
   w('버킷 없음 — 생성한다 (공개 읽기 버킷)');
   sh('gcloud', ['storage', 'buckets', 'create', `gs://${BUCKET}`, `--project=${PROJECT}`,
-    '--location=asia-southeast1', '--uniform-bucket-level-access', '--no-public-access-prevention'], { stdio: 'inherit' });
+    '--location=asia-northeast3', '--uniform-bucket-level-access', '--no-public-access-prevention'], { stdio: 'inherit' });
   sh('gcloud', ['storage', 'buckets', 'add-iam-policy-binding', `gs://${BUCKET}`,
     '--member=allUsers', '--role=roles/storage.objectViewer']);
   ok('생성 + allUsers 읽기 권한 부여');

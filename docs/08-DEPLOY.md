@@ -306,7 +306,7 @@ Play 내부 트랙도 이제 바로 출시되지만(`completed`), 테스터는 P
    조직에 이미 `github-actions` 풀이 있고 다른 레포들도 이 방식이다.
 
    ```bash
-   PROJECT=<firebase 프로젝트 id>            # 예: poptale-chat
+   PROJECT=<firebase 프로젝트 id>            # 예: poptale-nonprod
    PROJNUM=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
 
    # 3-1. 업로드 전용 서비스 계정
@@ -336,9 +336,15 @@ Play 내부 트랙도 이제 바로 출시되지만(`completed`), 테스터는 P
      --body "app-distribution-ci@$PROJECT.iam.gserviceaccount.com"
    ```
    > 서비스 계정과 WIF 풀은 **GCP 프로젝트 단위**다. `poptale-*`(dev-aipia-poptale)과
-   > `characterchat-dev`(poptale-chat)처럼 Firebase 프로젝트가 다르면 3~4 를 프로젝트마다
+   > `characterchat-dev`(poptale-nonprod)처럼 Firebase 프로젝트가 다르면 3~4 를 프로젝트마다
    > 반복하고 변수도 슬러그별로 등록한다. 접미사 없는 `FIREBASE_WIF_PROVIDER` /
    > `FIREBASE_WIF_SERVICE_ACCOUNT` 는 공통 폴백.
+   >
+   > `characterchat-dev` 는 2026-10-01 싱가포르 `poptale-chat` 에서 서울 `poptale-nonprod` 로 옮겼다.
+   > 이 프로젝트의 풀은 `github-actions` 가 아니라 **`github-pool`**, provider 는 레포 전용
+   > **`github-app-harness`**(조건 `assertion.repository == 'aipia-team/app-harness'`)다. APK 고정 링크 버킷은
+   > `poptale-nonprod-app-dist`(서울, allUsers 읽기, SA objectAdmin). Firebase 관리 권한(`roles/firebase.admin`)은
+   > 박현아(hyuna_park@aipia.co.kr).
 
 ### 배포
 ```bash

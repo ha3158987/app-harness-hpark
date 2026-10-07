@@ -8,7 +8,7 @@
   "startUrl": "https://chat.dev.poptale.ai",
   "version": {
     "name": "1.0.0",
-    "code": 14
+    "code": 17
   },
   "locales": {
     "default": "en",
@@ -18,7 +18,7 @@
     "primary": "#000000",
     "statusBarStyle": "light",
     "background": "#000000",
-    "splashBackground": "#2A307A",
+    "splashBackground": "#0e8af2",
     "splashDuration": 2500
   },
   "features": {
@@ -88,7 +88,7 @@
   "firebase": {
     "enabled": true,
     "project": {
-      "dev": "poptale-chat"
+      "dev": "poptale-nonprod"
     },
     "fcm": true,
     "remoteConfig": true,
