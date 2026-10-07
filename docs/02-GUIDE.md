@@ -285,8 +285,10 @@ flowchart TB
     꺼져 있으면 로딩 실패(선언만 하고 배선이 안 되는 상태를 막는다). 빈 배열 = https 앱 링크 없음(커스텀 스킴만).
   - 명시 목록은 시작 호스트를 자동으로 더하지 않는다 — 웹에 `.well-known` 을 올릴 호스트를 그대로 적는다.
   - 웹에는 나가지 않는다(`runtimeConfig` 의 `navigation` 은 그대로) — 네이티브 생성 전용.
-  - 쓰는 앱: `characterchat-dev`=`chat.dev.poptale.ai` · `characterchat`=`chat.poptale.ai` · `poptale-v2-dev`=V2 dev 웹
-    호스트. 나머지(aipia · poptale · poptale-dev · poptale-global)는 미지정 — doctor 가 와일드카드 앱 링크를 경고한다.
+  - 쓰는 앱: `characterchat-dev`=`chat.dev.poptale.ai` · `poptale-v2-dev`=V2 dev 웹 호스트(둘 다 dev 앱).
+    운영 앱 `characterchat` 은 이번 변경(DEV 한정)에서 일부러 손대지 않았다 — 운영 앱을 처음 빌드할 때
+    `["chat.poptale.ai"]` 로 명시한다. 나머지(aipia · poptale · poptale-dev · poptale-global)도 미지정 —
+    doctor 가 와일드카드 앱 링크를 경고한다.
   - ⚠️ intent-filter · entitlements 는 **add-once** 다(아래 표). 이미 만든 `build/<slug>` 는 바뀌지 않는다 —
     `rm -rf build/<slug>` 후 재생성한다. CI(`release.yml`)는 매번 새로 생성하므로 다음 릴리즈 빌드부터 반영된다.
 - `auth.oauthReturnScheme`(기본 `false`): **providers 와 독립**이다. `true` 면 providers 가 비어도 OAuth

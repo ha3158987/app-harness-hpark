@@ -152,10 +152,10 @@ test('딥링크가 꺼진 앱에 appLinkDomains 를 두면 멈춘다 — 선언�
 
 // ── 실제 앱 config ────────────────────────────────────────────────────────────
 
-test('팝챗·팝테일 V2 앱은 앱 링크 호스트를 명시하고, 서로 겹치지 않는다', () => {
+test('팝챗·팝테일 V2 dev 앱은 앱 링크 호스트를 명시하고, 서로 겹치지 않는다', () => {
+  // 운영 앱 characterchat 은 DEV 한정 변경이라 일부러 미지정(운영 앱 첫 빌드 때 명시 — docs/02-GUIDE.md §6).
   const want = {
     'characterchat-dev': ['chat.dev.poptale.ai'],
-    characterchat: ['chat.poptale.ai'],
     'poptale-v2-dev': [V2_HOST],
   };
   const claimedBy = new Map();
