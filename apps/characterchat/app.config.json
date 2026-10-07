@@ -40,6 +40,9 @@
       "chat.poptale.ai",
       "*.poptale.ai"
     ],
+    "appLinkDomains": [
+      "chat.poptale.ai"
+    ],
     "externalInBrowser": true
   },
   "marketing": {

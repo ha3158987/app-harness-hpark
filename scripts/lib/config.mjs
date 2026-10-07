@@ -171,6 +171,10 @@ const DEFAULT_ANDROID = { sha256CertFingerprints: [] };
 
 // SHA-256 지문: 대문자 16진수 2자리 32쌍을 콜론으로 이은 형태 (AA:BB:...:FF)
 const SHA256_FP_RE = /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/;
+// 앱 링크 호스트(navigation.appLinkDomains): 스킴·경로·포트 없는 소문자 호스트 이름, 점 1개 이상.
+// Android 는 호스트를 대소문자 구분해 비교하므로 소문자만 받는다. IP 는 App Links·Universal Links 대상이 아니다.
+const APP_LINK_HOST_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 // Apple 팀 ID: 영숫자 10자리 (예: 3W889GYPRK)
 const APPLE_TEAM_ID_RE = /^[0-9A-Z]{10}$/;
 
@@ -304,6 +308,36 @@ export function loadConfig(repoRoot, slug) {
     externalInBrowser: raw.navigation?.externalInBrowser ?? true,
   };
 
+  // navigation.appLinkDomains — App Links·Universal Links 로 등록할 호스트의 **명시 목록**(선택 키).
+  //   없으면(null) 종전대로 allowedDomains 전체가 앱 링크다(하위호환 — scripts/lib/app-links.mjs).
+  //   allowedDomains 는 WebView 이동 허용 목록이라 와일드카드·API 호스트가 들어가는데, 그걸 앱 링크로 쓰면
+  //   같은 기기의 다른 앱(팝챗↔팝테일)과 같은 호스트를 서로 주장한다. 여기는 이 앱이 .well-known
+  //   (AASA·assetlinks)을 실제로 서빙하는 호스트만 적는다. 빈 배열 = https 앱 링크 없음(커스텀 스킴만).
+  //   네이티브 생성 전용이라 navigation(→ runtimeConfig 로 웹 노출)에 넣지 않고 cfg.appLinkDomains 로 따로 둔다.
+  let appLinkDomains = null;
+  const rawAppLinks = raw.navigation?.appLinkDomains;
+  if (rawAppLinks != null) {
+    if (!Array.isArray(rawAppLinks)) {
+      err(slug, 'navigation.appLinkDomains 는 호스트 문자열 배열이어야 함 (예: ["chat.dev.poptale.ai"])');
+    }
+    for (const h of rawAppLinks) {
+      if (typeof h === 'string' && h.includes('*')) {
+        err(slug, `navigation.appLinkDomains 의 "${h}" — 와일드카드는 받지 않는다. 이 키는 앱 링크를 ` +
+          '실제로 서빙하는 호스트만 적는 명시 목록이다(와일드카드는 같은 기기의 다른 앱과 링크를 다툰다). ' +
+          '호스트를 하나씩 적어라 — docs/02-GUIDE.md §6');
+      }
+      if (typeof h !== 'string' || !APP_LINK_HOST_RE.test(h) || IPV4_RE.test(h)) {
+        err(slug, `navigation.appLinkDomains 의 ${JSON.stringify(h)} 는 호스트 이름이 아님 — 스킴·경로·포트 없이 ` +
+          '소문자 호스트만 적는다 (예: "chat.dev.poptale.ai"). IP 는 앱 링크 대상이 아니다.');
+      }
+    }
+    if (!features.deepLink) {
+      err(slug, 'navigation.appLinkDomains 는 features.deepLink=true 일 때만 배선된다 — ' +
+        '딥링크를 켜거나 이 키를 빼라(선언만 하고 조용히 무시되는 것을 막는다).');
+    }
+    appLinkDomains = [...new Set(rawAppLinks)];
+  }
+
   const assets = {
     icon: raw.assets?.icon ?? 'icon.png',
     splash: raw.assets?.splash ?? 'splash.png',
@@ -431,6 +465,9 @@ export function loadConfig(repoRoot, slug) {
     slug, appName: appName.base, appId: raw.appId, startUrl: raw.startUrl,
     version, theme, features, navigation, assets, marketing, auth, iap, monitoring,
     firebase, tracking, ios, android, legal, permissions,
+    // 앱 링크 호스트 명시 목록(null = 미지정 → allowedDomains 전체, 하위호환). 네이티브 생성 전용 —
+    // runtimeConfig 에 넣지 않는다(웹이 쓸 일이 없고, 기존 앱의 app-config.json 이 바뀌지 않게).
+    appLinkDomains,
     // 로케일 선언 + 언어별 원본. 기존 필드는 전부 문자열(기본 로케일 값)로 유지되므로
     // runtimeConfig·브릿지·capacitor.config 는 이 블록을 몰라도 그대로 동작한다.
     locales,

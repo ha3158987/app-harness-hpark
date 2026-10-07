@@ -35,6 +35,7 @@
   },
   "navigation": {
     "allowedDomains": ["poptale-dev-web-188609021980.asia-northeast3.run.app"],
+    "appLinkDomains": ["poptale-dev-web-188609021980.asia-northeast3.run.app"],
     "externalInBrowser": true
   },
   "marketing": {
