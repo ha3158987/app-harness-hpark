@@ -21,6 +21,13 @@ export interface AppCapabilities {
   iap: boolean;
   /** iOS ATT(추적 동의) 사용. config.tracking.att.enabled 이고 플랫폼이 iOS 일 때만 true. */
   att: boolean;
+  /**
+   * 스토어 나라 조회(`getStoreCountry`)를 이 셸이 지원한다. config 가 아니라 셸 네이티브가 정한다 —
+   * 네이티브 플러그인에 그 메서드가 있을 때만(`1.5.0-beta.6`+ 브릿지로 **빌드한** 앱) true. 웹은 false.
+   * Android 는 IAP 상품이 있는 앱(`capabilities.iap`)만 true — Play Billing 을 IAP 플러그인이 넣기 때문이다.
+   * false 여도 `getStoreCountry()` 는 던지지 않고 null 을 준다.
+   */
+  storeCountry: boolean;
 }
 
 export type TrackingStatus =
@@ -221,6 +228,19 @@ export interface AppBridgeSDK {
 
   /** 백엔드에 보낼 실행 컨텍스트(앱/웹·플랫폼·버전) — 서버가 이벤트/가격/콘텐츠 분기에 사용. */
   context(): { isApp: boolean; platform: Platform; appVersion: string | null; slug: string | null };
+
+  /**
+   * 이 기기 스토어 계정의 나라 — ISO 3166-1 alpha-2 대문자(`'KR'` · `'US'` · `'JP'`). 모르면 null.
+   * iOS = App Store storefront, Android = Play 결제 설정 나라. 기기 위치·언어·IP 가 아니라 **앱을 받은 스토어** 기준이다.
+   *
+   * null 인 경우: 웹 · 이 메서드가 없는 옛 셸 · Android 의 IAP 상품 없는 앱(둘 다 `capabilities.storeCountry === false`)
+   * · 결제 불가 기기(Play 없음 · 계정 없는 에뮬레이터 등) · 상한 초과. 모를 때 어떻게 처리할지는 웹이 정한다
+   * (브릿지는 값만 운반한다).
+   *
+   * 확정값은 WebView 문서가 사는 동안 캐시한다(스토어 계정을 바꾸면 앱 재시작 뒤 반영). null 은 캐시하지 않는다.
+   * 동시 호출은 한 번으로 합친다. **던지지 않는다.** (`1.5.0-beta.6`+)
+   */
+  getStoreCountry(): Promise<string | null>;
 
   /**
    * 소셜/이메일 로그인. 인증은 WebView 밖(시스템 브라우저 OAuth2+PKCE, Apple은 네이티브)에서

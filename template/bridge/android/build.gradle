@@ -1,6 +1,16 @@
 ext {
     junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
     androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.0'
+    // Play Billing — getStoreCountry(getBillingConfigAsync) 용. 구매는 하지 않는다.
+    // compileOnly 다(아래 dependencies): 브릿지는 모든 앱에 들어가는 코어라, implementation 이면 IAP 없는 앱에도
+    // Billing 라이브러리와 BILLING 권한이 붙는다. 런타임 Billing 은 IAP 앱에 cordova-plugin-purchase 가 넣는 것
+    // (13.18.0 = billing 9.0.0, plugin.xml)을 그대로 쓰고, 없는 앱에서 getStoreCountry 는 billing-unavailable 이다.
+    // ⚠️ 컴파일 기준을 그 플러그인과 같은 버전으로 둔다 — 런타임은 그쪽 버전으로 돈다. IAP 플러그인이 메이저를 올리면
+    //    이 값도 같이 본다(앱별로 바꿀 땐 variables.gradle 의 playBillingVersion).
+    // ⚠️ Billing 타입은 PlayStoreCountry.kt 에만 쓴다 — AppBridgePlugin 에 쓰면 Billing 없는 앱이 시작하자마자 죽는다.
+    // ⚠️ 앱이 R8 축소(minifyEnabled)를 켜면 Billing 없는 앱에서 "Missing class" 로 빌드가 멈춘다 —
+    //    그때는 -dontwarn com.android.billingclient.** 를 넣는다(현재 생성 앱은 전부 minifyEnabled false).
+    playBillingVersion = project.hasProperty('playBillingVersion') ? rootProject.ext.playBillingVersion : '9.0.0'
 }
 
 buildscript {
@@ -39,4 +49,5 @@ repositories {
 dependencies {
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    compileOnly "com.android.billingclient:billing:$playBillingVersion"
 }

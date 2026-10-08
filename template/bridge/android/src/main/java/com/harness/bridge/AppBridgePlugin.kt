@@ -212,4 +212,38 @@ class AppBridgePlugin : Plugin() {
             call.resolve(res)
         }
     }
+
+    // ── 스토어 나라 (getStoreCountry) ──────────────────────────────────────
+    // 이 기기 Play 계정의 결제 나라. 웹이 나라별 절차(예: 성인 확인 방식)를 고를 때 쓴다. 구현은 PlayStoreCountry.kt.
+    //
+    // 결과 { countryCode: "KR" } — 모르면 countryCode 없이 { reason } 으로 resolve 한다(reject 하지 않는다,
+    // JS 는 null 로 읽는다).
+    //
+    // Play Billing 은 브릿지에 compileOnly 다 — IAP 없는 앱에 Billing 라이브러리·BILLING 권한을 붙이지 않으려고.
+    // 런타임에는 IAP 플러그인(cordova-plugin-purchase)이 넣은 앱에만 있고, 없으면 { reason: "billing-unavailable" }
+    // 으로 바로 끝낸다.
+    // ⚠️ 이 클래스에는 Billing 타입을 한 글자도 쓰지 않는다(import·람다 포함) — 쓰면 Billing 없는 앱이 플러그인
+    //    등록 때 죽는다. 이유는 PlayStoreCountry.kt 머리 주석.
+
+    @PluginMethod
+    fun getStoreCountry(call: PluginCall) {
+        if (!hasPlayBilling()) {
+            call.resolve(JSObject().put("reason", "billing-unavailable"))
+            return
+        }
+        PlayStoreCountry.query(context) { countryCode, reason ->
+            val res = JSObject()
+            if (countryCode != null) res.put("countryCode", countryCode)
+            else res.put("reason", reason ?: "unknown")
+            call.resolve(res)
+        }
+    }
+
+    /** Play Billing 라이브러리가 이 앱에 있는가. 클래스 이름으로만 본다(로드만 시도하고 초기화하지 않는다). */
+    private fun hasPlayBilling(): Boolean = try {
+        Class.forName("com.android.billingclient.api.BillingClient", false, javaClass.classLoader)
+        true
+    } catch (e: Throwable) {
+        false
+    }
 }

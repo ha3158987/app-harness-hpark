@@ -46,7 +46,22 @@ function deriveCapabilities(features) {
     // flag() 로 안 잡히므로 직접 판정. 둘 중 하나라도 켜져 있으면 뷰어 capability.
     viewer: !!(f.viewer && typeof f.viewer === 'object' &&
       ((f.viewer.captureBlock && f.viewer.captureBlock.enabled) || (f.viewer.brightness && f.viewer.brightness.enabled))),
+    // 스토어 나라(getStoreCountry). config 가 아니라 **셸 네이티브**가 정한다 — ready() 가 네이티브 메서드 목록을 보고 채운다
+    // (Android 는 IAP 앱만 — _storeCountryCapability 주석).
+    storeCountry: false,
   };
+}
+
+// 스토어 나라 조회 상한. 네이티브가 스스로 5초 상한을 두고, 이건 그 위의 안전망이다 —
+// 네이티브가 끝내 응답하지 않아도 웹(토글 등)이 매달리지 않게.
+const STORE_COUNTRY_TIMEOUT_MS = 8_000;
+
+// 스토어 나라 값 검증 — ISO 3166-1 alpha-2 대문자 두 글자만 통과시킨다. 소문자·앞뒤 공백은 고쳐 받고,
+// 그 밖(빈 값·alpha-3·숫자·객체)은 null(모르는 나라). 다른 나라로 잘못 읽히는 것보다 모르는 쪽이 안전하다.
+function normalizeStoreCountry(value) {
+  if (typeof value !== 'string') return null;
+  const code = value.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : null;
 }
 
 // 핸들러가 없을 때 도착한 딥링크를 보류하는 시간. 콜드스타트에서 웹 번들이 뜨고
@@ -95,6 +110,7 @@ const CAP_METHOD = {
   iap: 'purchase',
   att: 'requestTracking',
   viewer: 'setBrightness',
+  storeCountry: 'getStoreCountry',
 };
 
 class AppBridgeImpl {
@@ -124,6 +140,10 @@ class AppBridgeImpl {
     this._rcPromise = null;      // Remote Config 초기화 1회 공유(fetchAndActivate 중복 방지)
     this._attStatus = null;      // 확정된 status 캐시. 'unavailable' 은 캐시하지 않는다(재시도 가능)
     this._attPending = null;     // 진행 중인 요청의 Promise (중복 팝업 차단)
+    // 스토어 나라: 확정값(alpha-2)만 캐시한다 — null 은 다음 호출이 다시 묻는다. 진행 중 요청은 하나로 합친다.
+    this._storeCountry = null;
+    this._storeCountryPending = null;
+    this._storeCountryTimeoutMs = STORE_COUNTRY_TIMEOUT_MS; // 테스트가 줄인다
   }
 
   ready() {
@@ -138,6 +158,7 @@ class AppBridgeImpl {
           // ATT 는 iOS 전용. Android 에서 capability 를 켜두면 웹이 헛되이 사전화면을 띄운다.
           const attOn = !!(cfg && cfg.tracking && cfg.tracking.att && cfg.tracking.att.enabled);
           this.capabilities.att = attOn && this.platform === 'ios';
+          this.capabilities.storeCountry = this._storeCountryCapability();
           this._validateCapabilities();
           this.initMonitoring().catch(() => {}); // 크래시 리포트 가능한 한 일찍
           this._autoInit();
@@ -154,6 +175,27 @@ class AppBridgeImpl {
   // ready() 가 쓰는 인증 capability 판정. 메서드로 두는 이유는 테스트가 Native.getConfig()
   // 를 갈아끼울 수 없어 ready() 경로를 직접 태우지 못하기 때문이다(다른 _ 메서드와 같은 규약).
   _authCapability(auth) { return deriveAuthCapability(auth); }
+
+  // capabilities.storeCountry 판정 — 이 셸의 네이티브(AppBridge 플러그인)에 getStoreCountry 가 있는가.
+  // config 로 정하지 않는 이유: 앱 셸은 웹보다 늦게 배포된다(docs/25 §6) — 새 브릿지 JS 가 이 메서드를 모르는
+  // 옛 셸에서 돌 수 있다. 네이티브가 문서 시작 때 주입하는 플러그인 메서드 목록(Capacitor.PluginHeaders)을 본다.
+  // Android 는 하나 더 — Play Billing 이 런타임에 있어야 답할 수 있다. 브릿지는 Billing 을 compileOnly 로만 두고
+  // (IAP 없는 앱에 Billing·BILLING 권한을 붙이지 않으려고) 실제 라이브러리는 IAP 플러그인(cordova-plugin-purchase)이
+  // 넣는다. generate-app 은 iap.products 가 있을 때만 그 플러그인을 설치하므로 capabilities.iap 가 곧 "Billing 있음"
+  // 이다. 없는 앱의 네이티브는 billing-unavailable 을 주므로 여기서 미리 false 로 둔다(iOS 는 StoreKit 이라 무관).
+  // ready() 안에서 capabilities.iap 를 채운 **뒤에** 불러야 한다.
+  _storeCountryCapability() {
+    if (!this.isNative) return false;
+    if (this.platform === 'android' && !(this.capabilities && this.capabilities.iap)) return false;
+    try {
+      const headers = Capacitor.PluginHeaders;
+      const appBridge = Array.isArray(headers) ? headers.find((h) => h && h.name === 'AppBridge') : null;
+      return !!(appBridge && Array.isArray(appBridge.methods)
+        && appBridge.methods.some((m) => m && m.name === 'getStoreCountry'));
+    } catch {
+      return false;
+    }
+  }
 
   // capability 가 켜졌는데 대응 메서드가 없으면 경고(향후 기능 추가 시 거짓 약속 방지).
   _validateCapabilities() {
@@ -1790,6 +1832,54 @@ class AppBridgeImpl {
     }
     return null;
   }
+
+  // ── 스토어 나라 ─────────────────────────────────────────────────────────
+  /**
+   * 이 기기 스토어 계정의 나라 — ISO 3166-1 alpha-2 대문자(`'KR'` · `'US'` · `'JP'`). 모르면 null.
+   *   iOS     = App Store storefront(StoreKit 2 → 없으면 StoreKit 1). alpha-3 → alpha-2 는 네이티브가 바꾼다.
+   *   Android = Play 결제 설정 나라(Play Billing getBillingConfigAsync). **IAP 상품이 있는 앱만** — Play Billing 은
+   *             IAP 플러그인이 넣는다(브릿지는 compileOnly). IAP 없는 앱은 capabilities.storeCountry=false · null.
+   *   null    = 웹 · 이 메서드가 없는 옛 셸(capabilities.storeCountry=false) · 위 Android IAP 없는 앱 · 결제 불가
+   *             기기(Play 없음·계정 없는 에뮬레이터) · 상한 초과 · alpha-2 가 아닌 값.
+   * 기기 위치·언어·IP 가 아니라 **앱을 받은 스토어**의 나라다. 그 값으로 무엇을 할지(나라별 절차, 모를 때의
+   * 처리)는 웹·BE 가 정한다 — 브릿지는 값만 운반한다.
+   *
+   * 확정값은 이 WebView 문서가 사는 동안 캐시한다(스토어 계정을 바꾸면 앱을 다시 켜야 반영된다). null 은 캐시하지
+   * 않는다 — 다음 호출이 다시 묻는다. 동시 호출은 네이티브 왕복 한 번으로 합친다. **던지지 않는다.**
+   * @returns {Promise<string|null>}
+   */
+  async getStoreCountry() {
+    if (!this.isNative) return null;
+    if (this._storeCountry) return this._storeCountry;
+    if (this._storeCountryPending) return this._storeCountryPending;
+    this._storeCountryPending = (async () => {
+      let timer;
+      try {
+        await this.ready();
+        if (!this.capabilities.storeCountry) return null;
+        // 늦게 온 답도 캐시에 남긴다 — 이번 호출은 상한에 걸려 null 이어도 다음 호출은 바로 받는다.
+        const asked = Promise.resolve()
+          .then(() => this._nativeStoreCountry())
+          .then((res) => {
+            const code = normalizeStoreCountry(res && res.countryCode);
+            if (code) this._storeCountry = code;
+            return code;
+          })
+          .catch(() => null); // 구 셸 UNIMPLEMENTED 등 — 모르는 나라로 끝낸다
+        const limit = new Promise((resolve) => { timer = setTimeout(() => resolve(null), this._storeCountryTimeoutMs); });
+        return await Promise.race([asked, limit]);
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(timer);
+        this._storeCountryPending = null;
+      }
+    })();
+    return this._storeCountryPending;
+  }
+
+  // 네이티브 호출 지점. 테스트가 갈아끼운다(Native 는 이 모듈 밖에서 못 바꾼다 — _authCapability 와 같은 규약).
+  _nativeStoreCountry() { return Native.getStoreCountry(); }
 
   // ── 마케팅 SDK ─────────────────────────────────────────────────────────
   // 마케팅 SDK 초기화. 앱 시작 시 1회 호출. 키는 네이티브 베이크 config 에서 읽는다.

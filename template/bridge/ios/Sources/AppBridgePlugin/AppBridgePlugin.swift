@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import Photos
+import StoreKit
 import UIKit
 import WebKit
 
@@ -21,7 +22,8 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "openAppSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "blockCapture", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setBrightness", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getBrightness", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getBrightness", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getStoreCountry", returnType: CAPPluginReturnPromise)
     ]
 
     /**
@@ -212,5 +214,41 @@ public class AppBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         guard let v = viewerBrightness else { return }
         savedBrightness = UIScreen.main.brightness
         UIScreen.main.brightness = v
+    }
+
+    // ── 스토어 나라 (getStoreCountry) ─────────────────────────────────────────
+    // 이 기기 App Store 계정의 나라(storefront). 웹이 나라별 절차(예: 성인 확인 방식)를 고를 때 쓴다.
+    // StoreKit 은 ISO 3166-1 alpha-3(예 KOR)를 주므로 alpha-2(KR)로 바꿔 돌려준다(StoreCountry.swift 표).
+    //
+    // 결과 { countryCode: "KR" } — 모르면 countryCode 없이 { reason } 으로 resolve 한다(reject 하지 않는다,
+    // JS 는 null 로 읽는다).
+    //   1) StoreKit 2 Storefront.current — iOS 15+(이 플러그인의 최소 버전이라 분기 없이 쓴다)
+    //   2) 값이 없으면 StoreKit 1 SKPaymentQueue.default().storefront(이미 알고 있는 값, 동기)
+    //   3) 상한 storeCountryTimeout — StoreKit 2 가 늦으면 그 시점의 2)로 끝낸다
+    // 구매 관찰자(transaction observer)는 붙이지 않는다 — 구매는 IAP 플러그인 몫이다.
+
+    private static let storeCountryTimeout: TimeInterval = 5
+
+    @objc func getStoreCountry(_ call: CAPPluginCall) {
+        let once = StoreCountry.Once()
+        let finish: (String?, String) -> Void = { alpha3, reasonIfMissing in
+            guard once.claim() else { return }
+            guard let alpha3 = alpha3 else {
+                call.resolve(["reason": reasonIfMissing])
+                return
+            }
+            if let alpha2 = StoreCountry.alpha2(fromAlpha3: alpha3) {
+                call.resolve(["countryCode": alpha2])
+            } else {
+                call.resolve(["reason": "unmapped"])
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + AppBridgePlugin.storeCountryTimeout) {
+            finish(SKPaymentQueue.default().storefront?.countryCode, "timeout")
+        }
+        Task {
+            let current = await Storefront.current
+            finish(current?.countryCode ?? SKPaymentQueue.default().storefront?.countryCode, "no-storefront")
+        }
     }
 }
