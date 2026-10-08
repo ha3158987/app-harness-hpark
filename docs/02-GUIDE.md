@@ -4,7 +4,7 @@ title: GUIDE — Appharness 마스터 가이드
 category: 시작
 audience: 전체
 status: active
-updated: 2026-09-11
+updated: 2026-10-07
 ---
 
 # GUIDE — Appharness 마스터 가이드
@@ -231,7 +231,9 @@ flowchart TB
     "pushPolicy": { "allowedPaths": null },
     "viewer": { "captureBlock": { "enabled": false, "paths": [] },
                 "brightness": { "enabled": false } } },
-  "navigation": { "allowedDomains": ["aipia.co.kr", "*.aipia.co.kr"], "externalInBrowser": true },
+  "navigation": { "allowedDomains": ["aipia.co.kr", "*.aipia.co.kr"], "externalInBrowser": true,
+    // 선택 — App Links·Universal Links 로 등록할 호스트의 명시 목록. 없으면 allowedDomains 전체(하위호환).
+    "appLinkDomains": ["aipia.co.kr"] },
   "marketing": { "attribution": { "provider": "appsflyer", "deferredDeepLink": true } },
   "auth": { "providers": ["email","apple","google","naver","kakao","facebook","x","threads","line","discord"],
     // 공급자 OAuth 를 앱이 직접 돈다(네이티브 OAuth 앱). secret 은 넣지 않는다(백엔드/인증서버 전용).
@@ -268,6 +270,27 @@ flowchart TB
   배열이면 prefix 매칭(예: `['/recommend','/detail/','/viewer']`).
 - `features.viewer.captureBlock`: 지정 경로 prefix 에서만 화면 캡쳐 차단. SPA 라우팅 자동 감지는
   `harness-adapter.autoBlockCaptureOnPaths()` 로.
+- `navigation.allowedDomains`: **WebView 가 이동해도 되는 곳**(Capacitor `allowNavigation` — 탐색만 다룬다).
+  목록 밖으로 나가는 이동은 외부 브라우저로 연다. fetch/XHR 는 "이동"이 아니라 이 목록의 대상이 아니다 —
+  API 호스트를 호출만 한다면 넣을 이유가 없다.
+- `navigation.appLinkDomains`(선택, 2026-10-07): **OS 가 https 링크를 이 앱으로 여는 호스트**의 명시 목록 —
+  Android intent-filter(`autoVerify`) · iOS `associated-domains` · `.well-known` 생성 대상이 된다. **없으면 종전대로
+  `allowedDomains` 전체**(와일드카드·`--local` 호스트 포함)가 앱 링크다(하위호환). 판정 정본은
+  `scripts/lib/app-links.mjs`.
+  - 왜 따로 두나: `allowedDomains` 를 그대로 앱 링크로 쓰면 `*.poptale.ai` 같은 와일드카드가 들어가, 같은 기기의
+    팝챗·팝테일 앱이 같은 호스트를 서로 주장한다(링크가 엉뚱한 앱으로 열린다). 또 Android 11 이하는 autoVerify
+    호스트 중 하나라도 검증에 실패하면 전부 미검증이라, `.well-known` 을 서빙하지 않는 API 호스트가 섞이면 앱 링크가
+    통째로 죽는다.
+  - 값: 스킴·경로·포트 없는 **소문자 호스트**만. 와일드카드·IP 는 받지 않는다(로딩 실패). `features.deepLink` 가
+    꺼져 있으면 로딩 실패(선언만 하고 배선이 안 되는 상태를 막는다). 빈 배열 = https 앱 링크 없음(커스텀 스킴만).
+  - 명시 목록은 시작 호스트를 자동으로 더하지 않는다 — 웹에 `.well-known` 을 올릴 호스트를 그대로 적는다.
+  - 웹에는 나가지 않는다(`runtimeConfig` 의 `navigation` 은 그대로) — 네이티브 생성 전용.
+  - 쓰는 앱: `characterchat-dev`=`chat.dev.poptale.ai` · `poptale-v2-dev`=V2 dev 웹 호스트(둘 다 dev 앱).
+    운영 앱 `characterchat` 은 이번 변경(DEV 한정)에서 일부러 손대지 않았다 — 운영 앱을 처음 빌드할 때
+    `["chat.poptale.ai"]` 로 명시한다. 나머지(aipia · poptale · poptale-dev · poptale-global)도 미지정 —
+    doctor 가 와일드카드 앱 링크를 경고한다.
+  - ⚠️ intent-filter · entitlements 는 **add-once** 다(아래 표). 이미 만든 `build/<slug>` 는 바뀌지 않는다 —
+    `rm -rf build/<slug>` 후 재생성한다. CI(`release.yml`)는 매번 새로 생성하므로 다음 릴리즈 빌드부터 반영된다.
 - `auth.oauthReturnScheme`(기본 `false`): **providers 와 독립**이다. `true` 면 providers 가 비어도 OAuth
   복귀 커스텀 스킴을 네이티브에 등록한다 — 브로커 로그인 앱(팝챗·팝테일 글로벌)용. providers 가 비어
   있지 않으면 이 값과 무관하게 스킴은 등록된다. 브로커 앱도 **탈퇴 게이트(`deleteEndpoint`)는 그대로**
@@ -367,7 +390,8 @@ Universal Link(iOS) / App Link(Android) 는 **앱 설정만으로는 동작하�
 신뢰한다"고 선언하는 파일 2개를 **웹이 서빙**해야 하고, 없으면 링크가 에러 없이 조용히 브라우저로 열린다.
 
 generate-app 이 `build/<slug>/well-known/<host>/` 에 만들어 둔다 (네이티브 플랫폼 불필요 →
-`--skip-install` 드라이 실행만으로도 받아갈 수 있다). 웹 레포로 옮기는 건 사람이 한다:
+`--skip-install` 드라이 실행만으로도 받아갈 수 있다). 대상 호스트는 `navigation.appLinkDomains` 가 있으면 그 목록,
+없으면 시작 호스트 + 와일드카드가 아닌 `allowedDomains` 다(위 필드 메모). 웹 레포로 옮기는 건 사람이 한다:
 
 | 파일 | 웹 서빙 경로 | 주의 |
 |---|---|---|

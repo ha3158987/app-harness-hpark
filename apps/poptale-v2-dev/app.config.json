@@ -1,0 +1,94 @@
+{
+  "slug": "poptale-v2-dev",
+  "appName": "팝테일 V2 DEV",
+  "appId": "com.aipia.poptale.v2.dev",
+  "startUrl": "https://poptale-dev-web-188609021980.asia-northeast3.run.app",
+  "version": { "name": "2.0.0", "code": 1 },
+  "theme": {
+    "primary": "#000000",
+    "statusBarStyle": "light",
+    "background": "#000000"
+  },
+  "assets": { "icon": "icon.png", "splash": "splash.png" },
+  "features": {
+    "push": true,
+    "pushPolicy": {
+      "allowedPaths": ["/recommend", "/for-you", "/detail/", "/viewer", "/event", "/my/notice", "/my/inquiry", "/info/notice", "/info/inquiry"]
+    },
+    "deepLink": true,
+    "deferredDeepLink": { "enabled": false, "provider": null },
+    "biometric": false,
+    "share": true,
+    "camera": false,
+    "forceUpdate": { "enabled": false, "minVersionUrl": null },
+    "secureStorage": false,
+    "localNotification": false,
+    "haptics": true,
+    "clipboard": false,
+    "geolocation": false,
+    "darkMode": true,
+    "appChannelCompat": false,
+    "viewer": {
+      "captureBlock": { "enabled": true, "paths": ["/viewer"] },
+      "brightness": { "enabled": true }
+    }
+  },
+  "navigation": {
+    "allowedDomains": ["poptale-dev-web-188609021980.asia-northeast3.run.app"],
+    "appLinkDomains": ["poptale-dev-web-188609021980.asia-northeast3.run.app"],
+    "externalInBrowser": true
+  },
+  "marketing": {
+    "attribution": { "provider": "adbrix", "deferredDeepLink": false },
+    "analytics": { "provider": "amplitude" },
+    "crm": { "provider": null },
+    "autoCapture": true
+  },
+  "auth": {
+    "providers": [],
+    "oauthReturnScheme": true,
+    "logoutEndpoint": "https://poptale-dev-web-188609021980.asia-northeast3.run.app/api/app/logout",
+    "deleteEndpoint": "https://poptale-dev-web-188609021980.asia-northeast3.run.app/api/app/withdraw",
+    "deviceEndpoint": "https://poptale-dev-web-188609021980.asia-northeast3.run.app/api/app/device",
+    "deviceUnregisterEndpoint": "https://poptale-dev-web-188609021980.asia-northeast3.run.app/api/app/device/unregister"
+  },
+  "iap": {
+    "verifyEndpoint": "https://dev.api.poptale.ai/api/v2/iap/verify",
+    "googleTokenCompression": true,
+    "products": [
+      { "id": "coin_100", "storeId": "com.aipia.poptale.dev.coin100", "type": "consumable" },
+      { "id": "coin_500", "storeId": "com.aipia.poptale.dev.coin500", "type": "consumable" }
+    ]
+  },
+  "monitoring": {
+    "crash": { "provider": "crashlytics", "dsn": null, "environment": "development" },
+    "apm": { "provider": null }
+  },
+  "firebase": {
+    "enabled": true,
+    "project": {
+      "dev": "poptale-nonprod"
+    },
+    "fcm": true,
+    "remoteConfig": true,
+    "analytics": true,
+    "crashlytics": true
+  },
+  "legal": {
+    "privacyUrl": "https://poptale-dev-web-188609021980.asia-northeast3.run.app/privacy",
+    "termsUrl": "https://poptale-dev-web-188609021980.asia-northeast3.run.app/terms",
+    "ageVerifyUrl": null
+  },
+  "permissions": {
+    "notifications": { "required": false, "purpose": "신작/이벤트/구매 알림 수신" },
+    "camera": { "required": false, "purpose": "1:1 문의 사진 첨부" }
+  },
+  "ios": {
+    "teamId": "3W889GYPRK",
+    "usageDescriptions": {
+      "NSCameraUsageDescription": "1:1 문의에 첨부할 사진을 촬영하기 위해 카메라 접근이 필요합니다.",
+      "NSPhotoLibraryUsageDescription": "1:1 문의에 첨부할 사진을 고르기 위해 사진 보관함 접근이 필요합니다."
+    }
+  },
+  "android": { "sha256CertFingerprints": [] }
+}

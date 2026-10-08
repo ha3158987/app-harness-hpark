@@ -44,6 +44,9 @@
       "chat.dev.poptale.ai",
       "*.poptale.ai"
     ],
+    "appLinkDomains": [
+      "chat.dev.poptale.ai"
+    ],
     "externalInBrowser": true
   },
   "marketing": {

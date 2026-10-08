@@ -52,7 +52,7 @@
 | 스토어 심사 · 개인정보 양식 | 16 → 17 |  |
 | config 스키마 확인 | 02 §6 | 02 §6 이 스키마 정본 |
 | 기능 지원 여부 / 기기 지원 확인 | 18 · 19 | 조회용 |
-| Poptale 이전 | 01 → 21 |  |
+| Poptale 이전 | 01 → 21 | 실제 경로는 **21 §10**(새 리더 웹 + `poptale-v2-dev`). 인증은 25 §3 "팝테일 V2" |
 | Poptale 글로벌 앱 신규 구축 | 01 → 04 → 25 | **정본은 레포 밖 아티팩트**: [팝테일 글로벌 시작 가이드](https://claude.ai/code/artifact/68bd80a8-cf18-4d91-a1f8-d4caa6f9e3b4) — 웹·앱 트랙, 작업 목록, 기능 격차표. 국내 이전(21)과 별건이다 |
 | 아이콘 · 스플래시 | — | `generate-assets` 스킬 사용 |
 
@@ -64,31 +64,31 @@
 
 | # | 문서 | 카테고리 | 대상 독자 | 상태 | 최종 수정 | 내용 |
 |---|---|---|---|---|---|---|
-| 01 | [AIPIA-CONVENTIONS](docs/01-AIPIA-CONVENTIONS.md) | 시작 | 개발자 | active | 2026-09-11 | 전사 표준 정본 — 번들ID·도메인·SDK·이벤트명 |
-| 02 | [GUIDE](docs/02-GUIDE.md) | 시작 | 전체 | active | 2026-09-11 | 하네스 동작 방식 + config 스키마 정본 |
+| 01 | [AIPIA-CONVENTIONS](docs/01-AIPIA-CONVENTIONS.md) | 시작 | 개발자 | active | 2026-10-07 | 전사 표준 정본 — 번들ID·도메인·SDK·이벤트명 |
+| 02 | [GUIDE](docs/02-GUIDE.md) | 시작 | 전체 | active | 2026-10-07 | 하네스 동작 방식 + config 스키마 정본 |
 | 03 | [STRATEGY](docs/03-STRATEGY.md) | 전략 | 전체 | active | 2026-05-30 | 왜 이 구조인가 — 결정과 이유 |
-| 04 | [NEW-APP-CHECKLIST](docs/04-NEW-APP-CHECKLIST.md) | 앱추가 | 배포담당자 | active | 2026-08-20 | 사람이 직접 할 콘솔·계정 작업 전부 |
+| 04 | [NEW-APP-CHECKLIST](docs/04-NEW-APP-CHECKLIST.md) | 앱추가 | 배포담당자 | active | 2026-10-07 | 사람이 직접 할 콘솔·계정 작업 전부 |
 | 05 | [SETUP](docs/05-SETUP.md) | 앱추가 | 개발자 | active | 2026-05-30 | 환경·키 단계별 준비 |
-| 06 | [INTEGRATION](docs/06-INTEGRATION.md) | 앱추가 | 개발자 | active | 2026-09-11 | 프론트 통합 — bridge·어댑터·API |
+| 06 | [INTEGRATION](docs/06-INTEGRATION.md) | 앱추가 | 개발자 | active | 2026-09-23 | 프론트 통합 — bridge·어댑터·API |
 | 07 | [HOWTO-DEPLOY](docs/07-HOWTO-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-09-07 | 배포 실전 절차 (진입점) |
-| 08 | [DEPLOY](docs/08-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-09-07 | CI/CD·시크릿·서명 상세 |
+| 08 | [DEPLOY](docs/08-DEPLOY.md) | 빌드배포 | 배포담당자 | active | 2026-10-07 | CI/CD·시크릿·서명 상세 |
 | 09 | [CREDENTIALS](docs/09-CREDENTIALS.md) | 빌드배포 | 배포담당자 | active | 2026-09-04 | 자격증명 단일 출처 |
 | 10 | [AUTH](docs/10-AUTH.md) | 기능연동 | 개발자 | active | 2026-09-11 | 로그인·SSO·탈퇴·백엔드 규약 |
 | 11 | [IAP](docs/11-IAP.md) | 기능연동 | 전체 | active | 2026-06-01 | 인앱결제·가격분기·백엔드 검증 |
 | 12 | [PUSH-NOTIFICATIONS](docs/12-PUSH-NOTIFICATIONS.md) | 기능연동 | 개발자 | active | 2026-08-10 | FCM 셋업 — 키·확장·발송 규약 |
 | 13 | [MARKETING](docs/13-MARKETING.md) | 기능연동 | 개발자 | active | 2026-06-01 | 어트리뷰션·분석·CRM SDK |
 | 14 | [ATT-INTEGRATION](docs/14-ATT-INTEGRATION.md) | 기능연동 | 개발자 | active | 2026-08-20 | 추적 동의(ATT) 연동 가이드 |
-| 15 | [APP-GROWTH-FEATURES](docs/15-APP-GROWTH-FEATURES.md) | 기능연동 | 개발자 | active | 2026-08-20 | 성장 기능 설계·결정 기록 |
+| 15 | [APP-GROWTH-FEATURES](docs/15-APP-GROWTH-FEATURES.md) | 기능연동 | 개발자 | active | 2026-10-07 | 성장 기능 설계·결정 기록 |
 | 16 | [COMPLIANCE](docs/16-COMPLIANCE.md) | 정책 | 기획자 | active | 2026-05-30 | 권한 고지·개인정보·성인인증 |
 | 17 | [DATA-COLLECTION](docs/17-DATA-COLLECTION.md) | 정책 | 기획자 | active | 2026-05-30 | 스토어 개인정보 양식 정답지 |
 | 18 | [APP-FEATURES](docs/18-APP-FEATURES.md) | 레퍼런스 | 전체 | reference | 2026-09-03 | 지원 기능 + 패키지 버전 |
 | 19 | [DEVICE-SUPPORT](docs/19-DEVICE-SUPPORT.md) | 레퍼런스 | 개발자 | reference | 2026-07-24 | 기기·OS 지원 매트릭스 |
 | 20 | [REFERENCES](docs/20-REFERENCES.md) | 레퍼런스 | 개발자 | reference | 2026-05-30 | 외부 1차 소스 링크 |
-| 21 | [POPTALE-MIGRATION](docs/21-POPTALE-MIGRATION.md) | 마이그레이션 | 전체 | active | 2026-06-01 | Poptale Flutter → 하네스 이전 인계 |
+| 21 | [POPTALE-MIGRATION](docs/21-POPTALE-MIGRATION.md) | 마이그레이션 | 전체 | active | 2026-10-07 | Poptale Flutter → 하네스 이전 인계 · §10 V2 경로(poptale-v2-dev) |
 | 22 | [NATIVE_FEATURES_PLAN](docs/22-NATIVE_FEATURES_PLAN.md) | 마이그레이션 | 개발자 | reference | 2026-08-19 | characterchat 네이티브 기능 조사 스냅샷 |
 | 23 | [FORCE-UPDATE](docs/23-FORCE-UPDATE.md) | 기능연동 | 개발자 | active | 2026-08-21 | 강제 업데이트 — Remote Config 콘솔 셋업 |
 | 24 | [MMP-CONSOLE-SETUP](docs/24-MMP-CONSOLE-SETUP.md) | 기능연동 | 개발자 | active | 2026-08-21 | 어트리뷰션 콘솔·스토어 신고 절차 |
-| 25 | [AUTH-DELEGATION](docs/25-AUTH-DELEGATION.md) | 기능연동 | 개발자 | active | 2026-09-11 | **인증 정본** — 외부 인증서버 위탁 규약 |
+| 25 | [AUTH-DELEGATION](docs/25-AUTH-DELEGATION.md) | 기능연동 | 개발자 | active | 2026-10-07 | **인증 정본** — 외부 인증서버 위탁 규약 · 브릿지 버전·배포 |
 
 **상태** — `active`: 현행 문서, 순서대로 읽는다 · `reference`: 수시 조회용, 처음부터 읽을 필요 없다
 

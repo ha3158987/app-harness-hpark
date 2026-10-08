@@ -21,6 +21,10 @@ import { loadConfig, runtimeConfig, WIRED_PROVIDERS } from './lib/config.mjs';
 import { LOCALES, resolveLocalized, baseLocaleOf } from './lib/i18n.mjs';
 import { appResourcesFilesAnchor, stripLprojRefs, rewriteKnownRegions } from './lib/pbxproj.mjs';
 import { authSetup, needsOAuthReturnScheme, usesNativeApple } from './lib/auth-setup.mjs';
+import {
+  appLinkHosts, appLinkWarnings, hasExplicitAppLinks, wellKnownHosts,
+  patchAndroidDeepLinks, patchIosDeepLinks,
+} from './lib/app-links.mjs';
 import { log, fail } from './lib/log.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -485,7 +489,8 @@ function scaffoldPackageJson(buildDir, cfg, plugins) {
 }
 
 // ── 네이티브 딥링크 / 권한 배선 ────────────────────────────────────────────
-// allowedDomains 를 유니버설/앱 링크로 연결한다. features.deepLink 일 때만 호출.
+// 유니버설/앱 링크(patchAndroidDeepLinks · patchIosDeepLinks)와 그 호스트 판정은 lib/app-links.mjs 가 정본이다.
+// 호스트 = navigation.appLinkDomains(명시) → 없으면 navigation.allowedDomains 전체(하위호환). features.deepLink 일 때만.
 
 // features.push: Android 13+ 알림 런타임 권한을 명시 선언한다.
 // firebase-messaging(23.0.6+) AAR 매니페스트 머지에 암묵 의존하면 라이브러리
@@ -507,32 +512,6 @@ function patchAndroidPushPermission(buildDir) {
   log.ok('AndroidManifest: POST_NOTIFICATIONS (push)');
 }
 
-function patchAndroidDeepLinks(buildDir, cfg) {
-  const manifest = join(buildDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
-  if (!existsSync(manifest)) return;
-  let xml = readFileSync(manifest, 'utf8');
-  const MARK = 'harness-deeplinks';
-  if (xml.includes(MARK)) return; // idempotent
-  const domains = cfg.navigation.allowedDomains || [];
-  if (!domains.length) return;
-  const dataTags = domains
-    .map((d) => `                <data android:scheme="https" android:host="${d}" />`).join('\n');
-  const filter =
-`            <!-- ${MARK}: App Links (generate-app 자동 주입) -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-${dataTags}
-            </intent-filter>
-`;
-  const actClose = xml.indexOf('</activity>'); // MainActivity 의 닫는 태그
-  if (actClose === -1) return;
-  xml = xml.slice(0, actClose) + filter + '        ' + xml.slice(actClose);
-  writeFileSync(manifest, xml);
-  log.ok(`AndroidManifest: App Links intent-filter (${domains.length} 도메인)`);
-}
-
 // ── 딥링크 도메인 증명 파일 (.well-known) ──────────────────────────────────
 // Universal Link(iOS) / App Link(Android) 는 **앱 설정만으로는 동작하지 않는다.**
 // 도메인이 "이 앱을 신뢰한다"고 선언하는 파일 2개를 웹이 서빙해야 한다.
@@ -549,13 +528,8 @@ function resolveAppleTeamId(cfg) {
     || null;
 }
 
-// AASA/assetlinks 를 서빙해야 하는 실제 호스트 목록.
-// 와일드카드(*.example.com)는 파일을 서빙할 대상이 아니다 — 각 실호스트가 자기 파일을 준다.
-function wellKnownHosts(cfg) {
-  const hosts = (cfg.navigation.allowedDomains || []).filter((d) => !d.includes('*'));
-  const startHost = new URL(cfg.startUrl).hostname;
-  return [...new Set([startHost, ...hosts])];
-}
+// AASA/assetlinks 를 서빙해야 하는 실제 호스트 목록은 lib/app-links.mjs 의 wellKnownHosts() —
+// navigation.appLinkDomains(명시)면 그 목록, 없으면 시작 호스트 + 와일드카드 아닌 allowedDomains.
 
 // 같은 호스트를 선언한 **모든** 앱을 모은다.
 // 한 도메인의 증명 파일은 그 도메인을 쓰는 앱 전부를 인가해야 한다 — dev/stage/prod 를
@@ -661,44 +635,6 @@ function writeWellKnown(buildDir, cfg) {
     log.dim('  ⚠️ 한 호스트를 여러 앱(dev/stage/prod)이 쓰면 이 파일 하나에 전부 들어 있다 — ' +
       '앱별로 따로 올리지 말 것(덮어쓰면 다른 앱 링크가 깨진다).');
   }
-}
-
-function patchIosDeepLinks(buildDir, cfg) {
-  const iosAppDir = join(buildDir, 'ios', 'App', 'App');
-  if (!existsSync(iosAppDir)) return; // iOS 플랫폼 미추가(예: Windows) — 디렉터리를 만들지 않는다
-  const entFile = join(iosAppDir, 'App.entitlements');
-  const domains = cfg.navigation.allowedDomains || [];
-  if (!domains.length) return;
-  const links = domains.map((d) => `\t\t<string>applinks:${d}</string>`).join('\n');
-
-  if (existsSync(entFile)) {
-    let xml = readFileSync(entFile, 'utf8');
-    if (xml.includes('associated-domains')) return; // 이미 있음
-    const block = `\t<key>com.apple.developer.associated-domains</key>\n\t<array>\n${links}\n\t</array>\n`;
-    const close = xml.lastIndexOf('</dict>');
-    if (close === -1) return;
-    xml = xml.slice(0, close) + block + xml.slice(close);
-    writeFileSync(entFile, xml);
-    log.ok(`iOS App.entitlements: associated-domains 병합 (${domains.length} 도메인)`);
-    return;
-  }
-  const plist =
-`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-\t<key>com.apple.developer.associated-domains</key>
-\t<array>
-${links}
-\t</array>
-</dict>
-</plist>
-`;
-  mkdirSync(dirname(entFile), { recursive: true });
-  writeFileSync(entFile, plist);
-  log.ok(`iOS App.entitlements 생성: associated-domains (${domains.length} 도메인)`);
-  log.warn('iOS 딥링크가 동작하려면 Xcode > App 타깃 > Signing & Capabilities 에서 ' +
-    'App.entitlements(CODE_SIGN_ENTITLEMENTS) 연결이 필요합니다(pbxproj 자동 수정은 손상 위험으로 생략).');
 }
 
 // 기능별 iOS 권한 사용 설명 문구 주입. 누락 시 권한 요청 시점에 iOS 가 크래시한다.
@@ -1911,6 +1847,12 @@ function main() {
   // 설치/sync 앞에 둔다 — 웹 담당자가 --skip-install 드라이 실행만으로 파일을 받아갈 수 있게.
   if (cfg.features.deepLink) {
     log.step('딥링크 도메인 증명 파일 (.well-known)');
+    // 앱 링크 호스트를 드라이 실행에서도 보이게 찍는다 — intent-filter·entitlements 는 네이티브 단계에서 만든다.
+    log.info(`앱 링크 호스트: ${appLinkHosts(cfg).join(', ') || '(없음)'}` +
+      (hasExplicitAppLinks(cfg)
+        ? ' — navigation.appLinkDomains'
+        : ' — navigation.allowedDomains 전체(appLinkDomains 미지정, 하위호환)'));
+    appLinkWarnings(cfg).forEach((w) => log.warn(w));
     writeWellKnown(buildDir, cfg);
   }
 

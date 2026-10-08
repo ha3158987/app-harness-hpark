@@ -54,6 +54,11 @@ function deriveCapabilities(features) {
 // 옛 OAuth code 를 받는다(그 code 는 이미 만료·소비돼 로그인이 실패한다).
 const PENDING_DEEP_LINK_TTL_MS = 30_000;
 
+// 같은 딥링크가 이 시간 안에 또 오면 버린다. 콜드스타트 launch URL 은 **두 길**로 온다 — Capacitor 가 보류해 둔
+// appUrlOpen(리스너가 붙는 순간 배달)과 getLaunchUrl. 둘 다 흘리면 웹이 같은 화면을 두 번 쌓아 뒤로를 두 번 눌러야
+// 나간다(2026-09-23 에뮬레이터 실측).
+const DUPLICATE_DEEP_LINK_MS = 3_000;
+
 // 범용 OAuth2(시스템 브라우저) 공급자 프리셋. config.auth.oauth.<provider> 가 덮어쓴다.
 // 비밀키(client secret)는 앱에 없음 — authorization code 를 백엔드가 교환(PKCE).
 const OAUTH_PRESETS = {
@@ -112,6 +117,7 @@ class AppBridgeImpl {
     // ⚠️ 배달되면 즉시 버린다 — 남겨 두면 다음 onDeepLink 등록자에게 다시 배달돼
     //    이미 소비된 OAuth code 가 재생된다(아래 onDeepLink 주석).
     this._pendingDeepLink = null;
+    this._lastEmittedDeepLink = null; // { url, at } — 잇단 같은 딥링크 걸러내기(DUPLICATE_DEEP_LINK_MS)
     // ATT: 시스템 팝업은 유저당 평생 1회만 뜬다(응답 후엔 notDetermined 로 못 돌아옴).
     // 호출부가 실수로 두 곳에서 요청하면 응답 타이밍이 엉켜 잘못된 값이 어트리뷰션 SDK 로 간다
     // (Poptale 실제 사례). 그래서 API 자체를 멱등하게 만든다 — 아래 2개가 그 상태다.
@@ -348,14 +354,34 @@ class AppBridgeImpl {
       });
       // 콜드스타트로 열렸을 때(launchUrl)도 라우팅
       App.getLaunchUrl().then((res) => {
-        if (res && res.url) this._emitDeepLink(res.url, res);
+        if (res && res.url) this._emitLaunchUrl(res.url, res);
       }).catch(() => {});
     }).catch(() => {});
+  }
+
+  // launch URL 은 **액티비티를 띄운 인텐트**라 앱 수명 내내 같은 값이다. 문서가 새로 뜰 때마다(전체 이동·새로 고침)
+  // 이 값을 다시 흘리면 처음 딥링크가 되풀이된다 — 2026-09-23 에뮬레이터 실측: 딥링크로 켠 뒤 전체 이동할 때마다
+  // 그 화면으로 되돌아갔다. OAuth 복귀로 콜드스타트했다면 이미 소비된 code 를 다시 상환하려 든다.
+  // 그래서 WebView 세션(sessionStorage — 프로세스가 새로 뜨면 비어 있다)당 같은 launch URL 은 한 번만 흘린다.
+  // 실행 중 도착(appUrlOpen)은 이 경로를 타지 않으므로 같은 링크를 다시 눌러도 막히지 않는다.
+  _emitLaunchUrl(url, raw) {
+    const KEY = '__appbridge_launch_url';
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+        if (sessionStorage.getItem(KEY) === url) return;
+        sessionStorage.setItem(KEY, url);
+      }
+    } catch { /* 저장소를 못 쓰면 종전대로 흘린다 */ }
+    this._emitDeepLink(url, raw);
   }
 
   // 등록된 모든 핸들러로 딥링크 분배 + 동선 자동 기록.
   // 핸들러가 없으면 보류분으로 남긴다 — 있으면 배달로 끝이고 보관하지 않는다.
   _emitDeepLink(url, raw) {
+    const now = Date.now();
+    const last = this._lastEmittedDeepLink;
+    if (last && last.url === url && now - last.at < DUPLICATE_DEEP_LINK_MS) return;
+    this._lastEmittedDeepLink = { url, at: now };
     this.track('deep_link_open', { url });
     const handlers = this._deepLinkHandlers.slice(); // 배달 중 등록/해제에 안전하게
     if (!handlers.length) {

@@ -28,7 +28,12 @@ description: 하네스에 새 웹 서비스를 앱으로 추가한다. apps/<slu
    그 출력에서 `appId`·`startUrl`·엔드포인트 호스트 등 사용자가 준 값으로 덮어쓴다.
 3. `apps/<slug>/` 생성, `app.config.json` 작성. 기능은 사용자가 명시 안 한 건 안전한 기본값
    (`push:false`, `deepLink:false` 등)으로 두고, 어떤 값으로 채웠는지 사용자에게 요약 보고.
-   **단 `broker` 면 `deepLink`·`secureStorage` 는 반드시 `true`** — 복귀 스킴이 딥링크다.
+   **단 `broker` 면 `deepLink` 는 반드시 `true`** — 복귀 스킴이 딥링크다. `secureStorage` 는 브릿지가
+   `login`·`guestLogin`·`completeSignup` 응답의 `token` 을 보관하는 자리라, 그 셋을 안 쓰고 세션을 httpOnly 쿠키로만
+   내리는 웹(팝테일 V2)은 꺼도 된다(프리셋 기본은 `true`).
+   `deepLink` 를 켜면 `navigation.appLinkDomains` 에 **앱 링크 호스트를 명시**한다 — `.well-known` 을 서빙할 웹 호스트만,
+   와일드카드 없이(프리셋의 `**.<slug>.ai` 는 WebView 이동 허용용이다). 키를 빼면 `allowedDomains` 전체가 앱 링크가 되어
+   다른 앱과 링크를 다툰다 — `docs/02-GUIDE.md` §6.
 4. `apps/<slug>/icon.png`, `splash.png` 자리 안내. 없으면 사용자에게 1024² 아이콘 /
    2732² 스플래시 소스를 요청 (placeholder를 만들지 말 것 — 사용자 제공 전까지 비워둔다).
 5. `appId` 중복 여부를 `apps/*/app.config.json` 전체에서 확인.

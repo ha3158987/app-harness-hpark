@@ -6,6 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './lib/config.mjs';
 import { authSetup, summarizeStoreBlockers } from './lib/auth-setup.mjs';
+import { appLinkHosts, appLinkWarnings, hasExplicitAppLinks } from './lib/app-links.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const IS_MAC = process.platform === 'darwin';
@@ -45,6 +46,12 @@ for (const slug of slugs) {
 
   const feats = Object.entries(cfg.features).filter(([, v]) => v === true || v?.enabled).map(([k]) => k);
   if (feats.length) ok(`features: ${feats.join(', ')}`);
+  if (cfg.features.deepLink) {
+    // 판정은 lib/app-links.mjs 가 정본 — generate-app 이 실제로 등록하는 목록과 같다.
+    ok(`app links: ${appLinkHosts(cfg).join(', ') || '(없음)'}` +
+      (hasExplicitAppLinks(cfg) ? '' : ' (allowedDomains 전체 — appLinkDomains 미지정)'));
+    appLinkWarnings(cfg).forEach((m) => w(m));
+  }
   if (cfg.auth.providers.length) {
     ok(`auth: ${cfg.auth.providers.join(', ')}`);
     // 인증 규칙은 lib/auth-setup.mjs 가 정본이다 — doctor 는 다시 구현하지 않는다.

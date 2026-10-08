@@ -4,7 +4,7 @@ title: AIPIA-CONVENTIONS — 전사 앱 컨벤션 (정본)
 category: 시작
 audience: 개발자
 status: active
-updated: 2026-09-11
+updated: 2026-10-07
 ---
 
 # AIPIA-CONVENTIONS — 전사 앱 컨벤션 (정본)
@@ -97,6 +97,9 @@ updated: 2026-09-11
 
 - iOS `apple-app-site-association` 호스팅: 각 환경 도메인 루트에서 서빙
 - Android `assetlinks.json`: 동일
+- **앱 링크 호스트는 앱별로 명시한다**(`navigation.appLinkDomains`, 2026-10-07) — 그 앱의 웹 호스트만, 와일드카드 없이.
+  `*.poptale.ai` 처럼 와일드카드를 앱 링크로 쓰면 같은 기기의 팝챗·팝테일 앱이 서로의 링크를 가로챈다.
+  WebView 이동 허용(`allowedDomains`)과는 별개다 — [02-GUIDE.md §6](./02-GUIDE.md)
 - 🅰️ Poptale 의 딥링크 테스트 URL: `https://poptale.ai/detail/<id>`, `https://dev.poptale.ai/detail/<id>` 등
 
 ---
