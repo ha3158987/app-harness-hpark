@@ -8,7 +8,7 @@
   "startUrl": "https://chat.dev.poptale.ai",
   "version": {
     "name": "1.0.0",
-    "code": 18
+    "code": 19
   },
   "locales": {
     "default": "en",
@@ -18,8 +18,8 @@
     "primary": "#000000",
     "statusBarStyle": "light",
     "background": "#000000",
-    "splashBackground": "#f4f9ff",
-    "splashBackgroundDark": "#0b1420",
+    "splashBackground": "#0D1B2B",
+    "splashBackgroundDark": "#0D1B2B",
     "splashDuration": 2500
   },
   "features": {
