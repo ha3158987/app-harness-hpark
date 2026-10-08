@@ -84,7 +84,7 @@ SNS 버튼 무반응.) `AppBridge` 자체 메서드(`getConfig`·`blockCapture`�
 | 딥링크 | `onDeepLink(fn)` |
 | 강제업데이트 | `checkForceUpdate()` (보통 자동) |
 | 기기/네트워크/키보드 | `getDeviceInfo()`, `getNetworkStatus()`, `onNetworkChange(fn)`, `onKeyboard(fn)` |
-| 스토어 나라 | `getStoreCountry()` → `'KR'`·`'US'`·`'JP'` … (ISO 3166-1 alpha-2) 또는 `null`. 앱을 받은 스토어 계정의 나라(iOS storefront · Android Play 결제 나라) — 기기 위치·언어가 아니다. 웹·옛 셸·결제 불가 기기는 `null`, 던지지 않는다. `capabilities.storeCountry` = 셸 네이티브가 지원(`1.5.0-beta.6`+ 로 빌드한 앱). 모를 때의 처리는 웹이 정한다 |
+| 스토어 나라 | `getStoreCountry()` → `'KR'`·`'US'`·`'JP'` … (ISO 3166-1 alpha-2) 또는 `null`. 앱을 받은 스토어 계정의 나라(iOS storefront · Android Play 결제 나라) — 기기 위치·언어가 아니다. 웹·옛 셸·결제 불가 기기는 `null`, 던지지 않는다. `capabilities.storeCountry` = 셸 네이티브가 지원(`1.5.0-beta.6`+ 로 빌드한 앱). **Android 는 IAP 상품이 있는 앱만** — Play Billing 은 IAP 플러그인이 넣고 브릿지는 넣지 않으므로(IAP 없는 앱에 Billing·BILLING 권한이 붙지 않는다) 그 밖의 앱은 capability `false` · `null`. 모를 때의 처리는 웹이 정한다 |
 | 저장 | `secureSet/Get/Remove`(민감), `setPref/getPref/removePref`(일반) |
 | 카메라/위치/햅틱/클립보드 | `takePhoto()`, `getLocation()`, `haptic()`, `copyToClipboard()`, `readClipboard()` |
 | 마케팅/분석 | `initMarketing()`, `track(event,params)`, `setUser(id,traits)`, `requestTracking()`(iOS ATT) |

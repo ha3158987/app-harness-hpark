@@ -118,7 +118,7 @@ flowchart LR
 | 카메라/위치/햅틱/클립보드 | `takePhoto` `getLocation` `haptic` `copyToClipboard` `readClipboard` | `features.*` | APP-FEATURES |
 | 저장 | `secureSet/Get/Remove`(민감) `setPref/getPref/removePref` | `features.secureStorage` | APP-FEATURES |
 | 기기/네트워크/키보드/복귀 | `getDeviceInfo` `getNetworkStatus` `onNetworkChange` `onKeyboard` `onResume` | — | INTEGRATION |
-| 스토어 나라 | `getStoreCountry` (앱을 받은 스토어 계정의 나라, alpha-2 · 모르면 null) | — (셸 네이티브가 정한다) | INTEGRATION |
+| 스토어 나라 | `getStoreCountry` (앱을 받은 스토어 계정의 나라, alpha-2 · 모르면 null) | — (셸 네이티브가 정한다. Android 는 `iap` 상품이 있는 앱만) | INTEGRATION |
 | 안전영역 | `getSafeAreaInsets` | (자동) | DEVICE-SUPPORT §4b |
 | 마케팅/분석 | `initMarketing` `track` `setUser` | `marketing` | MARKETING |
 | 모니터링 | `initMonitoring`(자동) `reportError` | `monitoring` | INTEGRATION §4b |

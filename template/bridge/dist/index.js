@@ -46,7 +46,8 @@ function deriveCapabilities(features) {
     // flag() 로 안 잡히므로 직접 판정. 둘 중 하나라도 켜져 있으면 뷰어 capability.
     viewer: !!(f.viewer && typeof f.viewer === 'object' &&
       ((f.viewer.captureBlock && f.viewer.captureBlock.enabled) || (f.viewer.brightness && f.viewer.brightness.enabled))),
-    // 스토어 나라(getStoreCountry). config 가 아니라 **셸 네이티브**가 정한다 — ready() 가 네이티브 메서드 목록을 보고 채운다.
+    // 스토어 나라(getStoreCountry). config 가 아니라 **셸 네이티브**가 정한다 — ready() 가 네이티브 메서드 목록을 보고 채운다
+    // (Android 는 IAP 앱만 — _storeCountryCapability 주석).
     storeCountry: false,
   };
 }
@@ -178,8 +179,14 @@ class AppBridgeImpl {
   // capabilities.storeCountry 판정 — 이 셸의 네이티브(AppBridge 플러그인)에 getStoreCountry 가 있는가.
   // config 로 정하지 않는 이유: 앱 셸은 웹보다 늦게 배포된다(docs/25 §6) — 새 브릿지 JS 가 이 메서드를 모르는
   // 옛 셸에서 돌 수 있다. 네이티브가 문서 시작 때 주입하는 플러그인 메서드 목록(Capacitor.PluginHeaders)을 본다.
+  // Android 는 하나 더 — Play Billing 이 런타임에 있어야 답할 수 있다. 브릿지는 Billing 을 compileOnly 로만 두고
+  // (IAP 없는 앱에 Billing·BILLING 권한을 붙이지 않으려고) 실제 라이브러리는 IAP 플러그인(cordova-plugin-purchase)이
+  // 넣는다. generate-app 은 iap.products 가 있을 때만 그 플러그인을 설치하므로 capabilities.iap 가 곧 "Billing 있음"
+  // 이다. 없는 앱의 네이티브는 billing-unavailable 을 주므로 여기서 미리 false 로 둔다(iOS 는 StoreKit 이라 무관).
+  // ready() 안에서 capabilities.iap 를 채운 **뒤에** 불러야 한다.
   _storeCountryCapability() {
     if (!this.isNative) return false;
+    if (this.platform === 'android' && !(this.capabilities && this.capabilities.iap)) return false;
     try {
       const headers = Capacitor.PluginHeaders;
       const appBridge = Array.isArray(headers) ? headers.find((h) => h && h.name === 'AppBridge') : null;
@@ -1830,9 +1837,10 @@ class AppBridgeImpl {
   /**
    * 이 기기 스토어 계정의 나라 — ISO 3166-1 alpha-2 대문자(`'KR'` · `'US'` · `'JP'`). 모르면 null.
    *   iOS     = App Store storefront(StoreKit 2 → 없으면 StoreKit 1). alpha-3 → alpha-2 는 네이티브가 바꾼다.
-   *   Android = Play 결제 설정 나라(Play Billing getBillingConfigAsync).
-   *   null    = 웹 · 이 메서드가 없는 옛 셸(capabilities.storeCountry=false) · 결제 불가 기기(Play 없음·계정 없는
-   *             에뮬레이터) · 상한 초과 · alpha-2 가 아닌 값.
+   *   Android = Play 결제 설정 나라(Play Billing getBillingConfigAsync). **IAP 상품이 있는 앱만** — Play Billing 은
+   *             IAP 플러그인이 넣는다(브릿지는 compileOnly). IAP 없는 앱은 capabilities.storeCountry=false · null.
+   *   null    = 웹 · 이 메서드가 없는 옛 셸(capabilities.storeCountry=false) · 위 Android IAP 없는 앱 · 결제 불가
+   *             기기(Play 없음·계정 없는 에뮬레이터) · 상한 초과 · alpha-2 가 아닌 값.
    * 기기 위치·언어·IP 가 아니라 **앱을 받은 스토어**의 나라다. 그 값으로 무엇을 할지(나라별 절차, 모를 때의
    * 처리)는 웹·BE 가 정한다 — 브릿지는 값만 운반한다.
    *

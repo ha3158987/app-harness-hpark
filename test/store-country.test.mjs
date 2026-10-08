@@ -17,12 +17,14 @@ import { AppBridgeWeb } from '../template/bridge/dist/web.js';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ORIG = {
   isNative: AppBridge.isNative,
+  platform: AppBridge.platform,
   capabilities: AppBridge.capabilities,
   timeoutMs: AppBridge._storeCountryTimeoutMs,
 };
 
 afterEach(() => {
   AppBridge.isNative = ORIG.isNative;
+  AppBridge.platform = ORIG.platform;
   AppBridge.capabilities = ORIG.capabilities;
   AppBridge._storeCountryTimeoutMs = ORIG.timeoutMs;
   AppBridge._storeCountry = null;
@@ -155,6 +157,7 @@ test('capability: 네이티브 메서드 목록(PluginHeaders)에 getStoreCountr
   const header = (name, methods) => ({ name, methods: methods.map((m) => ({ name: m, rtype: 'promise' })) });
   try {
     AppBridge.isNative = true;
+    AppBridge.platform = 'ios';
     cap.PluginHeaders = [header('App', ['getLaunchUrl']), header('AppBridge', ['getConfig', 'getStoreCountry'])];
     assert.equal(AppBridge._storeCountryCapability(), true);
 
@@ -170,6 +173,31 @@ test('capability: 네이티브 메서드 목록(PluginHeaders)에 getStoreCountr
     AppBridge.isNative = false;
     cap.PluginHeaders = [header('AppBridge', ['getStoreCountry'])];
     assert.equal(AppBridge._storeCountryCapability(), false, '웹에서 true');
+  } finally {
+    if (had) cap.PluginHeaders = orig;
+    else delete cap.PluginHeaders;
+  }
+});
+
+test('capability(Android): Play Billing 이 런타임에 있는 IAP 앱만 true — iOS 는 IAP 와 무관', () => {
+  // 브릿지는 Billing 을 compileOnly 로만 둔다. 실제 라이브러리는 IAP 플러그인이 넣고, generate-app 은
+  // iap.products 가 있을 때만 그 플러그인을 설치한다 → capabilities.iap 가 곧 "Billing 있음".
+  const cap = globalThis.Capacitor;
+  const had = Object.prototype.hasOwnProperty.call(cap, 'PluginHeaders');
+  const orig = cap.PluginHeaders;
+  try {
+    AppBridge.isNative = true;
+    cap.PluginHeaders = [{ name: 'AppBridge', methods: [{ name: 'getStoreCountry', rtype: 'promise' }] }];
+    for (const [platform, iap, expected] of [
+      ['android', true, true],   // poptale-v2-dev — cordova-plugin-purchase 가 billing 을 넣는다
+      ['android', false, false], // characterchat-dev — Billing 없음, 네이티브는 billing-unavailable
+      ['ios', false, true],      // StoreKit 은 시스템 프레임워크
+      ['ios', true, true],
+    ]) {
+      AppBridge.platform = platform;
+      AppBridge.capabilities = { ...ORIG.capabilities, iap };
+      assert.equal(AppBridge._storeCountryCapability(), expected, `${platform} iap=${iap}`);
+    }
   } finally {
     if (had) cap.PluginHeaders = orig;
     else delete cap.PluginHeaders;
@@ -205,6 +233,32 @@ test('네이티브 두 곳이 같은 메서드를 연다 — iOS 등록 목록 +
 
   const kt = readFileSync(join(ROOT, 'template/bridge/android/src/main/java/com/harness/bridge/AppBridgePlugin.kt'), 'utf8');
   assert.match(kt, /@PluginMethod\s+fun getStoreCountry\(call: PluginCall\)/);
+});
+
+test('Android: Billing 은 선택 의존성 — IAP 없는 앱에 라이브러리·권한을 붙이지 않고, 없어도 죽지 않는다', () => {
+  const dir = join(ROOT, 'template/bridge/android');
+  const gradle = readFileSync(join(dir, 'build.gradle'), 'utf8');
+  assert.match(gradle, /^\s*compileOnly\s+["']com\.android\.billingclient:billing:/m, 'billing 이 compileOnly 가 아니다');
+  assert.doesNotMatch(gradle, /^\s*(implementation|api|runtimeOnly)\s+["']com\.android\.billingclient:/m,
+    'billing 이 런타임 의존성이면 IAP 없는 앱에도 Billing·BILLING 권한이 붙는다');
+  assert.doesNotMatch(readFileSync(join(dir, 'src/main/AndroidManifest.xml'), 'utf8'), /com\.android\.vending\.BILLING/,
+    'BILLING 권한은 IAP 플러그인이 IAP 앱에만 넣는다');
+
+  // ★ 회귀 지점: AppBridgePlugin 에 Billing 타입(import·람다 인자 포함)이 하나라도 있으면, Capacitor 가 플러그인
+  //   등록 때 부르는 getDeclaredMethods() 가 Billing 없는 앱에서 NoClassDefFoundError 를 던져 앱이 시작하자마자
+  //   죽는다(2026-10-08 characterchat-dev 에뮬레이터 실측). Billing 코드는 PlayStoreCountry.kt 에만 둔다.
+  const plugin = readFileSync(join(dir, 'src/main/java/com/harness/bridge/AppBridgePlugin.kt'), 'utf8');
+  // 주석과 문자열(클래스 이름으로 존재를 확인하는 곳)은 빼고 코드만 본다.
+  const code = plugin
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '')
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  assert.doesNotMatch(code, /billingclient|\bBilling\w*|PendingPurchasesParams/, 'AppBridgePlugin.kt 에 Billing 타입이 있다');
+  assert.match(plugin, /Class\.forName\("com\.android\.billingclient\.api\.BillingClient"/, '없을 때를 이름으로 확인하지 않는다');
+  assert.match(plugin, /"billing-unavailable"/);
+
+  const impl = readFileSync(join(dir, 'src/main/java/com/harness/bridge/PlayStoreCountry.kt'), 'utf8');
+  assert.match(impl, /getBillingConfigAsync/);
 });
 
 test('iOS alpha-3 → alpha-2 표: 형식 · 1:1 · 실제 지역 · 주요 나라', () => {
