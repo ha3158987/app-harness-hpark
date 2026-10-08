@@ -1758,6 +1758,7 @@ function patchNativeLaunchMotion(buildDir, cfg) {
   const sourceDir = join(ROOT, 'apps', cfg.slug);
   const maleSource = join(sourceDir, 'launch-male.png');
   const femaleSource = join(sourceDir, 'launch-female.png');
+  const logoSource = join(sourceDir, 'splash_icon.png');
   if (!existsSync(maleSource) || !existsSync(femaleSource)) {
     log.warn('네이티브 런치 모션 에셋 없음 — launch-male.png / launch-female.png 를 앱 소스에 추가하세요.');
     return;
@@ -1769,6 +1770,7 @@ function patchNativeLaunchMotion(buildDir, cfg) {
     mkdirSync(drawable, { recursive: true });
     copyFileSync(maleSource, join(drawable, 'launch_male.png'));
     copyFileSync(femaleSource, join(drawable, 'launch_female.png'));
+    if (existsSync(logoSource)) copyFileSync(logoSource, join(drawable, 'launch_logo.png'));
     const mainActivity = join(androidDir, 'app', 'src', 'main', 'java', ...cfg.appId.split('.'));
     const javaPath = join(mainActivity, 'MainActivity.java');
     if (existsSync(javaPath)) {
@@ -1804,6 +1806,10 @@ public class MainActivity extends BridgeActivity {
         private final FrameLayout rightClip;
         private final ImageView leftImage;
         private final ImageView rightImage;
+        private final ImageView logoIcon;
+        private final TextView logo;
+        private final View atmosphere;
+        private final View beam;
         private final View seam;
         private final View glow;
         private final TextView copy;
@@ -1821,6 +1827,22 @@ public class MainActivity extends BridgeActivity {
             addView(leftClip);
             addView(rightClip);
 
+            atmosphere = new View(context);
+            GradientDrawable atmosphereDrawable = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] { 0xd9061120, 0x16061120, 0x05061120, 0xe6061120 });
+            atmosphere.setBackground(atmosphereDrawable);
+            addView(atmosphere);
+
+            beam = new View(context);
+            GradientDrawable beamDrawable = new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[] { 0x00c4e9ff, 0x66d9edff, 0x00ffdcb0 });
+            beam.setBackground(beamDrawable);
+            beam.setRotation(21f);
+            beam.setAlpha(0f);
+            addView(beam);
+
             glow = new View(context);
             GradientDrawable glowDrawable = new GradientDrawable(
                 GradientDrawable.Orientation.LEFT_RIGHT,
@@ -1836,20 +1858,19 @@ public class MainActivity extends BridgeActivity {
             seam.setBackground(seamDrawable);
             addView(seam);
 
-            TextView logo = label(context, "♡  popchat", 17, Color.WHITE);
+            logoIcon = new ImageView(context);
+            logoIcon.setImageResource(R.drawable.launch_logo);
+            logoIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            addView(logoIcon);
+            logo = label(context, "popchat", 17, Color.WHITE);
             logo.setTypeface(null, 1);
             addView(logo);
-            LayoutParams logoLp = new LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-            logoLp.topMargin = dp(112);
-            logo.setLayoutParams(logoLp);
 
-            copy = label(context, "스쳐 지나가기엔,\\n너무 궁금한 사람.", 27, Color.WHITE);
+            copy = label(context, "THE FIRST SCENE\\n스쳐 지나가기엔,\\n너무 궁금한 사람.\\n\\n앱을 준비하고 있어요", 27, Color.WHITE);
             copy.setTypeface(null, 1);
-            copy.setGravity(Gravity.CENTER_HORIZONTAL);
+            copy.setGravity(Gravity.LEFT);
             addView(copy);
-            LayoutParams copyLp = new LayoutParams(-1, -2, Gravity.BOTTOM);
-            copyLp.bottomMargin = dp(96);
-            copy.setLayoutParams(copyLp);
+            copy.setAlpha(0f);
         }
 
         private ImageView image(Context context, int res) {
@@ -1880,8 +1901,13 @@ public class MainActivity extends BridgeActivity {
             layoutChild(rightClip, half, 0, w, h);
             layoutChild(leftImage, 0, 0, w, h);
             layoutChild(rightImage, -half, 0, w - half, h);
+            layoutChild(atmosphere, 0, 0, w, h);
+            layoutChild(beam, -w / 2, -h / 2, w * 3 / 2, h * 3 / 2);
             layoutChild(glow, half - dp(36), h / 2 - dp(220), half + dp(36), h / 2 + dp(220));
             layoutChild(seam, half - dp(2), 0, half + dp(2), h);
+            layoutChild(logoIcon, half - dp(27), (int) (h * .435f) - dp(29), half + dp(27), (int) (h * .435f) + dp(25));
+            layoutChild(logo, half - dp(48), (int) (h * .435f) + dp(30), half + dp(48), (int) (h * .435f) + dp(58));
+            layoutChild(copy, dp(25), (int) (h * .77f), w - dp(25), h - dp(55));
         }
 
         private void layoutChild(View child, int l, int t, int r, int b) {
@@ -1891,16 +1917,27 @@ public class MainActivity extends BridgeActivity {
         void start() {
             leftClip.setTranslationX(-dp(18));
             rightClip.setTranslationX(dp(18));
-            leftClip.setAlpha(0f);
-            rightClip.setAlpha(0f);
-            seam.setAlpha(0f);
+            leftClip.setAlpha(1f);
+            rightClip.setAlpha(1f);
+            seam.setAlpha(0.4f);
+            seam.setScaleY(.5f);
             glow.setAlpha(0f);
+            logoIcon.setAlpha(1f);
+            logo.setAlpha(1f);
+            logoIcon.setTranslationY(0f);
+            logo.setTranslationY(0f);
             copy.setAlpha(0f);
-            leftClip.animate().translationX(0f).alpha(1f).setDuration(1150).setStartDelay(80).start();
-            rightClip.animate().translationX(0f).alpha(1f).setDuration(1150).setStartDelay(80).start();
+            atmosphere.setAlpha(0.98f);
+            leftClip.animate().translationX(0f).setDuration(1400).setStartDelay(0).start();
+            rightClip.animate().translationX(0f).setDuration(1400).setStartDelay(0).start();
             leftImage.animate().scaleX(1f).scaleY(1f).setDuration(1700).setStartDelay(80).start();
             rightImage.animate().scaleX(1f).scaleY(1f).setDuration(1700).setStartDelay(80).start();
-            seam.animate().alpha(0.92f).setDuration(800).setStartDelay(650).start();
+            atmosphere.animate().alpha(0.36f).setDuration(1600).setStartDelay(250).start();
+            beam.animate().alpha(0.35f).translationX(dp(240)).setDuration(2800).setStartDelay(120).start();
+            seam.animate().alpha(0.78f).scaleY(1f).setDuration(1700).setStartDelay(0).start();
+            float logoShift = -getHeight() * .335f;
+            logoIcon.animate().translationY(logoShift).scaleX(.78f).scaleY(.78f).setDuration(1100).setStartDelay(0).start();
+            logo.animate().translationY(logoShift + dp(2)).scaleX(.78f).scaleY(.78f).setDuration(1100).setStartDelay(0).start();
             copy.animate().alpha(1f).setDuration(550).setStartDelay(1050).start();
             ObjectAnimator pulse = ObjectAnimator.ofFloat(glow, View.ALPHA, 0.12f, 0.42f, 0.12f);
             pulse.setDuration(1500);
@@ -1922,7 +1959,8 @@ public class MainActivity extends BridgeActivity {
   const iosDir = join(buildDir, 'ios', 'App', 'App');
   if (existsSync(iosDir)) {
     const assets = join(iosDir, 'Assets.xcassets');
-    for (const [name, source] of [['LaunchMale', maleSource], ['LaunchFemale', femaleSource]]) {
+    for (const [name, source] of [['LaunchMale', maleSource], ['LaunchFemale', femaleSource], ['LaunchLogo', logoSource]]) {
+      if (!existsSync(source)) continue;
       const imageSet = join(assets, `${name}.imageset`);
       mkdirSync(imageSet, { recursive: true });
       copyFileSync(source, join(imageSet, `${name.toLowerCase()}.png`));
@@ -1946,8 +1984,12 @@ private final class LaunchMotionViewController: UIViewController {
     private let rightClip = UIView()
     private let leftImage = UIImageView(image: UIImage(named: "LaunchMale"))
     private let rightImage = UIImageView(image: UIImage(named: "LaunchFemale"))
+    private let atmosphere = UIView()
+    private let beam = UIView()
     private let seam = UIView()
     private let glow = UIView()
+    private let logoIcon = UIImageView(image: UIImage(named: "LaunchLogo"))
+    private let logo = UILabel()
     private let copy = UILabel()
 
     override func viewDidLoad() {
@@ -1960,6 +2002,18 @@ private final class LaunchMotionViewController: UIViewController {
             clip.addSubview(image)
             view.addSubview(clip)
         }
+        let atmosphereGradient = CAGradientLayer()
+        atmosphereGradient.colors = [UIColor(red: 0.02, green: 0.07, blue: 0.12, alpha: 0.86).cgColor, UIColor.clear.cgColor, UIColor(red: 0.02, green: 0.07, blue: 0.12, alpha: 0.9).cgColor]
+        atmosphereGradient.locations = [0, 0.42, 1]
+        atmosphere.layer.addSublayer(atmosphereGradient)
+        view.addSubview(atmosphere)
+        let beamGradient = CAGradientLayer()
+        beamGradient.colors = [UIColor.clear.cgColor, UIColor(red: 0.71, green: 0.84, blue: 0.94, alpha: 0.3).cgColor, UIColor(red: 1, green: 0.82, blue: 0.6, alpha: 0.2).cgColor, UIColor.clear.cgColor]
+        beamGradient.locations = [0, 0.42, 0.55, 1]
+        beam.layer.addSublayer(beamGradient)
+        beam.transform = CGAffineTransform(rotationAngle: .pi / 5)
+        beam.alpha = 0
+        view.addSubview(beam)
         seam.backgroundColor = UIColor(red: 0.62, green: 0.88, blue: 1, alpha: 0.9)
         seam.layer.shadowColor = UIColor(red: 0.23, green: 0.69, blue: 1, alpha: 1).cgColor
         seam.layer.shadowRadius = 14
@@ -1973,65 +2027,82 @@ private final class LaunchMotionViewController: UIViewController {
         gradient.locations = [0, 1]
         glow.layer.addSublayer(gradient)
 
-        let logo = UILabel()
-        logo.text = "♡  popchat"
+        logoIcon.contentMode = .scaleAspectFit
+        view.addSubview(logoIcon)
+        logo.text = "popchat"
         logo.textColor = .white
         logo.font = .systemFont(ofSize: 17, weight: .semibold)
         logo.textAlignment = .center
         view.addSubview(logo)
-        logo.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            logo.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 34),
-            logo.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-        ])
 
-        copy.text = "스쳐 지나가기엔,\\n너무 궁금한 사람."
+        copy.text = "THE FIRST SCENE\\n스쳐 지나가기엔,\\n너무 궁금한 사람.\\n\\n앱을 준비하고 있어요"
         copy.textColor = .white
         copy.font = .systemFont(ofSize: 28, weight: .bold)
         copy.numberOfLines = 2
-        copy.textAlignment = .center
+        copy.textAlignment = .left
         copy.alpha = 0
         view.addSubview(copy)
-        copy.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            copy.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            copy.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -76),
-        ])
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let w = view.bounds.width
         let h = view.bounds.height
-        leftClip.frame = CGRect(x: 0, y: 0, width: w / 2, height: h)
-        rightClip.frame = CGRect(x: w / 2, y: 0, width: w / 2, height: h)
-        leftImage.frame = CGRect(x: 0, y: 0, width: w, height: h)
-        rightImage.frame = CGRect(x: -w / 2, y: 0, width: w, height: h)
+        leftClip.frame = CGRect(x: 0, y: 0, width: w * 0.54, height: h)
+        rightClip.frame = CGRect(x: w * 0.46, y: 0, width: w * 0.54, height: h)
+        leftImage.frame = CGRect(x: -w * 0.25, y: 0, width: w * 1.25, height: h)
+        rightImage.frame = CGRect(x: -w * 0.46, y: 0, width: w, height: h)
+        atmosphere.frame = view.bounds
+        beam.frame = CGRect(x: -w, y: -h * 0.2, width: w * 3, height: h * 1.4)
         seam.frame = CGRect(x: w / 2 - 2, y: 0, width: 4, height: h)
         glow.frame = CGRect(x: w / 2 - 48, y: h / 2 - 260, width: 96, height: 520)
+        logoIcon.frame = CGRect(x: w / 2 - 27, y: h * 0.435 - 29, width: 54, height: 54)
+        logo.frame = CGRect(x: w / 2 - 58, y: h * 0.435 + 27, width: 116, height: 26)
+        copy.frame = CGRect(x: 25, y: h * 0.77, width: w - 50, height: h * 0.2)
+        for layer in atmosphere.layer.sublayers ?? [] { layer.frame = atmosphere.bounds }
+        for layer in beam.layer.sublayers ?? [] { layer.frame = beam.bounds }
         if let gradient = glow.layer.sublayers?.first as? CAGradientLayer { gradient.frame = glow.bounds }
     }
 
     func start() {
         leftClip.transform = CGAffineTransform(translationX: -18, y: 0)
         rightClip.transform = CGAffineTransform(translationX: 18, y: 0)
-        leftClip.alpha = 0
-        rightClip.alpha = 0
-        seam.alpha = 0
+        leftClip.alpha = 1
+        rightClip.alpha = 1
+        seam.alpha = 0.4
+        seam.transform = CGAffineTransform(rotationAngle: .pi / 25).scaledBy(x: 1, y: 0.5)
         glow.alpha = 0
+        beam.alpha = 0
+        atmosphere.alpha = 0.98
+        logoIcon.alpha = 1
+        logo.alpha = 1
+        logoIcon.transform = .identity
+        logo.transform = .identity
         leftImage.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
         rightImage.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
-        UIView.animate(withDuration: 1.15, delay: 0.08, options: [.curveEaseOut]) {
+        copy.alpha = 0
+        UIView.animate(withDuration: 1.4, delay: 0, options: [.curveEaseOut]) {
             self.leftClip.transform = .identity
             self.rightClip.transform = .identity
-            self.leftClip.alpha = 1
-            self.rightClip.alpha = 1
         }
         UIView.animate(withDuration: 1.7, delay: 0.08, options: [.curveEaseOut]) {
             self.leftImage.transform = .identity
             self.rightImage.transform = .identity
         }
-        UIView.animate(withDuration: 0.8, delay: 0.65, options: []) { self.seam.alpha = 0.92 }
+        UIView.animate(withDuration: 1.6, delay: 0.25, options: [.curveEaseOut]) { self.atmosphere.alpha = 0.36 }
+        UIView.animate(withDuration: 2.8, delay: 0.12, options: [.curveEaseOut]) {
+            self.beam.alpha = 0.35
+            self.beam.transform = CGAffineTransform(rotationAngle: .pi / 5).translatedBy(x: 240, y: 0)
+        }
+        UIView.animate(withDuration: 1.7, delay: 0, options: [.curveEaseInOut]) {
+            self.seam.alpha = 0.78
+            self.seam.transform = CGAffineTransform(rotationAngle: .pi / 25)
+        }
+        let logoShift = -view.bounds.height * 0.335
+        UIView.animate(withDuration: 1.1, options: [.curveEaseOut]) {
+            self.logoIcon.transform = CGAffineTransform(translationX: 0, y: logoShift).scaledBy(x: 0.78, y: 0.78)
+            self.logo.transform = CGAffineTransform(translationX: 0, y: logoShift + 2).scaledBy(x: 0.78, y: 0.78)
+        }
         UIView.animate(withDuration: 0.55, delay: 1.05, options: []) { self.copy.alpha = 1 }
         UIView.animate(withDuration: 1.5, delay: 0.65, options: [.autoreverse, .repeat, .curveEaseInOut]) { self.glow.alpha = 0.38 }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.45) {
