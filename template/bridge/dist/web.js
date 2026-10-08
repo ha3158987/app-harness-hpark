@@ -32,4 +32,7 @@ export class AppBridgeWeb extends WebPlugin {
   async blockCapture() { return; }
   async setBrightness() { return; }
   async getBrightness() { return { value: -1 }; }
+
+  // 브라우저에는 "앱을 받은 스토어" 가 없다 — countryCode 없이 돌려준다(SDK 는 null 로 읽는다).
+  async getStoreCountry() { return { reason: 'not-native' }; }
 }

@@ -4,7 +4,7 @@ title: GUIDE — Appharness 마스터 가이드
 category: 시작
 audience: 전체
 status: active
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # GUIDE — Appharness 마스터 가이드
@@ -118,6 +118,7 @@ flowchart LR
 | 카메라/위치/햅틱/클립보드 | `takePhoto` `getLocation` `haptic` `copyToClipboard` `readClipboard` | `features.*` | APP-FEATURES |
 | 저장 | `secureSet/Get/Remove`(민감) `setPref/getPref/removePref` | `features.secureStorage` | APP-FEATURES |
 | 기기/네트워크/키보드/복귀 | `getDeviceInfo` `getNetworkStatus` `onNetworkChange` `onKeyboard` `onResume` | — | INTEGRATION |
+| 스토어 나라 | `getStoreCountry` (앱을 받은 스토어 계정의 나라, alpha-2 · 모르면 null) | — (셸 네이티브가 정한다) | INTEGRATION |
 | 안전영역 | `getSafeAreaInsets` | (자동) | DEVICE-SUPPORT §4b |
 | 마케팅/분석 | `initMarketing` `track` `setUser` | `marketing` | MARKETING |
 | 모니터링 | `initMonitoring`(자동) `reportError` | `monitoring` | INTEGRATION §4b |
@@ -125,7 +126,7 @@ flowchart LR
 
 </details>
 
-**capabilities 플래그**: `push, deepLink, deferredDeepLink, biometric, share, camera, forceUpdate, secureStorage, localNotification, haptics, clipboard, geolocation, auth, iap`
+**capabilities 플래그**: `push, deepLink, deferredDeepLink, biometric, share, camera, forceUpdate, secureStorage, localNotification, haptics, clipboard, geolocation, auth, iap, storeCountry`
 
 **인증/계정 지원 범위**: 이메일 + 소셜(apple/google/naver/kakao/facebook/x/threads/**line**/**discord**) — 총 10종 · 회원가입 온보딩(약관/추가정보) · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인 · 기기 등록.
 **기본 경로는 외부 인증서버 위탁**이다 — [25-AUTH-DELEGATION.md](25-AUTH-DELEGATION.md). 중앙 IdP 자체 구축(Keycloak)은 **코드에서 제거됐다**(#25) — `auth.idp` 가 남아 있는 config 는 빌드가 멈춘다.

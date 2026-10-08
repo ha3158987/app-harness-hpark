@@ -4,7 +4,7 @@ title: INTEGRATION — 프론트엔드 통합 가이드
 category: 앱추가
 audience: 개발자
 status: active
-updated: 2026-09-23
+updated: 2026-10-08
 ---
 
 # INTEGRATION — 프론트엔드 통합 가이드
@@ -52,7 +52,7 @@ if (AppBridge.isNative) { /* 앱 */ } else { /* 브라우저 */ }
 제외(webpack `IgnorePlugin`·`externals`)하면 **앱에서도** `Cannot find module` 로 실패하고, 브릿지는 대부분 그 실패를
 삼킨다 — 오류 화면 없이 딥링크·하드웨어 뒤로·인앱 브라우저 로그인이 **아무 반응도 안 하는** 앱이 된다.
 (2026-09-23 팝테일 v2 리더 웹 에뮬레이터 실측: 뒤로 무반응, 커스텀 스킴 딥링크 `No listeners found for event appUrlOpen`,
-SNS 버튼 무반응.) `AppBridge` 자체 메서드(`getConfig`·`blockCapture`·`setBrightness`)는 `@capacitor/core` 만으로 동작한다.
+SNS 버튼 무반응.) `AppBridge` 자체 메서드(`getConfig`·`blockCapture`·`setBrightness`·`getStoreCountry`)는 `@capacitor/core` 만으로 동작한다.
 
 | 쓰는 브릿지 기능 | 웹에 설치할 패키지 |
 |---|---|
@@ -84,6 +84,7 @@ SNS 버튼 무반응.) `AppBridge` 자체 메서드(`getConfig`·`blockCapture`�
 | 딥링크 | `onDeepLink(fn)` |
 | 강제업데이트 | `checkForceUpdate()` (보통 자동) |
 | 기기/네트워크/키보드 | `getDeviceInfo()`, `getNetworkStatus()`, `onNetworkChange(fn)`, `onKeyboard(fn)` |
+| 스토어 나라 | `getStoreCountry()` → `'KR'`·`'US'`·`'JP'` … (ISO 3166-1 alpha-2) 또는 `null`. 앱을 받은 스토어 계정의 나라(iOS storefront · Android Play 결제 나라) — 기기 위치·언어가 아니다. 웹·옛 셸·결제 불가 기기는 `null`, 던지지 않는다. `capabilities.storeCountry` = 셸 네이티브가 지원(`1.5.0-beta.6`+ 로 빌드한 앱). 모를 때의 처리는 웹이 정한다 |
 | 저장 | `secureSet/Get/Remove`(민감), `setPref/getPref/removePref`(일반) |
 | 카메라/위치/햅틱/클립보드 | `takePhoto()`, `getLocation()`, `haptic()`, `copyToClipboard()`, `readClipboard()` |
 | 마케팅/분석 | `initMarketing()`, `track(event,params)`, `setUser(id,traits)`, `requestTracking()`(iOS ATT) |

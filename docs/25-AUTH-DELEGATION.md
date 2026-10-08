@@ -4,7 +4,7 @@ title: AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
@@ -347,8 +347,11 @@ npm view @aipia-team/harness-bridge dist-tags
 | `1.5.0-beta.3` | #45 | `rememberLastLogin` | 브로커 앱에서는 `provider-not-enabled` → `setPref` 우회 필요 |
 | `1.5.0-beta.4` | #46 | `rememberLastLogin` 브로커 허용(`unknown-provider` 게이트) · `capabilities.auth` 가 브로커 앱도 true | 우회 제거 가능 |
 | `1.5.0-beta.5` | #58 · #60 · #59 | 뷰어 `blockCapture` · `setBrightness` · `getBrightness` + `capabilities.viewer`(#58) · iOS 밝기 라이프사이클(#60 — 네이티브, JS 는 주석만) · **콜드스타트 launch URL 을 WebView 세션당 1회만** · **같은 딥링크 3초 안 재도착은 1회만**(#59) | 전체 이동·새로 고침마다 콜드스타트 OAuth 복귀 `code` 가 다시 흘러 **이미 소비된 code 를 재상환하던 것** 과, launch URL 이 두 길(`appUrlOpen` 보류분 + `getLaunchUrl`)로 와 같은 화면이 두 번 쌓이던 것이 없어진다 |
+| `1.5.0-beta.6` | `feat/bridge-store-country` | beta.5 전부 + **스토어 나라** `getStoreCountry()` · `capabilities.storeCountry` — 네이티브 추가(iOS StoreKit storefront → alpha-2 · Android Play Billing `getBillingConfigAsync`, `billing:9.0.0` = cordova-plugin-purchase 13.18.0 과 같은 버전) | 인증 흐름은 그대로. 팝테일 V2 「성인 콘텐츠 보기」가 나라별 확인 방식을 고르는 근거다. **네이티브 메서드라 앱 재빌드가 필요하다** — 그 전 셸에서는 `capabilities.storeCountry === false` 이고 `getStoreCountry()` 는 `null`(던지지 않는다) |
 
-`latest` 태그는 안정판 `1.4.0` 에 둔다(위 publish 규칙).
+`latest` 태그는 안정판 `1.4.0` 에 둔다(위 publish 규칙). beta.6 은 beta.5 위에 쌓였다 — beta.5 를 건너뛰고 beta.6 만 발행해도
+되고, 발행 절차는 아래 beta.5 와 같다. 다른 점은 버전 문자열과 tarball 이 **10파일**이라는 것뿐이다(iOS 에
+`StoreCountry.swift` 가 늘었다).
 
 > ⚠️ **beta.5 이전에는 서로 다른 세 내용이 모두 `1.5.0-beta.4` 로 불렸다** — 레지스트리 = `7ee042b`(#46, 팝챗 웹 lockfile
 > integrity 로 확정), main = 그 위에 #58·#60(미발행), 팝테일 V2 `vendor/harness-bridge` = PR #59 `5eef54d`(딥링크 가드, #60 주석

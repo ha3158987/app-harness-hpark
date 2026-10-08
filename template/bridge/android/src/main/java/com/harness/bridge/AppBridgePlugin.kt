@@ -7,17 +7,25 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Base64
 import android.view.WindowManager
 import androidx.core.view.WindowCompat
+import com.android.billingclient.api.BillingClient
+import com.android.billingclient.api.BillingClientStateListener
+import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.GetBillingConfigParams
+import com.android.billingclient.api.PendingPurchasesParams
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.io.OutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * AppBridge — 커스텀 Capacitor 플러그인 (Android).
@@ -211,5 +219,89 @@ class AppBridgePlugin : Plugin() {
             res.put("value", if (b < 0f) -1.0 else b.toDouble())
             call.resolve(res)
         }
+    }
+
+    // ── 스토어 나라 (getStoreCountry) ──────────────────────────────────────
+    // 이 기기 Play 계정의 결제 나라. 웹이 나라별 절차(예: 성인 확인 방식)를 고를 때 쓴다.
+    // Play Billing getBillingConfigAsync 가 ISO 3166-1 alpha-2(예 KR)를 준다.
+    //
+    // 결과 { countryCode: "KR" } — 모르면 countryCode 없이 { reason } 으로 resolve 한다(reject 하지 않는다,
+    // JS 는 null 로 읽는다): Play 스토어 없음·계정 없음(에뮬레이터 등)·연결 실패·상한(STORE_COUNTRY_TIMEOUT_MS) 초과.
+    //
+    // ⚠️ 구매용 연결이 아니다. 구매와 구매 갱신은 IAP 플러그인(cordova-plugin-purchase)이 자기 연결로 한다.
+    //    이 임시 연결은 값을 받거나 실패하면 바로 끊고, 구매 갱신 리스너는 아무것도 하지 않는다.
+    // Play Billing 은 메인 스레드 호출을 권장한다 — 연결·응답·끊기를 전부 메인 핸들러로 보낸다.
+
+    @PluginMethod
+    fun getStoreCountry(call: PluginCall) {
+        val main = Handler(Looper.getMainLooper())
+        val settled = AtomicBoolean(false)
+        var client: BillingClient? = null
+
+        // 상한·연결 실패·응답이 경합한다 — 처음 하나만 응답한다.
+        fun finish(countryCode: String?, reason: String?) {
+            if (!settled.compareAndSet(false, true)) return
+            main.post {
+                // 실패 경로에서도 끊는다 — endConnection 이 라이브러리의 브로드캐스트 수신기·실행기까지 정리한다.
+                // 연결이 안 됐던 클라이언트면 라이브러리가 "exception while unbinding service! … Service not registered"
+                // 경고를 logcat 에 남기는데, 라이브러리 안에서 잡는 무해한 로그다(9.0.0 에뮬레이터 실측 2026-10-08).
+                try { client?.endConnection() } catch (e: Throwable) { /* 이미 끊김 */ }
+                val res = JSObject()
+                if (countryCode != null) res.put("countryCode", countryCode)
+                else res.put("reason", reason ?: "unknown")
+                call.resolve(res)
+            }
+        }
+
+        main.postDelayed({ finish(null, "timeout") }, STORE_COUNTRY_TIMEOUT_MS)
+        main.post {
+            if (settled.get()) return@post // 상한이 먼저 끝났다 — 연결을 만들지 않는다
+            try {
+                val c = BillingClient.newBuilder(context.applicationContext)
+                    .setListener { _, _ -> /* 구매하지 않는다 — 구매 갱신은 IAP 플러그인 몫 */ }
+                    // 라이브러리 요구 사항(없으면 build() 가 던진다). 이 연결로는 구매하지 않는다.
+                    .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
+                    .build()
+                client = c
+                c.startConnection(object : BillingClientStateListener {
+                    override fun onBillingSetupFinished(result: BillingResult) {
+                        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                            finish(null, "billing-${result.responseCode}")
+                            return
+                        }
+                        try {
+                            c.getBillingConfigAsync(GetBillingConfigParams.newBuilder().build()) { r, config ->
+                                if (r.responseCode != BillingClient.BillingResponseCode.OK) {
+                                    finish(null, "config-${r.responseCode}")
+                                } else {
+                                    val code = normalizeAlpha2(config?.countryCode)
+                                    finish(code, if (code == null) "no-country" else null)
+                                }
+                            }
+                        } catch (e: Throwable) {
+                            finish(null, "config-error")
+                        }
+                    }
+
+                    override fun onBillingServiceDisconnected() {
+                        finish(null, "disconnected")
+                    }
+                })
+            } catch (e: Throwable) {
+                // 라이브러리 버전 불일치(NoSuchMethodError 등)도 여기로 — 나라를 모르는 것으로 끝내고 앱은 그대로 둔다.
+                finish(null, "billing-error")
+            }
+        }
+    }
+
+    /** Play 가 준 나라 코드를 alpha-2 대문자로 맞춘다. 그 밖의 값(빈 값 등)은 null. */
+    private fun normalizeAlpha2(raw: String?): String? {
+        val code = raw?.trim()?.uppercase() ?: return null
+        return if (code.length == 2 && code.all { it in 'A'..'Z' }) code else null
+    }
+
+    private companion object {
+        /** 스토어 나라 조회 상한. Play 연결이 응답하지 않아도 웹이 매달리지 않게. */
+        const val STORE_COUNTRY_TIMEOUT_MS = 5_000L
     }
 }

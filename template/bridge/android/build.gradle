@@ -1,6 +1,11 @@
 ext {
     junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
     androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.0'
+    // Play Billing — getStoreCountry(getBillingConfigAsync) 용. 구매는 하지 않는다.
+    // ⚠️ IAP 앱에는 cordova-plugin-purchase 가 같은 라이브러리를 이미 넣는다(13.18.0 = billing 9.0.0, plugin.xml).
+    //    같은 버전으로 맞춰 둔다 — 다르면 Gradle 이 높은 쪽 하나로 올려 버려 그쪽 플러그인이 컴파일된 버전과 어긋난다.
+    //    IAP 플러그인이 메이저를 올리면 이 값도 같이 본다(앱별로 바꿀 땐 variables.gradle 의 playBillingVersion).
+    playBillingVersion = project.hasProperty('playBillingVersion') ? rootProject.ext.playBillingVersion : '9.0.0'
 }
 
 buildscript {
@@ -39,4 +44,5 @@ repositories {
 dependencies {
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "com.android.billingclient:billing:$playBillingVersion"
 }
