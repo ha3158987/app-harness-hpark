@@ -26,6 +26,7 @@ import {
   patchAndroidDeepLinks, patchIosDeepLinks,
 } from './lib/app-links.mjs';
 import { log, fail } from './lib/log.mjs';
+import { hasNativeLaunch, patchNativeLaunchMotion } from './lib/native-launch.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -339,7 +340,7 @@ function buildCapacitorConfig(cfg, opts = {}) {
     webDir: 'www',
     // 앱 WebView UA 에 표식 추가 → 서버가 "앱에서 온 요청"을 판별(SSR 가격/결제 분기, anti-steering).
     //   감지: User-Agent 에 "HarnessApp/<slug>" 포함. 클라이언트는 AppBridge.isNative 사용.
-    appendUserAgent: `HarnessApp/${cfg.slug}/${cfg.version.name}+${cfg.version.code}`,
+    appendUserAgent: `HarnessApp/${cfg.slug}/${cfg.version.name}+${cfg.version.code}${hasNativeLaunch(cfg) ? " PopchatLaunch/1" : ""}`,
     // 원격 서비스를 직접 로드. allowNavigation 으로 화이트리스트 도메인만 셸 내부 탐색 허용.
     server: {
       url: cfg.startUrl,
@@ -348,7 +349,7 @@ function buildCapacitorConfig(cfg, opts = {}) {
     },
     plugins: {
       SplashScreen: {
-        launchShowDuration: cfg.theme.splashDuration ?? 1500,
+        launchShowDuration: hasNativeLaunch(cfg) ? 0 : (cfg.theme.splashDuration ?? 1500),
         backgroundColor: cfg.theme.splashBackground || cfg.theme.background,
         showSpinner: false,
         androidScaleType: 'CENTER_CROP',
@@ -1751,6 +1752,7 @@ function patchIosPbxEntitlements(buildDir, cfg) {
   log.ok(`iOS project.pbxproj: CODE_SIGN_ENTITLEMENTS 연결 (App 타깃 ${n}개 설정)`);
 }
 
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -1918,6 +1920,10 @@ function main() {
     writeFileSync(dst, bakedJson);
     log.ok('ios App/public/app-config.json');
   }
+
+  // 웹뷰가 준비되기 전에도 브랜드 장면과 모션을 보여준다. static splash는 OS가
+  // 즉시 그린 뒤 이 오버레이가 이어서 재생하므로 앱 첫 프레임이 비지 않는다.
+  patchNativeLaunchMotion(ROOT, buildDir, cfg);
 
   // 7a-2) 네이티브 버전 주입 (CI 경로에서도 version.code/name 반영 — 재배포 중복거부 방지)
   patchNativeVersion(buildDir, cfg);
