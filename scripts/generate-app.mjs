@@ -1751,6 +1751,306 @@ function patchIosPbxEntitlements(buildDir, cfg) {
   log.ok(`iOS project.pbxproj: CODE_SIGN_ENTITLEMENTS 연결 (App 타깃 ${n}개 설정)`);
 }
 
+// 앱이 준비되는 동안 보여주는 네이티브 런치 모션. 웹의 첫 화면이 뜨기 전에
+// 두 캐릭터가 한 장면으로 모이고, 중앙의 은은한 글로우가 한 번 호흡한 뒤 사라진다.
+// 생성 스크립트가 매번 같은 결과를 만들도록 소스 앱에서 이미지와 코드를 함께 주입한다.
+function patchNativeLaunchMotion(buildDir, cfg) {
+  const sourceDir = join(ROOT, 'apps', cfg.slug);
+  const maleSource = join(sourceDir, 'launch-male.png');
+  const femaleSource = join(sourceDir, 'launch-female.png');
+  if (!existsSync(maleSource) || !existsSync(femaleSource)) {
+    log.warn('네이티브 런치 모션 에셋 없음 — launch-male.png / launch-female.png 를 앱 소스에 추가하세요.');
+    return;
+  }
+
+  const androidDir = join(buildDir, 'android');
+  if (existsSync(androidDir)) {
+    const drawable = join(androidDir, 'app', 'src', 'main', 'res', 'drawable-nodpi');
+    mkdirSync(drawable, { recursive: true });
+    copyFileSync(maleSource, join(drawable, 'launch_male.png'));
+    copyFileSync(femaleSource, join(drawable, 'launch_female.png'));
+    const mainActivity = join(androidDir, 'app', 'src', 'main', 'java', ...cfg.appId.split('.'));
+    const javaPath = join(mainActivity, 'MainActivity.java');
+    if (existsSync(javaPath)) {
+      const pkg = cfg.appId;
+      const java = `package ${pkg};
+
+import android.animation.ObjectAnimator;
+import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.TextView;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        LaunchMotionView launch = new LaunchMotionView(this);
+        addContentView(launch, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        launch.start();
+    }
+
+    private static final class LaunchMotionView extends FrameLayout {
+        private final FrameLayout leftClip;
+        private final FrameLayout rightClip;
+        private final ImageView leftImage;
+        private final ImageView rightImage;
+        private final View seam;
+        private final View glow;
+        private final TextView copy;
+
+        LaunchMotionView(Context context) {
+            super(context);
+            setWillNotDraw(false);
+            setBackgroundColor(Color.rgb(7, 20, 36));
+            leftClip = new FrameLayout(context);
+            rightClip = new FrameLayout(context);
+            leftImage = image(context, R.drawable.launch_male);
+            rightImage = image(context, R.drawable.launch_female);
+            leftClip.addView(leftImage);
+            rightClip.addView(rightImage);
+            addView(leftClip);
+            addView(rightClip);
+
+            glow = new View(context);
+            GradientDrawable glowDrawable = new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[] { 0x001ba8ff, 0x7a8bd8ff, 0x001ba8ff });
+            glowDrawable.setCornerRadius(100f);
+            glow.setBackground(glowDrawable);
+            addView(glow);
+
+            seam = new View(context);
+            GradientDrawable seamDrawable = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] { 0x001ba8ff, 0xffb9e8ff, 0x001ba8ff });
+            seam.setBackground(seamDrawable);
+            addView(seam);
+
+            TextView logo = label(context, "♡  popchat", 17, Color.WHITE);
+            logo.setTypeface(null, 1);
+            addView(logo);
+            LayoutParams logoLp = new LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+            logoLp.topMargin = dp(112);
+            logo.setLayoutParams(logoLp);
+
+            copy = label(context, "스쳐 지나가기엔,\\n너무 궁금한 사람.", 27, Color.WHITE);
+            copy.setTypeface(null, 1);
+            copy.setGravity(Gravity.CENTER_HORIZONTAL);
+            addView(copy);
+            LayoutParams copyLp = new LayoutParams(-1, -2, Gravity.BOTTOM);
+            copyLp.bottomMargin = dp(96);
+            copy.setLayoutParams(copyLp);
+        }
+
+        private ImageView image(Context context, int res) {
+            ImageView image = new ImageView(context);
+            image.setImageResource(res);
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            image.setScaleX(1.08f);
+            image.setScaleY(1.08f);
+            return image;
+        }
+
+        private TextView label(Context context, String text, int size, int color) {
+            TextView view = new TextView(context);
+            view.setText(text);
+            view.setTextSize(size);
+            view.setTextColor(color);
+            return view;
+        }
+
+        private int dp(int value) {
+            return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+        }
+
+        @Override protected void onSizeChanged(int w, int h, int oldW, int oldH) {
+            super.onSizeChanged(w, h, oldW, oldH);
+            int half = w / 2;
+            layoutChild(leftClip, 0, 0, half, h);
+            layoutChild(rightClip, half, 0, w, h);
+            layoutChild(leftImage, 0, 0, w, h);
+            layoutChild(rightImage, -half, 0, w - half, h);
+            layoutChild(glow, half - dp(36), h / 2 - dp(220), half + dp(36), h / 2 + dp(220));
+            layoutChild(seam, half - dp(2), 0, half + dp(2), h);
+        }
+
+        private void layoutChild(View child, int l, int t, int r, int b) {
+            child.layout(l, t, r, b);
+        }
+
+        void start() {
+            leftClip.setTranslationX(-dp(18));
+            rightClip.setTranslationX(dp(18));
+            leftClip.setAlpha(0f);
+            rightClip.setAlpha(0f);
+            seam.setAlpha(0f);
+            glow.setAlpha(0f);
+            copy.setAlpha(0f);
+            leftClip.animate().translationX(0f).alpha(1f).setDuration(1150).setStartDelay(80).start();
+            rightClip.animate().translationX(0f).alpha(1f).setDuration(1150).setStartDelay(80).start();
+            leftImage.animate().scaleX(1f).scaleY(1f).setDuration(1700).setStartDelay(80).start();
+            rightImage.animate().scaleX(1f).scaleY(1f).setDuration(1700).setStartDelay(80).start();
+            seam.animate().alpha(0.92f).setDuration(800).setStartDelay(650).start();
+            copy.animate().alpha(1f).setDuration(550).setStartDelay(1050).start();
+            ObjectAnimator pulse = ObjectAnimator.ofFloat(glow, View.ALPHA, 0.12f, 0.42f, 0.12f);
+            pulse.setDuration(1500);
+            pulse.setStartDelay(650);
+            pulse.start();
+            postDelayed(() -> animate().alpha(0f).setDuration(320).withEndAction(() -> {
+                ViewGroup parent = (ViewGroup) getParent();
+                if (parent != null) parent.removeView(this);
+            }).start(), 2450);
+        }
+    }
+}
+`;
+      writeFileSync(javaPath, java);
+      log.ok('Android MainActivity: 네이티브 런치 모션 주입');
+    }
+  }
+
+  const iosDir = join(buildDir, 'ios', 'App', 'App');
+  if (existsSync(iosDir)) {
+    const assets = join(iosDir, 'Assets.xcassets');
+    for (const [name, source] of [['LaunchMale', maleSource], ['LaunchFemale', femaleSource]]) {
+      const imageSet = join(assets, `${name}.imageset`);
+      mkdirSync(imageSet, { recursive: true });
+      copyFileSync(source, join(imageSet, `${name.toLowerCase()}.png`));
+      writeFileSync(join(imageSet, 'Contents.json'), JSON.stringify({
+        images: [{ filename: `${name.toLowerCase()}.png`, idiom: 'universal', scale: '1x' }],
+        info: { author: 'xcode', version: 1 },
+      }, null, 2) + '\n');
+    }
+    const scene = join(iosDir, 'SceneDelegate.swift');
+    if (existsSync(scene)) {
+      let swift = readFileSync(scene, 'utf8');
+      swift = swift.replace(
+        'window?.rootViewController = CAPBridgeViewController()\n        window?.makeKeyAndVisible()',
+        `let root = CAPBridgeViewController()\n        window?.rootViewController = root\n        window?.makeKeyAndVisible()\n\n        let launch = LaunchMotionViewController()\n        launch.view.frame = root.view.bounds\n        launch.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]\n        root.addChild(launch)\n        root.view.addSubview(launch.view)\n        launch.didMove(toParent: root)\n        launch.start()`);
+      if (!swift.includes('// POPCHAT_NATIVE_LAUNCH_MOTION')) {
+        swift += `
+
+// POPCHAT_NATIVE_LAUNCH_MOTION
+private final class LaunchMotionViewController: UIViewController {
+    private let leftClip = UIView()
+    private let rightClip = UIView()
+    private let leftImage = UIImageView(image: UIImage(named: "LaunchMale"))
+    private let rightImage = UIImageView(image: UIImage(named: "LaunchFemale"))
+    private let seam = UIView()
+    private let glow = UIView()
+    private let copy = UILabel()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor(red: 0.027, green: 0.078, blue: 0.141, alpha: 1)
+        for (clip, image) in [(leftClip, leftImage), (rightClip, rightImage)] {
+            clip.clipsToBounds = true
+            image.contentMode = .scaleAspectFill
+            image.clipsToBounds = true
+            clip.addSubview(image)
+            view.addSubview(clip)
+        }
+        seam.backgroundColor = UIColor(red: 0.62, green: 0.88, blue: 1, alpha: 0.9)
+        seam.layer.shadowColor = UIColor(red: 0.23, green: 0.69, blue: 1, alpha: 1).cgColor
+        seam.layer.shadowRadius = 14
+        seam.layer.shadowOpacity = 0.85
+        view.addSubview(glow)
+        view.addSubview(seam)
+
+        let gradient = CAGradientLayer()
+        gradient.type = .radial
+        gradient.colors = [UIColor(red: 0.25, green: 0.72, blue: 1, alpha: 0.65).cgColor, UIColor.clear.cgColor]
+        gradient.locations = [0, 1]
+        glow.layer.addSublayer(gradient)
+
+        let logo = UILabel()
+        logo.text = "♡  popchat"
+        logo.textColor = .white
+        logo.font = .systemFont(ofSize: 17, weight: .semibold)
+        logo.textAlignment = .center
+        view.addSubview(logo)
+        logo.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            logo.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 34),
+            logo.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        ])
+
+        copy.text = "스쳐 지나가기엔,\\n너무 궁금한 사람."
+        copy.textColor = .white
+        copy.font = .systemFont(ofSize: 28, weight: .bold)
+        copy.numberOfLines = 2
+        copy.textAlignment = .center
+        copy.alpha = 0
+        view.addSubview(copy)
+        copy.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            copy.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            copy.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -76),
+        ])
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let w = view.bounds.width
+        let h = view.bounds.height
+        leftClip.frame = CGRect(x: 0, y: 0, width: w / 2, height: h)
+        rightClip.frame = CGRect(x: w / 2, y: 0, width: w / 2, height: h)
+        leftImage.frame = CGRect(x: 0, y: 0, width: w, height: h)
+        rightImage.frame = CGRect(x: -w / 2, y: 0, width: w, height: h)
+        seam.frame = CGRect(x: w / 2 - 2, y: 0, width: 4, height: h)
+        glow.frame = CGRect(x: w / 2 - 48, y: h / 2 - 260, width: 96, height: 520)
+        if let gradient = glow.layer.sublayers?.first as? CAGradientLayer { gradient.frame = glow.bounds }
+    }
+
+    func start() {
+        leftClip.transform = CGAffineTransform(translationX: -18, y: 0)
+        rightClip.transform = CGAffineTransform(translationX: 18, y: 0)
+        leftClip.alpha = 0
+        rightClip.alpha = 0
+        seam.alpha = 0
+        glow.alpha = 0
+        leftImage.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
+        rightImage.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
+        UIView.animate(withDuration: 1.15, delay: 0.08, options: [.curveEaseOut]) {
+            self.leftClip.transform = .identity
+            self.rightClip.transform = .identity
+            self.leftClip.alpha = 1
+            self.rightClip.alpha = 1
+        }
+        UIView.animate(withDuration: 1.7, delay: 0.08, options: [.curveEaseOut]) {
+            self.leftImage.transform = .identity
+            self.rightImage.transform = .identity
+        }
+        UIView.animate(withDuration: 0.8, delay: 0.65, options: []) { self.seam.alpha = 0.92 }
+        UIView.animate(withDuration: 0.55, delay: 1.05, options: []) { self.copy.alpha = 1 }
+        UIView.animate(withDuration: 1.5, delay: 0.65, options: [.autoreverse, .repeat, .curveEaseInOut]) { self.glow.alpha = 0.38 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.45) {
+            UIView.animate(withDuration: 0.32, animations: { self.view.alpha = 0 }) { _ in
+                self.willMove(toParent: nil)
+                self.view.removeFromSuperview()
+                self.removeFromParent()
+            }
+        }
+    }
+}
+`;
+      }
+      writeFileSync(scene, swift);
+      log.ok('iOS SceneDelegate: 네이티브 런치 모션 주입');
+    }
+  }
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -1918,6 +2218,10 @@ function main() {
     writeFileSync(dst, bakedJson);
     log.ok('ios App/public/app-config.json');
   }
+
+  // 웹뷰가 준비되기 전에도 브랜드 장면과 모션을 보여준다. static splash는 OS가
+  // 즉시 그린 뒤 이 오버레이가 이어서 재생하므로 앱 첫 프레임이 비지 않는다.
+  patchNativeLaunchMotion(buildDir, cfg);
 
   // 7a-2) 네이티브 버전 주입 (CI 경로에서도 version.code/name 반영 — 재배포 중복거부 방지)
   patchNativeVersion(buildDir, cfg);
