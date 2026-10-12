@@ -329,6 +329,10 @@ function run(cmd, args, cwd) {
 
 // capacitor.config.json 을 config 로부터 생성.
 // 핵심 결정: server.url = startUrl (원격 웹을 그대로 로드). 오프라인/에러 셸은 webDir(www)에 둔다.
+//   셸은 브릿지 플러그인이 '메인 화면 + 연결 계열 오류'일 때만 ?from=&home= 을 붙여 띄운다
+//   (Android OfflineShellWebViewClient · iOS OfflineShellNavigationProxy). server.errorPath 는 일부러 넣지 않는다 —
+//   Android 는 HTTP 4xx/5xx 에도 갈아 끼워 웹의 404·점검 화면을 덮고, iOS 는 탐색 취소(-999)에도 띄우며,
+//   둘 다 실패 주소를 넘기지 않아 딥링크 목적지를 잃는다(test/offline-shell.test.mjs 가 지킨다).
 function buildCapacitorConfig(cfg, opts = {}) {
   const isDark = cfg.theme.statusBarStyle === 'dark';
   // 로컬 dev 모드: 평문 http 로컬 서버를 로드하려면 cleartext + mixedContent 허용이 필요하다.

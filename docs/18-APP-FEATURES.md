@@ -4,7 +4,7 @@ title: APP-FEATURES — 앱에서 할 수 있는 기능 + 버전
 category: 레퍼런스
 audience: 전체
 status: reference
-updated: 2026-09-03
+updated: 2026-10-07
 ---
 
 # APP-FEATURES — 앱에서 할 수 있는 기능 + 버전
@@ -59,7 +59,7 @@ updated: 2026-09-03
 | 카메라/사진 | `@capacitor/camera` ^8 | `<input type=file>` 보완, QR 등 |
 | 파일시스템 | `@capacitor/filesystem` ^8 | 다운로드/캐시 |
 | 위치 | `@capacitor/geolocation` ^8 | 권한 필요 |
-| 네트워크 상태 | `@capacitor/network` ^8 | 오프라인 감지 → 에러 화면 |
+| 네트워크 상태 | `@capacitor/network` ^8 | 웹이 쓰는 오프라인 감지 API(`getNetworkStatus`·`onNetworkChange`). 시작·전체 이동이 네트워크 오류로 실패할 때의 화면은 C 절 '오프라인 셸' |
 | 기기 정보 | `@capacitor/device` ^8 | OS/모델 분기(최소화 권장) |
 | 앱 상태/라이프사이클 | `@capacitor/app` ^8 | 포그라운드/백그라운드 이벤트 |
 | 환경설정 저장 | `@capacitor/preferences` ^8 | ⚠️ **비암호화** — 토큰 저장 금지 |
@@ -75,6 +75,7 @@ updated: 2026-09-03
 | pull-to-refresh | 웹 또는 셸 | |
 | 화면전환 효과 | **웹 (View Transitions API)** | Safari 18+/Chrome 126+ 네이티브 지원, 미지원 시 폴백 |
 | 네비게이션 도메인 화이트리스트 | 셸 | 허용 도메인 외 외부 링크는 시스템 브라우저로 |
+| 오프라인 셸 | 브릿지 플러그인(Android `OfflineShellWebViewClient` · iOS `OfflineShellNavigationProxy`) + `template/src` | 메인 화면이 **네트워크 오류**(연결 끊김·DNS·연결 거부·시간 초과)로 못 뜨면 로컬 셸을 `?from=<실패 주소>&home=<server.url>` 로 띄운다. '다시 시도'·네트워크 복귀 때 from 으로 돌아가 딥링크 목적지를 잃지 않는다. 연결은 되는데 서버에 못 닿으면 3·6·12·24·30초 간격으로 자동 재시도. HTTP 4xx/5xx 는 셸이 아니라 웹의 오류 화면, 탐색 취소는 무시. Capacitor `server.errorPath` 는 쓰지 않는다(이유: generate-app `buildCapacitorConfig` 주석). **앱 재빌드 필요** |
 | 세이프에어리어 | 웹 CSS `env(safe-area-inset-*)` | 노치/Dynamic Island/제스처바. **이미 여백이 있는 헤더·탭바에 인셋을 통째로 더하지 말 것** — 규칙은 [19-DEVICE-SUPPORT §4b](./19-DEVICE-SUPPORT.md#4b-디스플레이-다양성-대응-레시피-해상도종횡비컷아웃폴더블) |
 | 에셋 포맷 정책 | 팀 룰 | 무거운 모션은 video/Lottie, 가벼운 건 WebP |
 

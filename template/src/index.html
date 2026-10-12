@@ -12,8 +12,8 @@
 <body>
   <!--
     server.url 로 원격 웹을 직접 로드하므로 이 화면은 평소엔 보이지 않는다.
-    네트워크 단절 / 원격 로드 실패 시의 오프라인 폴백 셸이다.
-    (Capacitor 는 webDir 에 index.html 이 반드시 존재하길 요구한다.)
+    메인 화면이 네트워크 오류로 못 떴을 때 브릿지 플러그인이 ?from=&home= 을 붙여 띄우는 오프라인 셸이다
+    (동작은 shell.js). Capacitor 는 webDir 에 index.html 이 반드시 존재하길 요구한다.
   -->
   <main class="shell" role="main">
     <div class="shell__box">
