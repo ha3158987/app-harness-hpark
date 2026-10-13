@@ -1,0 +1,21 @@
+# S10 하단 탭 추천 · 홈 · My
+appId: ${APP_ID}
+name: bottom-tabs
+tags: [smoke]
+---
+- runFlow: _open-home.yaml
+- tapOn: ${L_FORYOU}
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: bottom-tabs--for-you
+- tapOn: ${L_MY}
+# My 헤더의 설정(톱니)은 게스트에게도 보인다
+- extendedWaitUntil:
+    visible: ${L_SETTINGS}
+    timeout: 20000
+- takeScreenshot: bottom-tabs--my
+- tapOn: ${L_HOME}
+- extendedWaitUntil:
+    visible: ${L_WEBNOVEL}
+    timeout: 20000
+- takeScreenshot: bottom-tabs--home

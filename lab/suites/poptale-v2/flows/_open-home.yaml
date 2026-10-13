@@ -1,0 +1,11 @@
+# 앱을 새로 띄워 홈까지(팝업 닫기 포함). 다른 플로우가 runFlow 로 부른다.
+appId: ${APP_ID}
+tags: [helper]
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: ${L_OK}|${L_WEBNOVEL}
+    timeout: 60000
+- runFlow: _dismiss-popup.yaml
+- assertVisible: ${L_WEBNOVEL}

@@ -1,0 +1,54 @@
+# S12 검색 — 입력·결과·상세. 검색어는 SEARCH_QUERY(기본 작품 제목 일부, 비 ASCII 입력 확인 겸)
+appId: ${APP_ID}
+name: search
+tags: [smoke]
+---
+- runFlow: _open-home.yaml
+- tapOn: ${L_SEARCH}
+# 입력칸의 접근성 이름은 placeholder 가 아니라 숨김 label(search.input.label)
+- tapOn: ${L_SEARCH_INPUT}
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - runScript: ../scripts/type-query.js
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - inputText: ${SEARCH_QUERY}
+- assertVisible: ${SEARCH_QUERY}
+- pressKey: Enter
+# 제출하면 입력 포커스가 해제된다. Android hideKeyboard는 Back을 보내 검색 화면을 닫을 수 있다.
+# 홈의 같은 작품 카드를 검색 결과로 오인하지 않도록 검색 화면도 확인한다.
+- assertVisible: ${L_SEARCH_INPUT}
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - runScript: ../scripts/search-result.js
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: .*${CONTENT_TITLE}.*
+          timeout: 30000
+- takeScreenshot: search--results
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - runScript:
+          file: ../scripts/search-result.js
+          env:
+            OPEN_RESULT: 'true'
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: .*${CONTENT_TITLE}.*
+- extendedWaitUntil:
+    visible: ${L_FREE_START}
+    timeout: 30000
+- takeScreenshot: search--detail

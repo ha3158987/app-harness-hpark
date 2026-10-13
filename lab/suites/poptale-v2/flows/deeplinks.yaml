@@ -1,0 +1,30 @@
+# S21/S22 딥링크 — 콜드 스타트 뷰어 → 뒤로 폴백(상세), 웜 커스텀 스킴, 탭 쿼리
+appId: ${APP_ID}
+name: deeplinks
+tags: [smoke]
+onFlowComplete:
+  - runScript: ../scripts/navigation-snapshot.js
+---
+- stopApp
+- openLink: ${LINK_VIEWER_SCHEME}
+# 콜드 스타트 딥링크는 홈을 거쳐 온다 — 홈에도 같은 작품 카드가 있을 수 있어 뷰어 본문의 고정 문구를 기다린다
+- extendedWaitUntil:
+    visible: .*${VIEWER_TEXT}.*
+    timeout: 60000
+- takeScreenshot: deeplinks--cold-viewer
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+      # 기록이 없는 콜드 스타트 뷰어에서 뒤로 = 작품 상세(레거시 폴백과 같음)
+      - extendedWaitUntil:
+          visible: ${L_FREE_START}
+          timeout: 30000
+      - takeScreenshot: deeplinks--back-to-detail
+- openLink: ${LINK_WTNOVEL_TAB}
+- extendedWaitUntil:
+    visible: ${L_WTNOVEL}
+    timeout: 30000
+- runFlow: _dismiss-popup.yaml
+- takeScreenshot: deeplinks--wtnovel-tab

@@ -1,0 +1,23 @@
+# S13 작품 상세(실데이터) · 공유 시트
+appId: ${APP_ID}
+name: detail
+tags: [smoke]
+onFlowComplete:
+  - runScript: ../scripts/navigation-snapshot.js
+---
+- launchApp:
+    stopApp: true
+- openLink: ${LINK_DETAIL_SCHEME}
+- runFlow: _dismiss-popup.yaml
+# 콜드 스타트 딥링크는 홈을 거쳐 상세로 간다 — 홈에도 같은 작품 카드(최근 본)가 있을 수 있어 제목이 아니라
+# 상세에만 있는 '1화 무료로 읽기 시작' 버튼을 기다린다(2026-10-06 실측 오탐)
+- extendedWaitUntil:
+    visible: ${L_FREE_START}
+    timeout: 60000
+- assertVisible: ${CONTENT_TITLE}
+- takeScreenshot: detail--detail
+- tapOn: ${L_SHARE}
+# OS 공유 시트(안드 = intentresolver) — 늦게 뜰 수 있다
+- waitForAnimationToEnd:
+    timeout: 15000
+- takeScreenshot: detail--share-sheet

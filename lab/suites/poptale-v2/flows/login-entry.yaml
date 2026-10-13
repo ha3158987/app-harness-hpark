@@ -1,0 +1,16 @@
+# S30 로그인 진입 — My → 로그인 화면 → SNS 버튼. 공급자 버튼은 누르지 않는다
+# (에뮬레이터 Chrome 첫 실행 약관에서 멈추고, 자격증명 입력은 사람 몫 — 에이전트 시나리오 S30/S31 참고)
+appId: ${APP_ID}
+name: login-entry
+tags: [smoke]
+---
+- runFlow: _open-home.yaml
+- tapOn: ${L_MY}
+- extendedWaitUntil:
+    visible: ${L_SETTINGS}
+    timeout: 20000
+- tapOn: .*${L_SIGNUP_LOGIN}.*
+- extendedWaitUntil:
+    visible: .*(카카오|Kakao|カカオ|Google|구글).*
+    timeout: 30000
+- takeScreenshot: login-entry--login

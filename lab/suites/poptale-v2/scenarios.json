@@ -1,0 +1,340 @@
+{
+  "$comment": "시나리오 = (전제 상황 + 단계 + 기대 결과 + 남길 증거). 에이전트는 steps 를 자연어 그대로 따라 조작하고 expect 를 하나씩 판정한다. flow 가 있으면 같은 흐름의 Maestro 회귀 플로우(flows/<flow>.yaml)가 있다는 뜻 — 결정적 재생은 lab flow/matrix, 탐색·판단은 에이전트. platforms 생략 = 둘 다. devices 태그(예: foldable)가 있으면 그 태그 기기에서만.",
+  "scenarios": [
+    {
+      "id": "S01-cold-start",
+      "area": "셸·시작",
+      "title": "첫 실행 → 홈 렌더",
+      "situations": [["clear-data"], ["restart"]],
+      "steps": ["앱을 콜드 스타트한다", "스플래시가 끝날 때까지 기다린다(최대 15초)"],
+      "expect": [
+        "홈 헤더 한 줄에 로고·웹소설·웹툰소설·AI툰·검색이 모두 보인다(잘림 없음)",
+        "하단 탭 추천·홈·My 가 보인다",
+        "흰 화면·무한 스피너·오류 셸이 아니다",
+        "lab web state: native=true, horizontalOverflow=false",
+        "lab web console: 미처리 예외(exception) 없음"
+      ],
+      "evidence": ["홈 첫 화면 스크린샷", "web state JSON", "콘솔 오류 목록"],
+      "flow": "launch-home",
+      "priority": "P0"
+    },
+    {
+      "id": "S02-safe-area",
+      "area": "셸·시작",
+      "title": "안전영역 — 상태바·노치·내비바와 겹침/빈 띠 없음",
+      "steps": ["홈·상세·뷰어·My 를 차례로 연다", "각 화면 상·하단을 확대해 본다"],
+      "expect": [
+        "헤더가 상태바·다이내믹 아일랜드·펀치홀 아래에서 시작한다(겹침 없음)",
+        "헤더 위에 불필요한 빈 띠가 없다(인셋 이중 적용 = docs/19 §4b 의 가장 흔한 실수)",
+        "하단 탭바가 제스처 바·홈 인디케이터에 가리지 않는다",
+        "다크/라이트에 따라 상태바 아이콘 색이 배경과 대비된다"
+      ],
+      "evidence": ["화면별 스크린샷(상단·하단)"],
+      "priority": "P0"
+    },
+    {
+      "id": "S03-no-overflow",
+      "area": "셸·시작",
+      "title": "가로 넘침 없음 — 좁은 폭·큰 글꼴·다른 언어",
+      "steps": ["홈·상세·검색·My·설정에서 lab web state 를 본다"],
+      "expect": ["horizontalOverflow=false", "헤더 탭 마지막(AI툰)이 화면 안에 완전히 보인다"],
+      "evidence": ["web state JSON", "헤더 확대 스크린샷"],
+      "priority": "P0"
+    },
+    {
+      "id": "S10-bottom-tabs",
+      "area": "탐색",
+      "title": "하단 탭 추천 · 홈 · My 전환",
+      "steps": ["추천 탭", "홈 탭", "My 탭을 차례로 누른다"],
+      "expect": ["각 탭 화면이 1.5초 안에 내용으로 바뀐다", "현재 탭이 강조된다", "My 는 게스트에게도 열린다(설정 톱니 보임)"],
+      "evidence": ["탭별 스크린샷"],
+      "flow": "bottom-tabs",
+      "priority": "P0"
+    },
+    {
+      "id": "S11-header-tabs",
+      "area": "탐색",
+      "title": "헤더 타입 탭 웹소설 · 웹툰소설 · AI툰 + 가로 레일",
+      "steps": ["웹소설·웹툰소설·AI툰 탭을 차례로 누른다", "각 탭에서 첫 가로 레일을 왼쪽으로 스와이프한다"],
+      "expect": ["탭마다 섹션이 바뀐다", "레일이 가로로 스크롤되고 세로 스크롤과 엉키지 않는다", "AI툰 탭이 비면 시연 예시 카드가 보인다(dev)"],
+      "evidence": ["탭별 스크린샷", "스와이프 전후"],
+      "flow": "header-tabs",
+      "priority": "P1"
+    },
+    {
+      "id": "S12-search-korean",
+      "area": "탐색",
+      "title": "검색 — 한글 입력 · 키보드 · 결과 → 상세",
+      "steps": ["헤더 돋보기를 누른다", "입력창에 '사랑' 을 입력한다(Android: lab type — 한글은 CDP)", "결과 첫 작품을 누른다"],
+      "expect": ["키보드가 입력창을 가리지 않는다", "결과 목록이 나온다", "상세로 이동한다"],
+      "evidence": ["키보드 올라온 상태", "결과", "상세"],
+      "flow": "search",
+      "priority": "P1"
+    },
+    {
+      "id": "S13-detail-share",
+      "area": "탐색",
+      "title": "작품 상세(실데이터) · 회차 목록 · 공유",
+      "steps": ["${CONTENT_TITLE} 상세로 간다(딥링크 detail-https 또는 검색)", "회차 목록을 스크롤한다", "헤더 공유 버튼을 누른다"],
+      "expect": ["표지·제목·키워드·회차가 실데이터로 나온다", "OS 공유 시트가 뜬다(Android 공유 시트 / iOS 공유 시트)", "공유 시트를 닫으면 상세 그대로"],
+      "evidence": ["상세", "공유 시트"],
+      "flow": "detail",
+      "priority": "P0"
+    },
+    {
+      "id": "S14-viewer-capture-brightness",
+      "area": "뷰어",
+      "title": "무료 회차 뷰어 · 캡처 차단 · 밝기",
+      "steps": ["상세에서 무료 1화를 연다", "뷰어 설정에서 밝기 슬라이더를 낮춘다", "뒤로 나간다"],
+      "expect": [
+        "본문이 열린다",
+        "Android: 뷰어에서 스크린샷이 검게 찍힌다(FLAG_SECURE, lab shot 결과가 검정) · 이탈 후 다시 정상",
+        "iOS: 캡처 차단은 OS 미지원(no-op) — 화면이 찍혀도 FAIL 아님",
+        "밝기가 즉시 바뀌고 뷰어 이탈 시 원래대로"
+      ],
+      "evidence": ["뷰어(검정이면 그 자체가 증거)", "이탈 후 상세"],
+      "flow": "viewer",
+      "priority": "P0"
+    },
+    {
+      "id": "S15-aitoon-demo",
+      "area": "뷰어",
+      "title": "AI툰 시연 — 예시 상세 → 컷 뷰어",
+      "steps": ["헤더 AI툰 탭", "예시 카드(옥상 안테나…) 를 누른다", "무료 보기로 뷰어 진입 후 끝까지 스크롤"],
+      "expect": ["예시 상세가 '무료 작품' 으로 나온다", "컷 8장이 끊김 없이 이어진다", "6컷째에 결제 팝업이 뜨지 않는다(무료)"],
+      "evidence": ["상세", "뷰어 처음·중간·끝"],
+      "flow": "aitoon-demo",
+      "priority": "P1"
+    },
+    {
+      "id": "S20-back-chain",
+      "area": "내비게이션",
+      "title": "하드웨어 뒤로 체인(Android)",
+      "platforms": ["android"],
+      "steps": [
+        "홈에서 팝업(있으면)을 띄운 채 뒤로",
+        "홈 → My → 추천으로 이동 후 뒤로 두 번",
+        "홈에서 뒤로"
+      ],
+      "expect": ["팝업만 닫힌다", "기록대로 되돌아간다", "홈에서 뒤로 = 앱 종료(런처)"],
+      "evidence": ["각 뒤로 전후"],
+      "flow": "back-chain",
+      "priority": "P0"
+    },
+    {
+      "id": "S21-deeplink-cold",
+      "area": "내비게이션",
+      "title": "딥링크 콜드 스타트 → 뷰어 → 뒤로 폴백",
+      "situations": [["deeplink", "${viewer-scheme}", "cold"]],
+      "steps": ["앱이 꺼진 상태에서 viewer-scheme 딥링크로 연다", "뒤로를 누른다(Android) / 뷰어 닫기(iOS)"],
+      "expect": ["바로 뷰어가 열린다(홈을 거쳐 깜빡이지 않는다)", "뒤로 = 작품 상세 → 홈 → 종료(레거시와 같음)", "딥링크가 두 번 재생되지 않는다(로그인 등 다른 화면으로 가도 뷰어로 튕기지 않음)"],
+      "evidence": ["뷰어", "뒤로 후 상세"],
+      "priority": "P0"
+    },
+    {
+      "id": "S22-deeplink-warm",
+      "area": "내비게이션",
+      "title": "딥링크 웜 — https · 커스텀 스킴 · 탭 쿼리",
+      "steps": ["앱을 켠 채 detail-https 딥링크", "detail-scheme 딥링크", "wtnovel-tab 딥링크"],
+      "expect": ["각각 해당 화면으로 이동한다", "새 창/외부 브라우저가 열리지 않는다"],
+      "evidence": ["딥링크별 결과"],
+      "flow": "deeplinks",
+      "priority": "P0"
+    },
+    {
+      "id": "S23-external-link",
+      "area": "내비게이션",
+      "title": "외부 링크는 외부 브라우저로",
+      "steps": ["푸터의 사업자 정보 등 외부 링크를 누른다(또는 web go 로 external 링크 클릭 재현)"],
+      "expect": ["외부 브라우저/인앱 브라우저로 열린다", "앱 WebView 는 제자리"],
+      "evidence": ["외부 브라우저", "복귀 후 앱"],
+      "priority": "P2"
+    },
+    {
+      "id": "S30-sns-login-entry",
+      "area": "인증",
+      "title": "SNS 로그인 시작 → 인앱 브라우저 → 취소 복귀",
+      "steps": ["My → 로그인", "카카오(또는 첫 SNS) 버튼", "열린 인앱 브라우저를 닫는다"],
+      "expect": [
+        "인앱 브라우저(Chrome Custom Tab / SFSafariViewController)가 /auth/app-start?provider=…&scheme=<appId> 로 열린다",
+        "닫으면 로그인 화면으로 돌아오고 스피너가 남지 않는다",
+        "BLOCKED 조건: Chrome 첫 실행 약관(FRE) — 사람이 동의해야 함, 동의 대행 금지"
+      ],
+      "evidence": ["로그인 화면", "인앱 브라우저", "복귀"],
+      "flow": "login-entry",
+      "priority": "P0"
+    },
+    {
+      "id": "S31-login-complete",
+      "area": "인증",
+      "title": "SNS 로그인 완주 → 쿠키 → 푸시 권한 프롬프트",
+      "steps": ["테스트 계정으로 SNS 로그인을 끝까지(사람이 자격증명 입력)", "앱 복귀 후 My 확인"],
+      "expect": ["<appId>://oauth/callback 으로 복귀해 로그인 상태가 된다", "로그인 직후 알림 권한 프롬프트가 1회 뜬다(Android 13+ / iOS)", "게스트일 땐 프롬프트가 뜨지 않았다"],
+      "evidence": ["복귀 직후", "권한 프롬프트", "My"],
+      "notes": "에이전트는 비밀번호를 입력하지 않는다 — 사람이 입력하거나 BLOCKED 로 남긴다. dev 웹 배포에 NEXT_PUBLIC_APP_OAUTH_SCHEMES 가 비어 있으면 복귀가 막힌다(2026-10-06 확인).",
+      "priority": "P0"
+    },
+    {
+      "id": "S32-guest-gates",
+      "area": "인증",
+      "title": "게스트 게이트 — 성인물 제외 · 로그인 유도 · 원위치 복귀",
+      "steps": ["게스트로 19세 배지 작품을 찾는다", "로그인이 필요한 기능(서재·충전)을 누른다", "로그인 화면에서 뒤로"],
+      "expect": ["게스트에게 성인물이 노출되지 않는다", "로그인 유도 후 뒤로 = 원래 화면"],
+      "evidence": ["게이트 화면", "복귀"],
+      "priority": "P1"
+    },
+    {
+      "id": "S40-system-dark",
+      "area": "상황",
+      "title": "시스템 다크 모드 · 앱 내 테마 전환과 상태바 동기",
+      "situations": [["theme", "dark"]],
+      "steps": ["시스템 다크에서 앱을 연다", "My › 설정 › 화면에서 라이트/다크를 바꾼다"],
+      "expect": ["웹 테마는 앱 설정(쿠키)을 따른다 — 시스템 추종 여부는 현재 제품 결정대로", "웹이 다크면 상태바·내비바가 어두운 바탕·밝은 아이콘, 라이트면 반대(즉시)", "다크에서 흰 띠가 없다"],
+      "evidence": ["시스템 다크 첫 화면", "전환 직후"],
+      "flow": "settings-theme",
+      "priority": "P1"
+    },
+    {
+      "id": "S41-language",
+      "area": "상황",
+      "title": "언어 5종(ko·en·ja·zh-Hant·es-419) — 시스템 언어 → 웹",
+      "situations": [["locale", "ja"]],
+      "steps": ["언어 상황을 적용하고 앱을 다시 띄운다", "홈 헤더·하단 탭·설정을 본다", "다른 언어도 반복"],
+      "expect": ["웹 문구가 그 언어로 나온다(Accept-Language)", "헤더 한 줄 유지·넘침 없음(lab web state)", "앱 이름·권한 문구(OS 가 보여 주는 것)도 그 언어"],
+      "evidence": ["언어별 홈", "web state"],
+      "priority": "P1"
+    },
+    {
+      "id": "S42-font-scale",
+      "area": "상황",
+      "title": "큰 글꼴(1.3·2.0) — 레이아웃 붕괴 없음",
+      "situations": [["font", "1.3"]],
+      "steps": ["글꼴 배율 상황 후 앱 재시작", "홈·상세·뷰어·설정을 본다"],
+      "expect": ["Android WebView 는 시스템 글꼴 배율로 textZoom 을 키운다 — 헤더·탭·버튼 글자가 잘리거나 겹치지 않는다", "가로 넘침 없음"],
+      "evidence": ["화면별 스크린샷", "web state"],
+      "priority": "P1"
+    },
+    {
+      "id": "S43-offline",
+      "area": "상황",
+      "title": "오프라인 실행 · 복구",
+      "situations": [["network", "off"]],
+      "steps": ["네트워크를 끊고 앱을 콜드 스타트", "네트워크를 되살린 뒤 재시도/새로 고침"],
+      "expect": ["빈 흰 화면 대신 오프라인/오류 셸(www)이 보인다", "복구 후 정상 홈으로 돌아온다"],
+      "evidence": ["오프라인 화면", "복구 후"],
+      "priority": "P1"
+    },
+    {
+      "id": "S44-slow-network",
+      "area": "상황",
+      "title": "저속 네트워크(EDGE) — 로딩 표시·타임아웃",
+      "platforms": ["android"],
+      "situations": [["network", "slow"]],
+      "steps": ["저속 상황에서 홈 → 상세 → 뷰어"],
+      "expect": ["스켈레톤/로딩 표시가 있다", "무한 대기·중복 탭으로 인한 이중 이동이 없다"],
+      "evidence": ["로딩 중", "완료"],
+      "priority": "P2"
+    },
+    {
+      "id": "S45-rotation",
+      "area": "상황",
+      "title": "가로 회전",
+      "situations": [["rotate", "landscape"]],
+      "steps": ["홈·뷰어에서 가로로 돌린다", "다시 세로로"],
+      "expect": ["레이아웃이 깨지지 않거나(허용 시) 세로 고정이 일관된다", "스크롤 위치·뷰어 위치 유지"],
+      "evidence": ["가로", "복귀"],
+      "priority": "P2"
+    },
+    {
+      "id": "S46-fold",
+      "area": "상황",
+      "title": "폴더블 접기·펼치기·반접기",
+      "platforms": ["android"],
+      "devices": ["foldable"],
+      "steps": ["펼친 상태에서 홈·뷰어를 연다", "fold closed", "fold open", "fold half"],
+      "expect": ["화면 크기 변화에 레이아웃이 즉시 맞춰진다(고정 종횡비 가정 없음)", "보던 위치·상태가 유지된다", "앱이 재시작되지 않는다"],
+      "evidence": ["펼침", "접힘", "다시 펼침"],
+      "priority": "P1"
+    },
+    {
+      "id": "S47-resume",
+      "area": "상황",
+      "title": "백그라운드 → 복귀 · 프로세스 종료 후 복귀",
+      "steps": ["뷰어에서 읽던 중 background", "30초 뒤 foreground", "다시 process-death 후 앱 아이콘으로 복귀"],
+      "expect": ["복귀 시 같은 화면·위치", "프로세스 종료 후에는 크래시 없이 열리고(마지막 화면 또는 홈) 로그인 상태 유지"],
+      "evidence": ["복귀 직후 각각"],
+      "priority": "P1"
+    },
+    {
+      "id": "S48-push-tap",
+      "area": "푸시",
+      "title": "푸시 탭 → 해당 화면 라우팅",
+      "situations": [["push-tap", "/detail/${CONTENT_ID}"]],
+      "steps": ["(로그인·알림 허용 뒤) push-tap 상황을 적용한다", "iOS 는 뜬 알림 배너를 탭한다"],
+      "expect": ["작품 상세로 이동한다", "pushPolicy.allowedPaths 밖 경로(/my/coupon 등)는 무시된다"],
+      "evidence": ["알림(iOS)", "이동 결과"],
+      "notes": "브릿지는 registerPush()(로그인 후 권한 허용) 에서 탭 리스너를 단다 — 게스트면 이벤트가 보류된다(정상). 알림 표시 자체(채널·배너)는 FCM 실발송 빌드(CI 의 google-services.json)로 확인.",
+      "priority": "P1"
+    },
+    {
+      "id": "S49-notification-permission",
+      "area": "푸시",
+      "title": "알림 권한 — 거부·나중에 허용",
+      "devices": ["notification-permission"],
+      "situations": [["permission", "reset", "notifications"]],
+      "steps": ["로그인 후 권한 프롬프트에서 거부", "My › 설정 › 알림에서 다시 켠다"],
+      "expect": ["거부해도 앱 흐름이 막히지 않는다", "설정에서 OS 설정으로 안내하거나 다시 요청한다"],
+      "evidence": ["프롬프트", "설정 화면"],
+      "priority": "P2"
+    },
+    {
+      "id": "S50-large-screen",
+      "area": "기기",
+      "title": "태블릿 · 폴드 펼침 — 대화면 레이아웃",
+      "devices": ["large"],
+      "steps": ["홈·상세·뷰어·My 를 연다", "설정의 반응형/모바일뷰 전환을 써 본다"],
+      "expect": ["콘텐츠가 가운데 정렬되거나 반응형으로 늘어난다(한쪽으로 쏠림 없음)", "팝업·시트가 화면 가운데", "전환이 즉시 반영"],
+      "evidence": ["화면별"],
+      "priority": "P1"
+    },
+    {
+      "id": "S51-upgrade",
+      "area": "빌드",
+      "title": "이전 빌드 → 새 빌드 업그레이드 설치",
+      "steps": ["lab install <기기> <slug> --version <이전> --fresh", "로그인·설정(테마·언어)을 바꿔 둔다", "lab install <기기> <slug> --version <새>(--fresh 없이)", "앱을 연다"],
+      "expect": ["설정·로그인 상태가 유지된다", "첫 실행 안내가 다시 뜨지 않는다", "버전 표시(설정 하단 등)가 새 버전"],
+      "evidence": ["업그레이드 전·후"],
+      "priority": "P1"
+    },
+    {
+      "id": "S52-legacy-webview",
+      "area": "기기",
+      "title": "구형 WebView(Android 11 이미지) — 폴백",
+      "devices": ["legacy"],
+      "steps": ["홈·상세·뷰어를 연다", "lab web console 로 오류를 본다"],
+      "expect": ["치명 오류(흰 화면·미처리 예외) 없이 열린다", "최신 CSS 미지원은 보기 좋게 폴백"],
+      "evidence": ["화면별", "콘솔"],
+      "priority": "P2"
+    },
+    {
+      "id": "S53-midrange-jank",
+      "area": "기기",
+      "title": "중급기 — 레일·뷰어 스크롤 끊김",
+      "devices": ["midrange"],
+      "steps": ["홈 레일을 빠르게 가로 스와이프", "뷰어를 빠르게 세로 스크롤", "logcat 에서 Davey!/Choreographer 를 본다"],
+      "expect": ["눈에 띄는 멈춤(>700ms)이 없다", "이미지가 늦게 떠도 자리(플레이스홀더)가 있다"],
+      "evidence": ["스크롤 중 스크린샷", "logcat 발췌"],
+      "notes": "에뮬레이터 성능은 실기기와 다르다 — 여기서 PASS 여도 실기기(Firebase Test Lab 갤럭시 A) 확인이 필요하다.",
+      "priority": "P2"
+    },
+    {
+      "id": "S54-iap-entry",
+      "area": "결제",
+      "title": "충전 화면 진입(구매는 하지 않음)",
+      "steps": ["My › 충전", "상품 목록을 본다"],
+      "expect": ["상품이 스토어 가격으로 나온다(앱) — google_apis 이미지는 Play 결제가 없어 BLOCKED", "구매 버튼은 누르지 않는다"],
+      "evidence": ["충전 화면"],
+      "priority": "P2"
+    }
+  ]
+}

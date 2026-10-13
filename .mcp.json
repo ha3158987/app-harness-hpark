@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mobile": {
+      "command": "node",
+      "args": ["lab/mcp/mobile-mcp.mjs"]
+    }
+  }
+}

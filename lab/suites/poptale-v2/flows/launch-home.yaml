@@ -1,0 +1,11 @@
+# S01 첫 실행 → 홈. 문구는 L_* (suite.json labels, 프리셋 언어) — 언어 상황에서도 같은 플로우.
+appId: ${APP_ID}
+name: launch-home
+tags: [smoke]
+---
+- runFlow: _open-home.yaml
+- assertVisible: ${L_WTNOVEL}
+- assertVisible: ${L_AITOON}
+- assertVisible: ${L_FORYOU}
+- assertVisible: ${L_MY}
+- takeScreenshot: launch-home--home

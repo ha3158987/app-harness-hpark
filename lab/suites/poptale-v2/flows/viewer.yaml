@@ -1,0 +1,19 @@
+# S14 무료 회차 뷰어 — 안드는 캡처 차단(FLAG_SECURE)이라 스크린샷이 검게 찍히는 게 정상
+appId: ${APP_ID}
+name: viewer
+tags: [smoke]
+onFlowComplete:
+  - runScript: ../scripts/navigation-snapshot.js
+---
+- launchApp:
+    stopApp: true
+- openLink: ${LINK_VIEWER_SCHEME}
+# 콜드 스타트 딥링크는 홈을 거쳐 온다 — 홈에도 같은 작품 카드가 있을 수 있어 뷰어 본문의 고정 문구를 기다린다
+- extendedWaitUntil:
+    visible: .*${VIEWER_TEXT}.*
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: viewer--viewer
+- scroll
+- takeScreenshot: viewer--scrolled

@@ -47,6 +47,10 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
+# 디바이스 랩 산출물(빌드 보관소·런 증거) — docs/26-DEVICE-LAB.md
+lab/.builds/
+lab/.runs/
+
 # OS
 .DS_Store
 Thumbs.db

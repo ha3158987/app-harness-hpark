@@ -1,0 +1,24 @@
+# S11 헤더 타입 탭 웹소설 · 웹툰소설 · AI툰 (+ AI툰 시연 예시)
+appId: ${APP_ID}
+name: header-tabs
+tags: [smoke]
+---
+- runFlow: _open-home.yaml
+- tapOn: ${L_WEBNOVEL}
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: header-tabs--webnovel
+- tapOn: ${L_WTNOVEL}
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: header-tabs--wtnovel
+- tapOn: ${L_AITOON}
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: header-tabs--aitoon
+# 첫 가로 레일을 왼쪽으로 밀어 본다(세로 스크롤과 엉키지 않는지 — 스크린샷 비교)
+- swipe:
+    start: 80%, 45%
+    end: 20%, 45%
+    duration: 400
+- takeScreenshot: header-tabs--rail-swiped

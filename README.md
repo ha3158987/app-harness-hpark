@@ -97,6 +97,7 @@ Appharness/
 │   ├── characterchat-dev/       #   팝챗 dev  (com.aipia.characterchat.dev)
 │   ├── poptale/                 #   Poptale prod (com.aipia.poptale)
 │   ├── poptale-dev/             #   Poptale dev  (com.aipia.poptale.dev)
+│   ├── poptale-v2-dev/          #   Poptale V2 리더(새 웹) 검증용 (com.aipia.poptale.v2.dev)
 │   └── poptale-global/          #   Poptale 글로벌 (com.aipia.poptale.global)
 ├── template/
 │   ├── src/                     # 오프라인/에러 폴백 셸
@@ -110,6 +111,10 @@ Appharness/
 │   └── lib/config.mjs           #   스키마 + AIPIA_DEFAULTS + aipiaPreset()
 ├── fastlane/                    # 빌드/업로드 lane
 ├── .github/workflows/release.yml # CI 자동배포
+├── .github/workflows/device-lab.yml # 기기 매트릭스 화면 테스트(빌드 버전별)
+├── lab/                         # 디바이스 랩 — node lab/lab.mjs (docs/26-DEVICE-LAB.md)
+│   ├── devices.json             #   기기 카탈로그 정본(Android·iOS, 세트 smoke/kr/full)
+│   └── suites/<스위트>/          #   시나리오(scenarios.json) · Maestro 플로우(flows/)
 └── .claude/skills/              # 자동화 스킬(new-app, integrate-web, build-*, ...)
 ```
 

@@ -26,7 +26,7 @@
 
 - 실제 키 · 비번 · 토큰 값을 레포에 커밋하지 않는다. (`docs/09-CREDENTIALS.md`)
 - 프로덕션 스토어 공개(심사 제출 · 정식 릴리즈)는 자동화하지 않는다. 사람이 콘솔에서 한다.
-- 앱 작업은 해당 스킬(`new-app` · `integrate-web` · `build-android` · `build-ios` · `bump-version` · `generate-assets` · `release-app` · `submit-store` · `publish-apk`)을 우선 사용한다. 직접 명령을 조립하지 마라.
+- 앱 작업은 해당 스킬(`new-app` · `integrate-web` · `build-android` · `build-ios` · `bump-version` · `generate-assets` · `release-app` · `submit-store` · `publish-apk` · `device-test`)을 우선 사용한다. 직접 명령을 조립하지 마라.
 - 요청받은 것만 한다. 문서·기능·추상화를 임의로 늘리지 않는다.
 
 ---
@@ -55,12 +55,13 @@
 | Poptale 이전 | 01 → 21 | 실제 경로는 **21 §10**(새 리더 웹 + `poptale-v2-dev`). 인증은 25 §3 "팝테일 V2" |
 | Poptale 글로벌 앱 신규 구축 | 01 → 04 → 25 | **정본은 레포 밖 아티팩트**: [팝테일 글로벌 시작 가이드](https://claude.ai/code/artifact/68bd80a8-cf18-4d91-a1f8-d4caa6f9e3b4) — 웹·앱 트랙, 작업 목록, 기능 격차표. 국내 이전(21)과 별건이다 |
 | 아이콘 · 스플래시 | — | `generate-assets` 스킬 사용 |
+| **기기 화면 테스트** (빌드 버전별 · 에뮬레이터/시뮬레이터/실기기 · 상황별 · AI 에이전트) | 26 → 19 | `device-test` 스킬 사용. 진입점 `node lab/lab.mjs`. iOS 는 맥 |
 
 ---
 
-## 2. 전체 문서 25개
+## 2. 전체 문서 26개
 
-전부 [`docs/`](docs/) 에 있다. 번호는 01 부터 연속이며 **마지막 번호 = 전체 개수(25)**.
+전부 [`docs/`](docs/) 에 있다. 번호는 01 부터 연속이며 **마지막 번호 = 전체 개수(26)**.
 
 | # | 문서 | 카테고리 | 대상 독자 | 상태 | 최종 수정 | 내용 |
 |---|---|---|---|---|---|---|
@@ -89,6 +90,7 @@
 | 23 | [FORCE-UPDATE](docs/23-FORCE-UPDATE.md) | 기능연동 | 개발자 | active | 2026-08-21 | 강제 업데이트 — Remote Config 콘솔 셋업 |
 | 24 | [MMP-CONSOLE-SETUP](docs/24-MMP-CONSOLE-SETUP.md) | 기능연동 | 개발자 | active | 2026-08-21 | 어트리뷰션 콘솔·스토어 신고 절차 |
 | 25 | [AUTH-DELEGATION](docs/25-AUTH-DELEGATION.md) | 기능연동 | 개발자 | active | 2026-10-08 | **인증 정본** — 외부 인증서버 위탁 규약 · 브릿지 버전·배포 |
+| 26 | [DEVICE-LAB](docs/26-DEVICE-LAB.md) | 테스트 | 개발자 | active | 2026-10-13 | 빌드 버전별 기기 화면 테스트 — 기기 카탈로그·상황·Maestro·AI 에이전트·CI·실기기 |
 
 **상태** — `active`: 현행 문서, 순서대로 읽는다 · `reference`: 수시 조회용, 처음부터 읽을 필요 없다
 
@@ -115,12 +117,13 @@
 | [template/plugins/README.md](template/plugins/README.md) | 네이티브 플러그인 작업 개요 |
 | [template/plugins/](template/plugins/) `{adbrix,whatap}/SPEC.md` | 플러그인별 작업 사양서 |
 | [.claude/skills/](.claude/skills/) `*/SKILL.md` | 자동화 스킬 정의 (하네스가 경로로 로드 — 옮기지 마라) |
+| [lab/devices.json](lab/devices.json) · [lab/suites/](lab/suites/) | 디바이스 랩 기기 카탈로그(정본) · 앱별 시나리오·플로우 (설명은 26) |
 
 ---
 
 ## 5. 문서 관리 규칙
 
-1. 문서는 `docs/` 에만 둔다. 번호는 **01 부터 빈칸 없이 연속** — 마지막 번호 = 전체 개수(현재 **25**).
+1. 문서는 `docs/` 에만 둔다. 번호는 **01 부터 빈칸 없이 연속** — 마지막 번호 = 전체 개수(현재 **26**).
 2. 새 문서는 해당 카테고리 블록의 **끝 번호**를 받는다. 뒤 문서를 밀지 않는다 (링크가 깨진다). 전면 재정렬은 별도 작업으로 한 번에 한다.
 3. 모든 문서는 frontmatter 6개 키를 갖는다. 새 문서도 반드시 붙인다.
 4. **색인은 이 파일 하나다.** 다른 문서에 문서 목록 표를 새로 만들지 않는다 — 반드시 낡는다. (README 와 `02-GUIDE §8` 에 있던 중복 색인을 이 파일로 합쳤다.)

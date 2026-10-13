@@ -1,0 +1,28 @@
+# S40 My › 설정 › 화면 — 라이트/다크 전환(상태바 동기는 스크린샷으로 본다)
+appId: ${APP_ID}
+name: settings-theme
+tags: [smoke]
+---
+- runFlow: _open-home.yaml
+- tapOn: ${L_MY}
+- extendedWaitUntil:
+    visible: ${L_SETTINGS}
+    timeout: 20000
+- tapOn: ${L_SETTINGS}
+- extendedWaitUntil:
+    visible: .*(${L_DARK}|${L_LIGHT}).*
+    timeout: 20000
+- runFlow:
+    when:
+      visible: .*${L_DARK}.*
+    commands:
+      - tapOn: .*${L_DARK}.*
+      - extendedWaitUntil:
+          visible: .*${L_LIGHT}.*
+          timeout: 10000
+      - takeScreenshot: settings-theme--dark
+      - tapOn: .*${L_LIGHT}.*
+      - extendedWaitUntil:
+          visible: .*${L_DARK}.*
+          timeout: 10000
+- takeScreenshot: settings-theme--light

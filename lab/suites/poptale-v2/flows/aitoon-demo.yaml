@@ -1,0 +1,14 @@
+# S15 AI툰 시연 — 예시 상세(무료) → 뷰어
+appId: ${APP_ID}
+name: aitoon-demo
+tags: [smoke]
+---
+- runFlow: _open-home.yaml
+- tapOn: ${L_AITOON}
+- extendedWaitUntil:
+    visible: .*${AITOON_DEMO_TITLE}.*
+    timeout: 30000
+- tapOn: .*${AITOON_DEMO_TITLE}.*
+- waitForAnimationToEnd:
+    timeout: 10000
+- takeScreenshot: aitoon-demo--detail

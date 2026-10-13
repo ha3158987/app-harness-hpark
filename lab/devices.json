@@ -1,0 +1,174 @@
+{
+  "$comment": "디바이스 랩 기기 카탈로그 — 정본. 근거: docs/19-DEVICE-SUPPORT.md(권장 테스트 매트릭스·OS 체크사항). 레이아웃을 가르는 건 기종명이 아니라 CSS 폭(dp)·종횡비·인셋이므로 dpWidth 를 함께 적는다. 실제 갤럭시의 dp 폭은 '디스플레이 크기' 설정에 따라 달라진다 — 여기 값은 출고 기본값 기준 근사치다.",
+  "version": 1,
+  "sets": {
+    "smoke": ["and16-s25", "and15-a36", "ios26-17pro", "ios26-se3"],
+    "kr": ["and16-s25", "and15-a36", "and16-flip", "and16-fold", "ios26-17pro", "ios26-16e", "ios18-14"],
+    "full": "*"
+  },
+  "android": {
+    "defaults": { "abi": "auto", "tag": "google_apis", "ramMb": 3072, "cores": 4, "dataMb": 6144, "heapMb": 512 },
+    "devices": [
+      {
+        "id": "and17-pixel9",
+        "label": "Pixel 9 · Android 17",
+        "api": "37.0",
+        "profile": "pixel_9",
+        "dpWidth": 412,
+        "tags": ["latest"],
+        "why": "가장 새 OS(Android 17). 예측 뒤로·edge-to-edge 강제의 다음 단계를 먼저 본다."
+      },
+      {
+        "id": "and16-s25",
+        "label": "Galaxy S25급 · Android 16",
+        "api": "36",
+        "hw": { "width": 1080, "height": 2340, "density": 450, "diagonal": 6.2 },
+        "dpWidth": 384,
+        "tags": ["smoke", "kr", "flagship"],
+        "why": "국내 주력 플래그십 폭(384dp). Android 16 = edge-to-edge 강제·16KB 페이지·targetSdk 36."
+      },
+      {
+        "id": "and15-a36",
+        "label": "Galaxy A36급 중급기 · Android 15",
+        "api": "35",
+        "hw": { "width": 1080, "height": 2340, "density": 450, "diagonal": 6.7 },
+        "dpWidth": 384,
+        "tags": ["smoke", "kr", "midrange"],
+        "why": "판매량 주력 중급기(docs/19 필수)의 화면·OS(Android 15 = edge-to-edge 시작). 성능(끊김)은 에뮬레이터로 흉내 낼 수 없다 — 코어를 줄이면 테스트 도구가 먼저 죽는다(2026-10-06 실측). 끊김 판정은 실기기(lab cloud, Firebase Test Lab 갤럭시 A)."
+      },
+      {
+        "id": "and16-flip",
+        "label": "Z Flip급 플립 폴더블 · Android 16",
+        "api": "36",
+        "profile": "6.7in Foldable",
+        "dpWidth": 360,
+        "tags": ["kr", "foldable"],
+        "why": "국내 인기 폴더블(세로로 긴 22:9 이상 비율). 접기·펼치기 상황으로 리사이즈 대응을 본다."
+      },
+      {
+        "id": "and16-fold",
+        "label": "Z Fold급 북 폴더블 · Android 16",
+        "api": "36",
+        "profile": "pixel_9_pro_fold",
+        "dpWidth": 851,
+        "tags": ["kr", "foldable", "large"],
+        "why": "펼치면 정사각에 가까운 대화면, 접으면 좁은 커버 화면. 고정 종횡비 가정이 여기서 깨진다."
+      },
+      {
+        "id": "and16-tablet",
+        "label": "Android 태블릿(Pixel Tablet) · Android 16",
+        "api": "36",
+        "profile": "pixel_tablet",
+        "dpWidth": 1280,
+        "tags": ["tablet", "large"],
+        "why": "가로 대화면·데스크톱형 레이아웃 경계."
+      },
+      {
+        "id": "and14-small",
+        "label": "소형 360dp · Android 14",
+        "api": "34",
+        "hw": { "width": 720, "height": 1600, "density": 320, "diagonal": 6.5 },
+        "dpWidth": 360,
+        "tags": ["small"],
+        "why": "가장 좁은 주력 폭(360dp, 갤럭시 A0x 류). 한 줄 헤더·탭 넘침을 본다."
+      },
+      {
+        "id": "and13-s22",
+        "label": "Galaxy S22급 · Android 13",
+        "api": "33",
+        "hw": { "width": 1080, "height": 2340, "density": 480, "diagonal": 6.1 },
+        "dpWidth": 360,
+        "tags": ["notification-permission"],
+        "why": "POST_NOTIFICATIONS 런타임 권한이 처음 생긴 버전 — '푸시가 조용히 안 온다' 1순위 원인."
+      },
+      {
+        "id": "and11-legacy",
+        "label": "구형 저가 · Android 11",
+        "api": "30",
+        "hw": { "width": 720, "height": 1520, "density": 320, "diagonal": 6.2 },
+        "dpWidth": 360,
+        "ramMb": 2048,
+        "tags": ["legacy"],
+        "why": "긴 꼬리. 이미지에 든 System WebView 가 오래돼 최신 CSS/JS 폴백을 본다(실기기는 Play 로 WebView 가 갱신되므로 '최악의 경우'다)."
+      }
+    ]
+  },
+  "ios": {
+    "$comment": "macOS + Xcode 에서만 쓴다. runtime 은 접두사로 찾는다('iOS 26' → 설치된 26.x 중 최신). 없으면 lab doctor 가 알려 준다(Xcode › Settings › Components 에서 받기).",
+    "devices": [
+      {
+        "id": "ios26-17pro",
+        "label": "iPhone 17 Pro · iOS 26",
+        "deviceType": "iPhone 17 Pro",
+        "runtime": "iOS 26",
+        "dpWidth": 402,
+        "tags": ["smoke", "kr", "latest", "dynamic-island"],
+        "why": "최신 기기·다이내믹 아일랜드 인셋·Liquid Glass 위 상태바 가독성."
+      },
+      {
+        "id": "ios26-17promax",
+        "label": "iPhone 17 Pro Max · iOS 26",
+        "deviceType": "iPhone 17 Pro Max",
+        "runtime": "iOS 26",
+        "dpWidth": 440,
+        "tags": ["large"],
+        "why": "가장 넓은 아이폰 폭."
+      },
+      {
+        "id": "ios26-air",
+        "label": "iPhone Air · iOS 26",
+        "deviceType": "iPhone Air",
+        "runtime": "iOS 26",
+        "dpWidth": 420,
+        "tags": [],
+        "why": "새 폭(420pt)."
+      },
+      {
+        "id": "ios26-16e",
+        "label": "iPhone 16e · iOS 26",
+        "deviceType": "iPhone 16e",
+        "runtime": "iOS 26",
+        "dpWidth": 390,
+        "tags": ["kr", "notch"],
+        "why": "노치형 인셋(다이내믹 아일랜드 아님)."
+      },
+      {
+        "id": "ios26-se3",
+        "label": "iPhone SE(3세대) · iOS 26",
+        "deviceType": "iPhone SE (3rd generation)",
+        "runtime": "iOS 26",
+        "fallbackRuntime": "iOS 18",
+        "dpWidth": 375,
+        "tags": ["smoke", "small", "home-button"],
+        "why": "가장 작은 화면·홈 버튼(하단 인셋 0)·상단 인셋 20."
+      },
+      {
+        "id": "ios18-14",
+        "label": "iPhone 14 · iOS 18",
+        "deviceType": "iPhone 14",
+        "runtime": "iOS 18",
+        "dpWidth": 390,
+        "tags": ["kr", "older-os"],
+        "why": "4년 전 기기·iOS 18 WebKit(View Transitions 18.2 경계)."
+      },
+      {
+        "id": "ios17-13mini",
+        "label": "iPhone 13 mini · iOS 17",
+        "deviceType": "iPhone 13 mini",
+        "runtime": "iOS 17",
+        "dpWidth": 375,
+        "tags": ["legacy"],
+        "why": "iOS 16~17 구 WebKit 폴백(docs/19 '반드시 폴백')."
+      },
+      {
+        "id": "ios26-ipadmini",
+        "label": "iPad mini · iPadOS 26",
+        "deviceType": "iPad mini (A17 Pro)",
+        "runtime": "iOS 26",
+        "dpWidth": 744,
+        "tags": ["tablet"],
+        "why": "아이패드 레이아웃 경계(아이폰 앱도 아이패드에서 돈다)."
+      }
+    ]
+  }
+}

@@ -1,0 +1,380 @@
+# 디바이스 랩 — 빌드 버전별 앱을 에뮬레이터/시뮬레이터 기기 매트릭스에 띄워 화면 테스트(Maestro 회귀 + 선택: AI 탐색).
+# 로컬과 같은 코드(lab/lab.mjs)로 돈다. 문서: docs/26-DEVICE-LAB.md
+#
+# 트리거
+#   - 태그 <slug>-v<버전>(release.yml 과 같은 태그): 그 버전의 랩 빌드(디버그 APK · 시뮬레이터 .app)를 아티팩트로
+#     남기고(90일 — lab fetch 로 받아 맥·PC 에서 같은 버전을 띄운다) 스모크 세트를 돌린다.
+#   - 수동 실행: slug · 플랫폼 · 기기 세트 · 상황 프리셋 · (선택) AI 탐색.
+#   - PR(lab/** 등 변경): 랩 코드 회귀 확인 — Android 스모크만(맥 러너는 분당 10배라 PR 에선 안 돈다).
+#
+# 비용(비공개 레포): Linux 2코어 $0.006/분, macOS $0.062/분. Android 기기 1대 × 프리셋 1개 ≈ 20~30분.
+name: device-lab
+
+on:
+  push:
+    tags: ['*-v*']
+  pull_request:
+    paths:
+      - 'lab/**'
+      - '.github/workflows/device-lab.yml'
+      - 'apps/poptale-v2-dev/**'
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: '앱 slug (apps/<slug>) — 스위트가 있는 앱'
+        required: true
+        default: 'poptale-v2-dev'
+        type: string
+      platforms:
+        description: '플랫폼'
+        required: true
+        default: 'android'
+        type: choice
+        options: [android, ios, both]
+      devices:
+        description: '기기 세트(smoke·kr·full) 또는 기기 id 쉼표 목록 (lab/devices.json)'
+        required: true
+        default: 'smoke'
+        type: string
+      presets:
+        description: '상황 프리셋 쉼표 목록 (lab/suites/<suite>/suite.json presets)'
+        required: true
+        default: 'baseline'
+        type: string
+      start_url:
+        description: '(선택) 다른 웹 배포를 같은 셸로 — 비우면 app.config.json startUrl'
+        required: false
+        default: ''
+        type: string
+      ai:
+        description: 'AI 에이전트 탐색 테스트도 돌린다(Anthropic 키 시크릿 필요 — docs/26 §7)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: device-lab-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  MAESTRO_VERSION: '2.11.0'
+  # https://github.com/mobile-dev-inc/maestro/releases/tag/cli-2.11.0 maestro.zip 의 sha256(릴리스 digest 와 대조함)
+  MAESTRO_SHA256: '5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a'
+  MAESTRO_CLI_NO_ANALYTICS: '1'
+  MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      slug: ${{ steps.p.outputs.slug }}
+      slug_env: ${{ steps.p.outputs.slug_env }}
+      suite: ${{ steps.p.outputs.suite }}
+      presets: ${{ steps.p.outputs.presets }}
+      android: ${{ steps.p.outputs.android }}
+      ios: ${{ steps.p.outputs.ios }}
+      start_url: ${{ steps.p.outputs.start_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        env:
+          EVENT: ${{ github.event_name }}
+          IN_SLUG: ${{ inputs.slug }}
+          IN_PLATFORMS: ${{ inputs.platforms }}
+          IN_DEVICES: ${{ inputs.devices }}
+          IN_PRESETS: ${{ inputs.presets }}
+          IN_START_URL: ${{ inputs.start_url }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          node - <<'EOF' >> "$GITHUB_OUTPUT"
+          const fs = require('fs');
+          const env = process.env;
+          const cat = JSON.parse(fs.readFileSync('lab/devices.json', 'utf8'));
+          let slug = env.IN_SLUG || 'poptale-v2-dev', platforms = env.IN_PLATFORMS || 'android', devices = env.IN_DEVICES || 'smoke';
+          if (env.EVENT === 'push') { slug = env.TAG.replace(/-v[^-]*$/, ''); platforms = 'both'; devices = 'smoke'; }
+          if (env.EVENT === 'pull_request') { platforms = 'android'; devices = 'smoke'; }
+          // 스위트가 이 slug 를 다루는지
+          const suites = fs.readdirSync('lab/suites').filter((s) => JSON.parse(fs.readFileSync(`lab/suites/${s}/suite.json`, 'utf8')).slugs.includes(slug));
+          const all = [...cat.android.devices.map((d) => ({ ...d, p: 'android' })), ...cat.ios.devices.map((d) => ({ ...d, p: 'ios' }))];
+          const set = cat.sets[devices];
+          const ids = devices === 'full' || set === '*' ? all.map((d) => d.id) : (set ?? devices.split(','));
+          // 스위트가 없는 앱(다른 앱의 릴리즈 태그 등)은 실패시키지 않고 전부 건너뛴다
+          const pick = (p) => suites.length && (platforms === p || platforms === 'both') ? all.filter((d) => d.p === p && ids.includes(d.id)).map((d) => d.id) : [];
+          const out = {
+            slug, slug_env: slug.toUpperCase().replace(/-/g, '_'), suite: suites[0] ?? '',
+            presets: env.IN_PRESETS || 'baseline', android: JSON.stringify(pick('android')), ios: JSON.stringify(pick('ios')),
+            start_url: env.IN_START_URL || '',
+          };
+          for (const [k, v] of Object.entries(out)) console.log(`${k}=${v}`);
+          console.error(out);
+          if (!out.suite) console.error(`::notice::${slug} 를 다루는 스위트가 lab/suites 에 없어 건너뛴다`);
+          EOF
+
+  build-android:
+    needs: plan
+    if: ${{ needs.plan.outputs.android != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SLUG: ${{ needs.plan.outputs.slug }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+      - uses: android-actions/setup-android@v4
+      - run: npm ci
+      - name: 랩 빌드(디버그 APK — WebView 검사 가능)
+        env:
+          START_URL: ${{ needs.plan.outputs.start_url }}
+        run: node lab/lab.mjs build "$SLUG" --platform android ${START_URL:+--start-url "$START_URL"}
+      - name: 아티팩트 폴더
+        run: |
+          D=$(ls -d lab/.builds/$SLUG/*/android-debug | head -1)
+          mkdir -p out && cp "$D/app.apk" "$D/meta.json" out/
+          cat out/meta.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lab-${{ env.SLUG }}-android
+          path: out/
+          retention-days: 90
+
+  build-ios:
+    needs: plan
+    if: ${{ needs.plan.outputs.ios != '[]' }}
+    runs-on: macos-26
+    timeout-minutes: 50
+    env:
+      SLUG: ${{ needs.plan.outputs.slug }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: npm }
+      - run: npm ci
+      - name: 랩 빌드(시뮬레이터 .app — 서명 없음)
+        env:
+          START_URL: ${{ needs.plan.outputs.start_url }}
+          # 있으면 실 Firebase(푸시 토큰까지), 없으면 자리표시 plist — lab/lib/builds.mjs prepareIosFirebasePlist
+          GOOGLE_SERVICE_INFO_PLIST_B64: ${{ secrets[format('GOOGLE_SERVICE_INFO_PLIST_B64_{0}', needs.plan.outputs.slug_env)] }}
+        run: node lab/lab.mjs build "$SLUG" --platform ios ${START_URL:+--start-url "$START_URL"}
+      - name: 아티팩트 폴더
+        run: |
+          D=$(ls -d lab/.builds/$SLUG/*/ios-debug | head -1)
+          mkdir -p out && cp "$D/meta.json" out/ && ditto -c -k --keepParent "$D/App.app" out/App.app.zip
+          cat out/meta.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lab-${{ env.SLUG }}-ios
+          path: out/
+          retention-days: 90
+
+  test-android:
+    needs: [plan, build-android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        device: ${{ fromJSON(needs.plan.outputs.android) }}
+    env:
+      SLUG: ${{ needs.plan.outputs.slug }}
+      LAB_GPU: swiftshader_indirect
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+      - uses: android-actions/setup-android@v4
+      # Android API 24+는 데이터 영역을 최소 6 GiB로 늘리고 생성 시 20% 여유 공간을 요구한다.
+      # 이 일회용 테스트 러너는 .NET을 사용하지 않는다. 로컬 파일이나 Android SDK는 지우지 않는다.
+      - name: 에뮬레이터 디스크 공간 확보
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          df -h "$HOME" "$ANDROID_HOME"
+      - name: KVM(하드웨어 가속) 켜기
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: 에뮬레이터 패키지
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools > /dev/null
+      - name: Maestro ${{ env.MAESTRO_VERSION }}(해시 검증)
+        run: |
+          curl -fsSL -o /tmp/maestro.zip "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          echo "${MAESTRO_SHA256}  /tmp/maestro.zip" | sha256sum -c -
+          unzip -q /tmp/maestro.zip -d "$HOME" && echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        with:
+          name: lab-${{ env.SLUG }}-android
+          path: dl
+      - run: node lab/lab.mjs import "$SLUG" dl/app.apk
+      - name: 호스트 자원 확인
+        run: |
+          df -h "$HOME" "$ANDROID_HOME"
+          free -h
+      - name: 기기 생성·부팅·설치·플로우(프리셋별)
+        run: |
+          node lab/lab.mjs matrix --suite "${{ needs.plan.outputs.suite }}" --slug "$SLUG" \
+            --devices "${{ matrix.device }}" --presets "${{ needs.plan.outputs.presets }}"
+      - name: 에뮬레이터 시작 로그
+        if: ${{ failure() }}
+        run: |
+          for log in lab/.runs/emulator-*.log; do
+            if [ -f "$log" ]; then tail -n 120 "$log"; fi
+          done
+          free -h
+          sudo dmesg -T | rg -i 'out of memory|oom-kill|killed process.*(qemu|java|maestro)' || true
+      - name: 요약·리포트
+        if: ${{ !cancelled() }}
+        run: |
+          node lab/lab.mjs report || true
+          node lab/lab.mjs summary >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: lab-run-${{ matrix.device }}
+          include-hidden-files: true
+          path: |
+            lab/.runs/**/report.html
+            lab/.runs/**/results.jsonl
+            lab/.runs/**/run.json
+            lab/.runs/**/shots/**
+            lab/.runs/**/maestro/**/junit.xml
+            lab/.runs/**/maestro/**/logs/**
+            lab/.runs/emulator-*.log
+          retention-days: 30
+
+  test-ios:
+    needs: [plan, build-ios]
+    runs-on: macos-26
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        device: ${{ fromJSON(needs.plan.outputs.ios) }}
+    env:
+      SLUG: ${{ needs.plan.outputs.slug }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+      - name: Maestro ${{ env.MAESTRO_VERSION }}(해시 검증)
+        run: |
+          curl -fsSL -o /tmp/maestro.zip "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          echo "${MAESTRO_SHA256}  /tmp/maestro.zip" | shasum -a 256 -c -
+          unzip -q /tmp/maestro.zip -d "$HOME" && echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        with:
+          name: lab-${{ env.SLUG }}-ios
+          path: dl
+      # meta.json 이 App.app 옆(dl/)에 있어야 빌드 정보(startUrl·커밋)가 보존된다
+      - run: ditto -x -k dl/App.app.zip dl && node lab/lab.mjs import "$SLUG" dl/App.app
+      - name: 시뮬레이터 생성·부팅·설치·플로우(프리셋별)
+        run: |
+          node lab/lab.mjs matrix --suite "${{ needs.plan.outputs.suite }}" --slug "$SLUG" --headless \
+            --devices "${{ matrix.device }}" --presets "${{ needs.plan.outputs.presets }}"
+      - name: 요약·리포트
+        if: ${{ !cancelled() }}
+        run: |
+          node lab/lab.mjs report || true
+          node lab/lab.mjs summary >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: lab-run-${{ matrix.device }}
+          include-hidden-files: true
+          path: |
+            lab/.runs/**/report.html
+            lab/.runs/**/results.jsonl
+            lab/.runs/**/run.json
+            lab/.runs/**/shots/**
+            lab/.runs/**/maestro/**/junit.xml
+            lab/.runs/**/maestro/**/logs/**
+          retention-days: 30
+
+  # AI 에이전트 탐색 — Claude 가 mobile-mcp 로 에뮬레이터를 직접 보고 누르며 시나리오(scenarios.json)를 판정한다.
+  # 결정적 회귀(Maestro)가 못 보는 것(레이아웃 깨짐·어색한 화면·흐름 끊김)을 잡는 층. 키가 없으면 건너뛴다.
+  ai-explore:
+    needs: [plan, build-android]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.ai }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SLUG: ${{ needs.plan.outputs.slug }}
+      LAB_GPU: swiftshader_indirect
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' || secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    steps:
+      - if: ${{ env.HAS_KEY != 'true' }}
+        run: echo "::notice::ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN 시크릿이 없어 AI 탐색을 건너뛴다 — docs/26-DEVICE-LAB.md §7"
+      - uses: actions/checkout@v4
+        if: ${{ env.HAS_KEY == 'true' }}
+      - uses: actions/setup-node@v4
+        if: ${{ env.HAS_KEY == 'true' }}
+        with: { node-version-file: '.nvmrc', cache: npm }
+      - uses: actions/setup-java@v4
+        if: ${{ env.HAS_KEY == 'true' }}
+        with: { distribution: 'temurin', java-version: '21' }
+      - uses: android-actions/setup-android@v4
+        if: ${{ env.HAS_KEY == 'true' }}
+      # Android API 24+는 데이터 영역을 최소 6 GiB로 늘리고 생성 시 20% 여유 공간을 요구한다.
+      # 이 일회용 테스트 러너는 .NET을 사용하지 않는다. 로컬 파일이나 Android SDK는 지우지 않는다.
+      - name: 에뮬레이터 디스크 공간 확보
+        if: ${{ env.HAS_KEY == 'true' }}
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          df -h "$HOME" "$ANDROID_HOME"
+      - name: 준비(KVM·에뮬레이터·mobile-mcp·빌드·기기)
+        if: ${{ env.HAS_KEY == 'true' }}
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools > /dev/null
+          npm ci
+      - uses: actions/download-artifact@v4
+        if: ${{ env.HAS_KEY == 'true' }}
+        with:
+          name: lab-${{ env.SLUG }}-android
+          path: dl
+      - name: 기기 부팅·설치·런 시작
+        if: ${{ env.HAS_KEY == 'true' }}
+        run: |
+          node lab/lab.mjs import "$SLUG" dl/app.apk
+          node lab/lab.mjs up and16-s25
+          node lab/lab.mjs install and16-s25 "$SLUG" --fresh
+          node lab/lab.mjs run start --suite "${{ needs.plan.outputs.suite }}" --slug "$SLUG" --devices and16-s25 --by ci-agent
+      - uses: anthropics/claude-code-action@v1
+        if: ${{ env.HAS_KEY == 'true' }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            .claude/skills/device-test/SKILL.md 의 절차대로 디바이스 랩 테스트를 한다.
+            - 기기: and16-s25(이미 켜져 있고 앱 설치됨, 런도 열려 있음) · slug: ${{ env.SLUG }} · 스위트: ${{ needs.plan.outputs.suite }}
+            - 대상: scenarios.json 의 priority P0 시나리오 전부. 각 시나리오마다 lab shot 으로 증거를 남기고 lab verdict 로 판정한다.
+            - 끝나면 lab report 와 lab summary 를 실행한다. 사람이 해야 하는 단계(자격증명 입력·약관 동의)는 하지 말고 BLOCKED 로 남긴다.
+          claude_args: >-
+            --mcp-config .mcp.json
+            --allowedTools "mcp__mobile__*,Bash(node lab/lab.mjs:*),Read,Glob,Grep"
+            --max-turns 200
+      - name: 요약
+        if: ${{ env.HAS_KEY == 'true' && !cancelled() }}
+        run: node lab/lab.mjs summary >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: ${{ env.HAS_KEY == 'true' && !cancelled() }}
+        with:
+          name: lab-run-ai-explore
+          include-hidden-files: true
+          path: |
+            lab/.runs/**/report.html
+            lab/.runs/**/results.jsonl
+            lab/.runs/**/shots/**
+          retention-days: 30

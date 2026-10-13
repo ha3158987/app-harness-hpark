@@ -1,0 +1,26 @@
+# S20 하드웨어 뒤로 체인(Android) — 기록대로 되돌아가고, 홈에서 뒤로 = 앱 종료
+appId: ${APP_ID}
+name: back-chain
+tags: [android-only]
+---
+- runFlow: _open-home.yaml
+- tapOn: ${L_MY}
+- extendedWaitUntil:
+    visible: ${L_SETTINGS}
+    timeout: 20000
+- tapOn: ${L_FORYOU}
+- waitForAnimationToEnd:
+    timeout: 8000
+- back
+- extendedWaitUntil:
+    visible: ${L_SETTINGS}
+    timeout: 15000
+- back
+- extendedWaitUntil:
+    visible: ${L_WEBNOVEL}
+    timeout: 15000
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible: ${L_WEBNOVEL}
+- takeScreenshot: back-chain--exited
