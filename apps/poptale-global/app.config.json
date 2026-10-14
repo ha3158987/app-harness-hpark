@@ -1,9 +1,9 @@
 {
   "slug": "poptale-global",
-  "appName": { "en": "Poptale", "ko-KR": "팝테일 글로벌", "ja-JP": "Poptale", "es-419": "Poptale" },
+  "appName": { "en": "Poptale Global", "ko-KR": "팝테일 글로벌", "ja-JP": "Poptale Global", "es-419": "Poptale Global" },
   "appId": "com.aipia.poptale.global",
   "startUrl": "https://global.dev.poptale.ai",
-  "version": { "name": "0.1.1", "code": 4 },
+  "version": { "name": "0.1.1", "code": 7 },
   "locales": { "default": "en", "supported": ["en", "ko-KR", "ja-JP", "es-419"] },
   "theme": { "primary": "#000000", "statusBarStyle": "light", "background": "#000000" },
   "assets": { "icon": "icon.png", "splash": "splash.png" },
@@ -39,7 +39,7 @@
   "monitoring": { "crash": { "provider": "crashlytics", "dsn": null, "environment": "development" }, "apm": { "provider": null } },
   "firebase": {
     "enabled": true,
-    "project": { "dev": "dev-aipia-poptale", "stage": "stage-aipia-poptale", "prod": "aipia-poptale" },
+    "project": { "dev": "dev-poptale-global", "stage": null, "prod": null },
     "fcm": true, "remoteConfig": true, "analytics": true, "crashlytics": true
   },
   "legal": { "privacyUrl": "https://global.dev.poptale.ai/privacy", "termsUrl": "https://global.dev.poptale.ai/terms", "ageVerifyUrl": null },

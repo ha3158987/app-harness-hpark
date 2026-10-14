@@ -11,6 +11,7 @@
 #    프로덕션 공개는 사람이 콘솔에서.
 
 require 'json'
+require 'fileutils'
 
 # fastlane 은 플러그인을 **Gemfile 을 통해서만** 자동 로드한다 — `PluginManager#available_gems`
 # 가 `Bundler::SharedHelpers.default_gemfile` 을 읽고, 없으면 빈 배열을 돌려준다. 이 레포는
@@ -253,6 +254,59 @@ platform :ios do
     UI.success("TestFlight 업로드 완료 (#{slug}). 외부 배포/심사 제출은 App Store Connect 에서 직접.")
   end
 
+  desc 'iOS Firebase App Distribution — 등록된 기기용 Ad Hoc IPA로 재서명하여 배포'
+  lane :firebase do |options|
+    require_firebase_plugin!
+    slug = require_slug(options)
+    cfg = app_config(slug)
+    app_id = cfg['appId']
+    build_path = build_dir(slug)
+    plist = File.join(build_path, 'ios', 'App', 'GoogleService-Info.plist')
+    UI.user_error!("Firebase 설정 없음: #{plist}") unless File.exist?(plist)
+    firebase_bundle = get_info_plist_value(path: plist, key: 'BUNDLE_ID')
+    firebase_id = get_info_plist_value(path: plist, key: 'GOOGLE_APP_ID')
+    UI.user_error!('Firebase BUNDLE_ID가 대상 앱과 다릅니다') unless firebase_bundle == app_id
+    UI.user_error!('Firebase iOS 앱 ID가 없습니다') unless firebase_id.to_s.match?(/\A1:\d+:ios:[a-zA-Z0-9]+\z/)
+
+    build(options) unless options[:skip_build]
+    source = ios_artifact_path(slug)
+    UI.user_error!("IPA 없음: #{source}") unless File.exist?(source)
+    UI.user_error!('IPA 번들 ID가 대상 앱과 다릅니다') unless get_ipa_info_plist_value(ipa: source, key: 'CFBundleIdentifier') == app_id
+
+    identifiers = [app_id]
+    identifiers << ios_ext_app_id(app_id) if ios_has_nse?(build_path)
+    # 기기 추가 후 로컬 regen_profile profile_type:adhoc 실행. CI는 저장된 프로파일만 사용.
+    match(type: 'adhoc', app_identifier: identifiers, readonly: true)
+    profiles = identifiers.to_h do |id|
+      path = ENV["sigh_#{id}_adhoc_profile-path"]
+      UI.user_error!("#{id} Ad Hoc 프로파일 없음 — regen_profile profile_type:adhoc 필요") unless path && File.exist?(path)
+      [id, path]
+    end
+    identity = ENV["sigh_#{app_id}_adhoc_certificate-name"]
+    UI.user_error!('Ad Hoc 서명 인증서가 없습니다') if identity.to_s.empty?
+    output = File.join(build_path, 'ios', 'firebase-output')
+    FileUtils.mkdir_p(output)
+    ipa = File.join(output, "#{release_artifact_stem(slug)}-adhoc.ipa")
+    FileUtils.cp(source, ipa)
+    resign(ipa: ipa, signing_identity: identity, provisioning_profile: profiles, use_app_entitlements: true)
+
+    params = {
+      app: firebase_id,
+      ipa_path: ipa,
+      groups: options[:groups] || ENV['FIREBASE_TESTER_GROUPS'] || 'aipia_internal',
+      release_notes: options[:notes] || "#{slug} #{cfg.dig('version', 'name')} (#{cfg.dig('version', 'code')})"
+    }
+    creds = ENV['FIREBASE_SERVICE_CREDENTIALS_FILE'] || ENV['GOOGLE_APPLICATION_CREDENTIALS']
+    if creds && !creds.strip.empty?
+      params[:service_credentials_file] = File.expand_path(creds, REPO_ROOT)
+      UI.user_error!('Firebase 인증 파일이 없습니다') unless File.exist?(params[:service_credentials_file])
+    elsif !File.exist?(File.expand_path('~/.config/gcloud/application_default_credentials.json'))
+      UI.user_error!('Firebase 인증 필요 — CI WIF 또는 로컬 gcloud ADC를 준비하세요')
+    end
+    firebase_app_distribution(**params)
+    UI.success("iOS Firebase 업로드 완료: #{slug}. Ad Hoc 프로파일에 포함된 기기만 설치할 수 있습니다.")
+  end
+
   # appstore 프로비저닝 프로파일을 재생성한다. CI 의 match 는 readonly 라 스스로 못 고치므로,
   # 이 lane 을 로컬에서 1회 돌린 뒤 CI(release)를 iOS 로 재실행한다. 쓰는 상황은 셋:
   #   1) App ID 에서 capability(딥링크=Associated Domains / 푸시 / Apple 로그인 등)를 켠 뒤
@@ -264,6 +318,8 @@ platform :ios do
   desc 'appstore 프로파일 재생성 — capability 변경·인증서 만료 후(readonly off + force). 로컬 전용.'
   lane :regen_profile do |options|
     slug = require_slug(options)
+    profile_type = options[:profile_type] || 'appstore'
+    UI.user_error!('profile_type은 appstore 또는 adhoc이어야 합니다') unless %w[appstore adhoc].include?(profile_type)
     app_id = app_config(slug)['appId']
     # 알림 확장의 프로파일도 같이 만든다. 확장은 별개 번들 id 라 프로파일도 별개이고,
     # CI 의 match 는 readonly 라 스스로 만들 수 없다 — 여기서 안 만들면 CI 가
@@ -311,7 +367,9 @@ platform :ios do
     #    그리고 두 사람이 동시에 돌리면 인증서가 2장으로 갈라져 서명이 깨진다 — 한 사람이
     #    순차로 돌릴 것.
     renew_opts = {}
-    if Gem::Version.new(Fastlane::VERSION) >= Gem::Version.new(MATCH_RENEW_MIN_VERSION)
+    if profile_type == 'adhoc'
+      # 기존 배포 인증서를 재사용한다. 새 기기를 포함하는 프로파일만 갱신한다.
+    elsif Gem::Version.new(Fastlane::VERSION) >= Gem::Version.new(MATCH_RENEW_MIN_VERSION)
       renew_opts[:renew_expired_certs] = true
     else
       # 옛 fastlane 에서는 조용히 넘어가지 않고 **미리 크게 알린다.** 만료 상황이면 어차피
@@ -325,7 +383,7 @@ platform :ios do
       )
     end
 
-    match({ type: 'appstore', app_identifier: ids, readonly: false, force: true }.merge(renew_opts))
+    match({ type: profile_type, app_identifier: ids, readonly: false, force: true }.merge(renew_opts))
     UI.success("프로파일 재생성 완료: #{Array(ids).join(', ')} — 이제 CI(release)를 iOS 로 재실행하세요.")
   end
 end

@@ -99,6 +99,16 @@ gh run watch <run-id> --exit-status
 - `track` (Android Play): `internal` | `beta`
 - `android_channel`: `both`(기본) | `firebase` | `play`
 - `firebase_groups`: Firebase 테스터 그룹 별칭 (기본 `aipia_internal`, 쉼표로 여러 개)
+- `ios_channel`: `testflight`(기본) | `firebase` | `both`. Firebase는 Ad Hoc 프로파일에 등록된 iPhone만 설치할 수 있다.
+
+글로벌 앱을 TestFlight와 양 플랫폼 Firebase에 함께 배포:
+```bash
+gh workflow run release.yml --ref <빌드-브랜치> \
+  -f slug=poptale-global -f platform=both -f android_channel=firebase \
+  -f ios_channel=both -f firebase_groups=aipia_internal
+```
+최초 iOS Firebase 배포 전에는 `fastlane ios regen_profile slug:poptale-global profile_type:adhoc`으로 앱·알림 확장 프로파일을 준비한다.
+새 iPhone 테스터는 Firebase 초대를 Safari에서 열어 기기를 등록한다. 수집된 UDID를 Apple Developer에 등록한 뒤 같은 명령으로 프로파일을 갱신하고 iOS Firebase를 재배포한다. CI는 프로파일을 읽기만 하며 기기 등록은 자동으로 하지 않는다.
 - `--ref`: 앱 정의(app.config.json)가 있는 브랜치. (main 에 없으면 작업 브랜치 지정)
 
 > Actions 탭 → release → "Run workflow" 로 클릭으로도 가능.

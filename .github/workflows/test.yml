@@ -40,6 +40,7 @@ jobs:
         run: |
           ruby test/android-artifact-filenames-test.rb fastlane/Fastfile
           ruby test/ios-artifact-filenames-test.rb fastlane/Fastfile
+          ruby test/ios-firebase-test.rb fastlane/Fastfile
 
       - name: 테스트 스위트
         run: npm test
