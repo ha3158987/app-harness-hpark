@@ -3,7 +3,7 @@
   "appName": { "en": "Poptale", "ko-KR": "팝테일 글로벌", "ja-JP": "Poptale", "es-419": "Poptale" },
   "appId": "com.aipia.poptale.global",
   "startUrl": "https://global.dev.poptale.ai",
-  "version": { "name": "0.1.1", "code": 2 },
+  "version": { "name": "0.1.1", "code": 4 },
   "locales": { "default": "en", "supported": ["en", "ko-KR", "ja-JP", "es-419"] },
   "theme": { "primary": "#000000", "statusBarStyle": "light", "background": "#000000" },
   "assets": { "icon": "icon.png", "splash": "splash.png" },
@@ -24,7 +24,7 @@
     "forceUpdate": { "enabled": false, "minVersionUrl": null },
     "viewer": { "captureBlock": { "enabled": true, "paths": ["/viewer"] }, "brightness": { "enabled": true } }
   },
-  "navigation": { "allowedDomains": ["global.dev.poptale.ai"], "externalInBrowser": true },
+  "navigation": { "allowedDomains": ["global.dev.poptale.ai"], "appLinkDomains": ["global.dev.poptale.ai"], "externalInBrowser": true },
   "auth": {
     "providers": [],
     "oauthReturnScheme": true,
