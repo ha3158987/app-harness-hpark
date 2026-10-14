@@ -33,6 +33,14 @@ jobs:
 
       - run: npm ci
 
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3' }
+
+      - name: iOS·Android 배포 파일명 검증
+        run: |
+          ruby test/android-artifact-filenames-test.rb fastlane/Fastfile
+          ruby test/ios-artifact-filenames-test.rb fastlane/Fastfile
+
       - name: 테스트 스위트
         run: npm test
 

@@ -53,6 +53,29 @@ def require_slug(options)
   slug
 end
 
+def release_artifact_stem(slug)
+  version = app_config(slug).fetch('version')
+  "#{slug}-v#{version.fetch('name')}-#{version.fetch('code')}"
+end
+
+def android_artifact_path(slug, extension)
+  File.join(build_dir(slug), 'android', 'artifacts', "#{release_artifact_stem(slug)}.#{extension}")
+end
+
+def ios_artifact_path(slug)
+  File.join(build_dir(slug), 'ios', 'output', "#{release_artifact_stem(slug)}.ipa")
+end
+
+def stage_android_artifact(slug, kind, extension)
+  source = File.join(build_dir(slug), 'android', 'app', 'build', 'outputs', kind, 'release', "app-release.#{extension}")
+  UI.user_error!("빌드 산출물 없음: #{source}") unless File.file?(source)
+  destination = android_artifact_path(slug, extension)
+  FileUtils.mkdir_p(File.dirname(destination))
+  FileUtils.cp(source, destination)
+  UI.message("Android 산출물: #{destination}")
+  destination
+end
+
 # Firebase App Distribution 이 요구하는 앱 식별자는 번들 id(appId)가 아니라
 # **Firebase 앱 ID**(`1:123456789012:android:abc…`) 다. 이 값은 CI 가 이미 시크릿에서
 # 배치하는 google-services.json 안에 들어 있으므로, app.config.json 에 키를 새로 만들지 않고
@@ -209,7 +232,7 @@ platform :ios do
       scheme: 'App',
       export_method: 'app-store',
       output_directory: File.join(build_path, 'ios', 'output'),
-      output_name: "#{slug}.ipa",
+      output_name: File.basename(ios_artifact_path(slug)),
       clean: true,
       export_options: {
         signingStyle: 'manual',
@@ -223,7 +246,7 @@ platform :ios do
     slug = require_slug(options)
     build(options) unless options[:skip_build]
     upload_to_testflight(
-      ipa: File.join(build_dir(slug), 'ios', 'output', "#{slug}.ipa"),
+      ipa: ios_artifact_path(slug),
       skip_waiting_for_build_processing: true,
       distribute_external: false # 내부 테스터까지만. 외부 배포/심사 제출은 사람이.
     )
@@ -317,6 +340,7 @@ platform :android do
       task: 'bundle',
       build_type: 'Release'
     )
+    stage_android_artifact(slug, 'bundle', 'aab')
   end
 
   desc 'Play 내부 트랙 업로드 (베타). 프로덕션 승격 아님.'
@@ -324,10 +348,12 @@ platform :android do
     slug = require_slug(options)
     cfg = app_config(slug)
     build(options) unless options[:skip_build]
+    aab = options[:skip_build] ? stage_android_artifact(slug, 'bundle', 'aab') : android_artifact_path(slug, 'aab')
+    UI.user_error!("AAB 없음: #{aab} — build 를 먼저 실행하세요") unless File.file?(aab)
     upload_to_play_store(
       package_name: cfg['appId'],
       track: options[:track] || 'internal', # internal | beta. production 금지(수동 게이트)
-      aab: File.join(build_dir(slug), 'android', 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab'),
+      aab: aab,
       skip_upload_apk: true,
       skip_upload_metadata: true,
       skip_upload_images: true,
@@ -355,6 +381,7 @@ platform :android do
       task: 'assemble',
       build_type: 'Release'
     )
+    stage_android_artifact(slug, 'apk', 'apk')
   end
 
   desc 'Firebase App Distribution 업로드 (내부 테스터에게 즉시 배포). 스토어 공개 아님.'
@@ -365,8 +392,8 @@ platform :android do
     app_id = firebase_android_app_id(slug)
     build_apk(options) unless options[:skip_build]
 
-    apk = File.join(build_dir(slug), 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
-    UI.user_error!("APK 없음: #{apk} — build_apk 가 실패했거나 산출물 경로가 바뀌었습니다") unless File.exist?(apk)
+    apk = options[:skip_build] ? stage_android_artifact(slug, 'apk', 'apk') : android_artifact_path(slug, 'apk')
+    UI.user_error!("APK 없음: #{apk} — build_apk 를 먼저 실행하세요") unless File.file?(apk)
 
     # 테스터 그룹은 **Firebase 콘솔에서 사람이 미리 만든 별칭(alias)** 이다. 없는 별칭을 주면
     # 업로드는 되는데 아무에게도 안 가므로, 기본값을 두되 그 값을 로그에 남긴다.

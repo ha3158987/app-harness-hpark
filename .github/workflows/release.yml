@@ -108,6 +108,9 @@ jobs:
       # 1.0.0 부터 external_account(WIF) 자격증명을 지원한다 — 아래 OIDC 인증이 그걸 쓴다.
       - run: gem install fastlane --no-document && gem install fastlane-plugin-firebase_app_distribution --no-document --version '>= 1.0.0'
 
+      - name: Android 배포 파일명 검증
+        run: ruby test/android-artifact-filenames-test.rb fastlane/Fastfile
+
       - name: Capacitor 프로젝트 생성/동기화
         # 어트리뷰션 키는 generate-app 이 네이티브 번들에 베이크한다 — **이 스텝에** 있어야 한다.
         # 슬러그별(<NAME>_<SLUG대문자_하이픈→언더스코어>) 우선, 없으면 공통값. 둘 다 없으면
@@ -235,7 +238,7 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: ${{ env.SLUG }}-aab
-          path: build/${{ env.SLUG }}/android/app/build/outputs/bundle/release/*.aab
+          path: build/${{ env.SLUG }}/android/artifacts/*.aab
           if-no-files-found: warn
 
       # Firebase 를 안 쓰는 앱이나 배포 실패 시의 폴백(= 지금까지 쓰던 URL 다운로드 경로).
@@ -243,7 +246,7 @@ jobs:
         if: ${{ !cancelled() && needs.resolve.outputs.android_channel != 'play' }}
         with:
           name: ${{ env.SLUG }}-apk
-          path: build/${{ env.SLUG }}/android/app/build/outputs/apk/release/*.apk
+          path: build/${{ env.SLUG }}/android/artifacts/*.apk
           if-no-files-found: ignore
 
   ios:
@@ -273,6 +276,9 @@ jobs:
         with: { ruby-version: '3.3' }
       # iOS 는 Firebase 플러그인이 필요 없다 — Fastfile 의 require 는 LoadError 를 삼킨다.
       - run: gem install fastlane --no-document
+
+      - name: iOS 배포 파일명 검증
+        run: ruby test/ios-artifact-filenames-test.rb fastlane/Fastfile
 
       - name: Capacitor 프로젝트 생성/동기화 (iOS 포함)
         # 어트리뷰션 키는 generate-app 이 네이티브 번들에 베이크한다 — **이 스텝에** 있어야 한다.
