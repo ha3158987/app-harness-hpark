@@ -1,7 +1,7 @@
 // 빌드 보관소 — "어느 버전을 테스트하나"를 한 곳에서. lab/.builds/<slug>/<이름+코드>/<플랫폼>-<변형>/
 //   app.apk | App.app  +  meta.json { slug, version, code, platform, variant, startUrl, gitSha, source, at }
 // 출처 3가지: 로컬 빌드(lab build) · CI 아티팩트(lab fetch, device-lab.yml) · 아무 APK(lab import).
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { BUILDS_DIR, REPO_DIR, IS_WIN, IS_MAC, androidEnv, tool, run, runScript, mustRun, readJson } from './env.mjs';
@@ -99,8 +99,10 @@ export function buildLocal(slug, platform, { startUrl } = {}) {
 
 // iOS 는 generate-app 이 AppDelegate 에 FirebaseApp.configure() 를 무조건 넣는다(firebase.enabled 앱) →
 // GoogleService-Info.plist 가 없으면 실행 즉시 죽는다. 랩 빌드는 실키(GOOGLE_SERVICE_INFO_PLIST_B64)가 있으면
-// 그것을, 없으면 형식만 맞춘 자리표시를 둔다 — 앱은 뜨고, FCM 토큰만 안 나온다(시뮬레이터 simctl push 는 APNs
+// 그것을, 없으면 형식만 맞춘 자리표시를 둔다(API_KEY 도 Firebase 형식 'A'+38자 — 형식이 틀리면
+// +[FIRInstallations validateAPIKey:] NSException 으로 실행 즉시 죽는다) — 앱은 뜨고, FCM 토큰만 안 나온다(시뮬레이터 simctl push 는 APNs
 // 페이로드를 직접 넣으므로 탭 라우팅 확인에는 지장 없다). 스토어 빌드(release.yml)는 이 경로를 쓰지 않는다.
+const PLACEHOLDER_MARK = '디바이스 랩 자리표시';
 export function prepareIosFirebasePlist(slug) {
   const cfg = appConfig(slug);
   if (!cfg.firebase?.enabled) return 'firebase 미사용';
@@ -109,12 +111,13 @@ export function prepareIosFirebasePlist(slug) {
     writeFileSync(dest, Buffer.from(process.env.GOOGLE_SERVICE_INFO_PLIST_B64, 'base64'));
     return '실키';
   }
-  if (existsSync(dest)) return '기존 파일';
+  // 예전 랩이 둔 자리표시(형식 틀린 키)는 덮어쓴다 — 그 외 기존 파일(손으로 넣은 실키)은 그대로 쓴다.
+  if (existsSync(dest) && !readFileSync(dest, 'utf8').includes(PLACEHOLDER_MARK)) return '기존 파일';
   writeFileSync(dest, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- 디바이스 랩 자리표시(lab/lib/builds.mjs) — 실 Firebase 프로젝트가 아니다. 시뮬레이터 실행용. -->
+<!-- ${PLACEHOLDER_MARK}(lab/lib/builds.mjs) — 실 Firebase 프로젝트가 아니다. 시뮬레이터 실행용. -->
 <plist version="1.0"><dict>
-  <key>API_KEY</key><string>LAB-PLACEHOLDER-NOT-A-REAL-KEY</string>
+  <key>API_KEY</key><string>REDACTED_GOOGLE_API_KEY</string>
   <key>GCM_SENDER_ID</key><string>000000000000</string>
   <key>PLIST_VERSION</key><string>1</string>
   <key>BUNDLE_ID</key><string>${cfg.appId}</string>

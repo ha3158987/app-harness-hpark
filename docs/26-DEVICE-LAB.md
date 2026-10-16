@@ -4,7 +4,7 @@ title: DEVICE-LAB — 빌드 버전별 기기 화면 테스트(에뮬레이터·
 category: 테스트
 audience: 개발자
 status: active
-updated: 2026-10-13
+updated: 2026-10-15
 ---
 
 # DEVICE-LAB — 빌드 버전별 기기 화면 테스트
@@ -115,7 +115,7 @@ Android 이미지 ABI 기본값은 `auto`다. Apple Silicon(arm64)은 `arm64-v8a
 
 설치: `lab install <기기> <slug> --version <2.0.0+3|코드|latest> [--fresh]`. 업그레이드 경로(시나리오 S51)는 이전 버전 `--fresh` → 새 버전(`--fresh` 없이).
 디버그 빌드만 WebView 검사(CDP)가 된다 — 릴리즈 빌드는 화면·접근성으로 판정한다.
-iOS 시뮬레이터 빌드는 서명이 필요 없다. Firebase 앱인데 iOS plist 시크릿이 없으면 **자리표시 plist** 를 넣는다(앱은 뜨고 FCM 토큰만 없음 — `prepareIosFirebasePlist`).
+iOS 시뮬레이터 빌드는 서명이 필요 없다. Firebase 앱인데 iOS plist 시크릿이 없으면 **자리표시 plist** 를 넣는다(앱은 뜨고 FCM 토큰만 없음 — `prepareIosFirebasePlist`). 자리표시라도 `API_KEY` 는 Firebase 형식(`A`+38자, `[A-Za-z0-9_-]`)이어야 한다 — 아니면 실행 즉시 크래시(§11). `build/<slug>/ios/App/GoogleService-Info.plist` 가 이미 있으면 재사용하되, 예전 자리표시 파일이면 새로 쓴다. 실키로 빌드하려면 `GOOGLE_SERVICE_INFO_PLIST_B64`.
 
 ## 5. 상황
 
@@ -227,6 +227,7 @@ WebView 화면은 Robo 가 깊이 못 들어간다 — 실기기층은 "실제 �
 | Maestro 첫 실행 2분 | JVM + 기기 드라이버 설치 | 한 번에 여러 플로우(`lab flow` 는 폴더째) |
 | Maestro 가 도는 동안 mobile-mcp·`lab ui` 의 요소 덤프 실패(`no XML content found`) | 기기당 UiAutomation 연결은 하나 — Maestro 가 쥐고 있다 | 같은 기기에서 동시에 쓰지 않는다(플로우 끝난 뒤 탐색, 또는 기기를 나눈다) |
 | mobile-mcp 를 쓴 뒤 Maestro 드라이버가 'did not start up in time' | mobile-mcp 기기 서버(`com.mobilenext.mobilecli.DeviceServer`, 30분 상주)가 UiAutomation 을 쥠 | `lab flow`·`matrix` 가 시작 전에 자동으로 내린다(mobile-mcp 는 다음 호출 때 다시 띄움) |
+| iOS 시뮬레이터 앱이 실행 즉시 크래시, 전 플로우 실패(2026-10-15) | 자리표시 plist 의 `API_KEY`(`LAB-PLACEHOLDER-…`)가 Firebase 형식이 아니라 `+[FIRInstallations validateAPIKey:]` NSException | 자리표시 키를 형식만 맞는 가짜 값으로 바꿈. 예전 자리표시 파일은 `lab build … --platform ios` 가 다시 쓴다 |
 | mobile-mcp 가 `emulator-5554` 를 못 찾음 | mobile-mcp 는 기기를 AVD 이름으로 부른다 | `lab-<기기id>`(예: `lab-and16-s25`) — `mobile_list_available_devices` 로 확인 |
 
 ## 12. 지금 상태 · 남은 것

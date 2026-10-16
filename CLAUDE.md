@@ -90,7 +90,7 @@
 | 23 | [FORCE-UPDATE](docs/23-FORCE-UPDATE.md) | 기능연동 | 개발자 | active | 2026-08-21 | 강제 업데이트 — Remote Config 콘솔 셋업 |
 | 24 | [MMP-CONSOLE-SETUP](docs/24-MMP-CONSOLE-SETUP.md) | 기능연동 | 개발자 | active | 2026-08-21 | 어트리뷰션 콘솔·스토어 신고 절차 |
 | 25 | [AUTH-DELEGATION](docs/25-AUTH-DELEGATION.md) | 기능연동 | 개발자 | active | 2026-10-08 | **인증 정본** — 외부 인증서버 위탁 규약 · 브릿지 버전·배포 |
-| 26 | [DEVICE-LAB](docs/26-DEVICE-LAB.md) | 테스트 | 개발자 | active | 2026-10-13 | 빌드 버전별 기기 화면 테스트 — 기기 카탈로그·상황·Maestro·AI 에이전트·CI·실기기 |
+| 26 | [DEVICE-LAB](docs/26-DEVICE-LAB.md) | 테스트 | 개발자 | active | 2026-10-15 | 빌드 버전별 기기 화면 테스트 — 기기 카탈로그·상황·Maestro·AI 에이전트·CI·실기기 |
 
 **상태** — `active`: 현행 문서, 순서대로 읽는다 · `reference`: 수시 조회용, 처음부터 읽을 필요 없다
 
