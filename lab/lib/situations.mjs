@@ -21,7 +21,8 @@ export const SITUATIONS = {
   network: { args: 'off|on|slow', desc: '네트워크 끊김/복구/저속(EDGE)' },
   rotate: { args: 'portrait|landscape', desc: '화면 회전' },
   fold: { args: 'open|closed|half', desc: '폴더블 펼침/접힘/반접힘(폴더블 AVD 만)' },
-  permission: { args: '<grant|revoke|reset> <notifications|camera>', desc: '권한 부여·회수·다시 묻기' },
+  permission: { args: '<grant|revoke|reset> <notifications|camera|microphone>', desc: '권한 부여·회수·다시 묻기' },
+  'host-mic': { args: 'on|off', desc: '맥 마이크를 기기 마이크로(음성 입력 테스트 — 맥에서 say 로 말을 들려준다). 안드는 lab up --audio 로 띄운 기기만' },
   background: { args: '', desc: '홈으로 나가 앱을 백그라운드로' },
   foreground: { args: '', desc: '앱을 다시 앞으로(재시작 아님)' },
   'process-death': { args: '', desc: '백그라운드 중 OS 가 프로세스를 죽인 상황 → 복귀 시 상태 복원 확인' },
@@ -84,11 +85,24 @@ const ANDROID = {
     throw new Error('fold open|closed|half');
   },
   permission: ({ serial, pkg }, action, what) => {
-    const perm = { notifications: 'android.permission.POST_NOTIFICATIONS', camera: 'android.permission.CAMERA' }[what];
-    if (!perm) throw new Error('permission <grant|revoke|reset> <notifications|camera>');
+    const perm = {
+      notifications: 'android.permission.POST_NOTIFICATIONS',
+      camera: 'android.permission.CAMERA',
+      microphone: 'android.permission.RECORD_AUDIO',
+    }[what];
+    if (!perm) throw new Error('permission <grant|revoke|reset> <notifications|camera|microphone>');
     if (what === 'notifications' && A.apiLevel(serial) < 33) return unsupported('Android 12 이하는 알림 런타임 권한이 없다(항상 허용)');
     if (action === 'reset') return A.sh(serial, `pm revoke ${pkg} ${perm}; pm clear-permission-flags ${pkg} ${perm} user-set user-fixed`);
     return A.sh(serial, `pm ${action} ${pkg} ${perm}`);
+  },
+  // 에뮬레이터의 '가상 마이크 = 호스트 오디오 입력' 스위치(기본 꺼짐). -no-audio 로 띄운 기기는 오디오 장치 자체가
+  // 없어 켜도 무음이다 → lab up --audio 로 다시 띄우라고 알린다(조용히 '켜짐'으로 보고하지 않게).
+  'host-mic': ({ serial }, state) => {
+    if (state !== 'on' && state !== 'off') throw new Error('host-mic on|off');
+    if (!A.audioEnabled(serial)) {
+      return unsupported('오디오 없이(-no-audio) 부팅된 기기다 — lab down <기기> 후 lab up <기기> --audio 로 다시 띄운다');
+    }
+    return A.adb(serial, ['emu', 'avd', state === 'on' ? 'hostmicon' : 'hostmicoff']);
   },
   background: ({ serial }) => A.input.key(serial, 'KEYCODE_HOME'),
   foreground: ({ serial, pkg }) => A.launch(serial, pkg),
@@ -155,8 +169,15 @@ const IOS = {
     if (what === 'notifications') {
       return unsupported('simctl 은 알림 권한을 못 바꾼다 — reset 은 앱 삭제 후 재설치(lab install --fresh)로, 허용/거부는 프롬프트에서 직접');
     }
+    // 음성 인식(SFSpeechRecognizer) 권한은 simctl privacy 서비스에 없다 — 마이크만 미리 줄 수 있고,
+    // 음성 인식 프롬프트는 앱이 처음 물을 때 화면에서 직접 허용/거부한다.
     return I.privacy(udid, action, what, pkg);
   },
+  // 시뮬레이터는 항상 맥의 기본 입력 장치를 마이크로 쓴다(끌 스위치 없음). 처음엔 맥이 Simulator 의
+  // 마이크 접근을 묻는다 — 시스템 설정 › 개인정보 보호 › 마이크 에서 Simulator 허용.
+  'host-mic': (_, state) => (state === 'on'
+    ? { ok: true, note: '시뮬레이터는 맥 마이크를 그대로 쓴다 — 맥 개인정보 보호 › 마이크에서 Simulator 허용 필요' }
+    : unsupported('시뮬레이터는 맥 마이크를 끌 수 없다 — 맥 쪽 입력 장치를 바꾸거나 음소거')),
   background: ({ udid }) => I.ui.home(udid),
   foreground: ({ udid, pkg }) => I.launch(udid, pkg),
   'process-death': ({ udid, pkg }) => {

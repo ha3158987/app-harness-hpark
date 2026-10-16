@@ -34,6 +34,7 @@
     "haptics": true,
     "clipboard": false,
     "geolocation": false,
+    "speechRecognition": true,
     "darkMode": true
   },
   "navigation": {

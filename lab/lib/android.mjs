@@ -2,6 +2,7 @@
 // adb 는 serial(emulator-5554)로, 카탈로그 기기는 AVD 이름 `lab-<id>` 로 잇는다.
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   androidEnv, androidSdk, tool, sdkJava, run, mustRun, spawnDetached, sleep, RUNS_DIR, IS_MAC,
 } from './env.mjs';
@@ -145,14 +146,18 @@ function freePort() {
 //   Windows 에서 host(Intel Arc + gfxstream)는 가볍지만 화면 읽기(glReadPixels)가 실패해 스크린샷이 흰색/검정으로
 //   나온다(2026-10-06 폴더블 실측) — 에이전트는 스크린샷이 생명이라 소프트웨어 렌더러를 기본으로 한다.
 //   ⚠ angle_indirect 는 에뮬레이터 37.2 가 '유효하지 않은 값'으로 보고 auto(=swiftshader)로 바꾼다(로그 확인, 10-07).
-export async function boot(dev, { window = false, cold = false, wipe = false, gpu } = {}) {
+// audio: 기본은 -no-audio(가볍고, 여러 대 동시 실행 시 맥 오디오를 안 잡는다). 음성 입력(STT) 테스트만
+//   --audio 로 띄우고 lab situation <기기> <slug> host-mic on 으로 맥 마이크를 연결한다.
+//   이미 떠 있는 기기는 플래그가 안 바뀐다(스냅샷 재사용) — lab down 후 다시 up.
+export async function boot(dev, { window = false, cold = false, wipe = false, gpu, audio = false } = {}) {
   let serial = serialOf(dev);
   let pid;
   const logFile = join(RUNS_DIR, `emulator-${dev.id}.log`);
   if (!serial) {
     const port = freePort();
     serial = `emulator-${port}`;
-    const args = ['-avd', avdName(dev), '-port', String(port), '-no-boot-anim', '-no-audio',
+    const args = ['-avd', avdName(dev), '-port', String(port), '-no-boot-anim',
+      ...(audio ? [] : ['-no-audio']),
       '-gpu', gpu ?? process.env.LAB_GPU ?? DEFAULT_GPU];
     if (!window) args.push('-no-window');
     if (cold) args.push('-no-snapshot-load');
@@ -223,6 +228,18 @@ export async function settle(serial, { maxMs = 10 * 60_000, below = 4 } = {}) {
     await sleep(15_000);
   }
   return { settled: false, load, ms: Date.now() - t0 };
+}
+
+// 이 에뮬레이터가 오디오 장치를 갖고 떴는가(-no-audio 가 아닌가). 에뮬레이터 프로세스 인자로 판정한다.
+export function audioEnabled(serial) {
+  const port = serial.replace(/^emulator-/, '');
+  try {
+    const ps = execFileSync('ps', ['-axo', 'args'], { encoding: 'utf8' });
+    const line = ps.split(/\r?\n/).find((l) => /emulator|qemu/.test(l) && l.includes(`-port ${port}`));
+    return !!line && !line.includes('-no-audio');
+  } catch {
+    return true; // 판정 불가(Windows 등) — 막지 않는다. 무음이면 결과로 드러난다.
+  }
 }
 
 export function shutdown(serial) {

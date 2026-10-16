@@ -60,6 +60,11 @@ const FEATURE_PLUGINS = {
   haptics: ['@capacitor/haptics'],
   clipboard: ['@capacitor/clipboard'],
   geolocation: ['@capacitor/geolocation'],
+  // 음성 입력(STT). 브릿지 메서드를 거치지 않고 웹이 플러그인을 이름으로 직접 잡는다
+  // (registerPlugin('SpeechRecognition') — 팝챗 src/lib/voiceInput.ts). 그래서 브릿지 SDK
+  // 재배포 없이 셸 재빌드만으로 켜진다. Android RECORD_AUDIO·RecognitionService <queries> 는
+  // 플러그인 자체 매니페스트가 머지되므로 여기서 패치하지 않는다(iOS 문구만 아래 IOS_USAGE).
+  speechRecognition: ['@capacitor-community/speech-recognition'],
 };
 // npm 으로 자동 설치하지 않고 사람에게 안내만 하는 기능 (현재 없음 — 전부 자동 배선).
 const MANUAL_FEATURES = {};
@@ -130,6 +135,29 @@ const IOS_USAGE = {
       'id-ID': 'Akses lokasi diperlukan untuk menyediakan fitur berbasis lokasi.',
       'es-419': 'Se necesita acceso a la ubicación para ofrecer funciones basadas en la ubicación.',
       'pt-BR': 'O acesso à localização é necessário para oferecer recursos baseados em localização.',
+    },
+  },
+  // 둘 다 필요하다 — 음성 인식(SFSpeechRecognizer)과 마이크 녹음(AVAudioEngine)은 별개 권한이다.
+  speechRecognition: {
+    NSMicrophoneUsageDescription: {
+      'en': 'Microphone access is required to write messages with your voice.',
+      'ko-KR': '음성으로 메시지를 입력하기 위해 마이크 접근이 필요합니다.',
+      'ja-JP': '音声でメッセージを入力するためにマイクへのアクセスが必要です。',
+      'zh-Hant': '以語音輸入訊息需要使用麥克風權限。',
+      'th-TH': 'ต้องเข้าถึงไมโครโฟนเพื่อพิมพ์ข้อความด้วยเสียง',
+      'id-ID': 'Akses mikrofon diperlukan untuk menulis pesan dengan suara.',
+      'es-419': 'Se necesita acceso al micrófono para escribir mensajes con tu voz.',
+      'pt-BR': 'O acesso ao microfone é necessário para escrever mensagens com a sua voz.',
+    },
+    NSSpeechRecognitionUsageDescription: {
+      'en': 'Speech recognition is used to turn your voice into message text.',
+      'ko-KR': '음성을 메시지 텍스트로 바꾸기 위해 음성 인식을 사용합니다.',
+      'ja-JP': '音声をメッセージのテキストに変換するために音声認識を使用します。',
+      'zh-Hant': '使用語音辨識將您的語音轉換為訊息文字。',
+      'th-TH': 'ใช้การรู้จำเสียงเพื่อแปลงเสียงของคุณเป็นข้อความ',
+      'id-ID': 'Pengenalan ucapan digunakan untuk mengubah suara Anda menjadi teks pesan.',
+      'es-419': 'Se usa el reconocimiento de voz para convertir tu voz en el texto del mensaje.',
+      'pt-BR': 'O reconhecimento de fala é usado para transformar a sua voz em texto da mensagem.',
     },
   },
   biometric: {

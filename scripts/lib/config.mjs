@@ -30,6 +30,8 @@ const DEFAULT_FEATURES = {
   haptics: false,
   clipboard: false,
   geolocation: false,
+  // 음성 입력(STT) — @capacitor-community/speech-recognition + iOS 마이크·음성인식 문구.
+  speechRecognition: false,
   // OS 다크모드 자동 추종(statusBar/네비/스플래시 색상 동기). 강제 다크면 theme 에서 처리.
   darkMode: false,
   // 기존 웹에 `window.AppChannel.postMessage("scheme://...")` 패턴이 박혀 있을 때 활성.

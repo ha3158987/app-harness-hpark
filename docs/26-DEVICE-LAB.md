@@ -130,7 +130,8 @@ iOS 시뮬레이터 빌드는 서명이 필요 없다. Firebase 앱인데 iOS pl
 | `network off\|on\|slow` | `svc wifi/data` · 에뮬레이터 콘솔 EDGE | 지원 안 함 — 맥 Network Link Conditioner |
 | `rotate portrait\|landscape` | `user_rotation` | Simulator 메뉴 단축키(AppleScript) |
 | `fold open\|closed\|half` | 에뮬레이터 콘솔 `fold`/`unfold`/`posture` (폴더블 AVD) | 지원 안 함 |
-| `permission grant\|revoke\|reset notifications\|camera` | `pm grant/revoke` · 플래그 초기화(프롬프트 다시) | `simctl privacy`(알림은 불가 → 재설치) |
+| `permission grant\|revoke\|reset notifications\|camera\|microphone` | `pm grant/revoke` · 플래그 초기화(프롬프트 다시) | `simctl privacy`(알림은 불가 → 재설치. 음성 인식 권한은 simctl 서비스에 없어 프롬프트에서 직접) |
+| `host-mic on\|off` | 에뮬레이터 콘솔 `avd hostmicon/off` — **`lab up <기기> --audio` 로 띄운 기기만**(기본 `-no-audio`) | 항상 맥 기본 입력 장치(끌 수 없음) |
 | `background` · `foreground` · `restart` | HOME · 런처 · force-stop | 설정 앱 앞으로 · `simctl launch` |
 | `process-death` | 백그라운드에서 `am kill`(OS 메모리 회수와 같은 경로) | `simctl terminate` |
 | `deeplink <url\|이름> [cold]` | `am start -a VIEW -d … <pkg>` | `simctl openurl` |
@@ -138,6 +139,32 @@ iOS 시뮬레이터 빌드는 서명이 필요 없다. Firebase 앱인데 iOS pl
 | `battery low\|ok` · `animations off\|on` · `clear-data` | `dumpsys battery` · 애니메이션 배율 · `pm clear` | 지원 안 함(clear-data → `--fresh` 재설치) |
 
 `push-tap` 은 탭 이후 라우팅만 본다. 브릿지는 로그인 뒤 `registerPush()` 에서 리스너를 단다(게스트면 보류 = 정상). 알림 '표시'는 FCM 실발송 빌드로.
+
+### 5-1. 음성 입력(STT) 테스트
+
+맥이 `say` 로 말하고, 기기는 맥 마이크로 듣는다(공기 경로 — 스피커→마이크).
+
+1. 셸에 플러그인이 있는 빌드: `features.speechRecognition` 이 켜진 앱을 `lab build` (웹은 `registerPlugin("SpeechRecognition")` 로 직접 잡으므로 브릿지 무관).
+2. Android: `lab up <기기> --audio` → `lab situation <기기> <slug> host-mic on` → `permission reset microphone`(프롬프트 확인) 또는 `grant`.
+   iOS: 첫 탭에서 음성 인식 → 마이크 프롬프트가 차례로 뜬다(문구 확인 지점).
+3. **기기 언어를 말할 언어로**(`locale ko`) — 앱 로케일이 en 이면 en-US 로 인식해 한국어는 `NO_SPEECH`/`No match` 가 난다.
+4. 마이크 버튼 → `say -v Yuna "…"` → 입력창 값 확인(`lab web <기기> <slug> eval`, iOS 는 스크린샷).
+
+함정:
+- **⚠️ 받아쓰기 결과까지는 아직 랩에서 재현하지 못했다(2026-10-16).** UI·권한 프롬프트·거부 안내·인식 엔진 기동까지는
+  확인되지만, 기기로 들어가는 오디오가 무음이다.
+  - iOS: 시뮬레이터 Safari 에서 getUserMedia 레벨을 찍으면 맥이 말하는 동안에도 **peak 0.0000**(디지털 무음).
+    오디오는 CoreSimulator 의 `SimAudioProcessorService` 가 맥 마이크를 잡는데, 이 서비스는 처음 띄운 클라이언트
+    (에이전트 셸에서 simctl 을 쳤다면 Claude Code)에 권한이 귀속된다 — 맥 설정에서 Simulator 를 허용해도 이미 떠 있는
+    서비스엔 반영되지 않는다. 시험할 땐 다른 세션의 시뮬레이터 사용이 없을 때 CoreSimulator 를 재시작하고
+    **Simulator.app 을 먼저(`open -a Simulator`)** 띄운 뒤 진행한다(미검증 가설).
+  - Android: 에이전트 셸에서 띄운 에뮬레이터는 TCC 책임 프로세스가 `com.anthropic.claude-code` 로 잡힌다(tccd 로그 확인).
+    `launchctl submit` 으로 띄워 부모를 launchd 로 바꿔도 맥 쪽 마이크 요청 자체가 안 찍혔다 — 원인 미확정.
+  - 판정 팁: Android 는 logcat `RecognitionClient ... NO_SPEECH_DETECTED` 면 "엔진은 정상, 소리가 안 들어옴"이다.
+    앱/플러그인 버그로 오진하지 말 것. 받아쓰기 정확도는 **실기기**에서 본다.
+- 로컬 dev 웹(`--start-url`)을 Android 에뮬레이터에서 볼 땐 `10.0.2.2` 가 아니라 **`adb reverse tcp:3001 tcp:3001` + `--start-url http://localhost:3001`**.
+  `10.0.2.2` 는 Next `allowedDevOrigins` 밖이라 클라이언트 JS 가 막혀 하이드레이션이 안 된다 — 서버 HTML 만 보여 기능이 "없는" 것처럼 보인다.
+  앱 안에서 다른 호스트로 `location.href` 를 바꾸면 Chrome 으로 튕긴다 — 다시 빌드한다.
 
 ## 6. iOS — 별도 맥에서 Claude 컴퓨터 유즈로
 

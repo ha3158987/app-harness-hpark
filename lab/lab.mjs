@@ -111,7 +111,7 @@ function ensureCreated(d) {
 async function bootDevice(d) {
   if (d.platform === 'ios') return I.boot(d, { window: !flags.headless });
   if (!A.listAvds().includes(A.avdName(d))) ensureCreated(d);
-  const serial = await A.boot(d, { window: !!flags.window, cold: !!flags.cold, wipe: !!flags.wipe, gpu: flags.gpu });
+  const serial = await A.boot(d, { window: !!flags.window, cold: !!flags.cold, wipe: !!flags.wipe, gpu: flags.gpu, audio: !!flags.audio });
   // 부팅 직후 과부하가 가라앉을 때까지(시스템 ANR 대화상자는 치우며) — --no-settle 로 건너뛴다
   if (!flags['no-settle']) {
     const st = await A.settle(serial);
@@ -658,7 +658,7 @@ function collectMaestroShots(out, run_, devId, suite, preset) {
 // ── 실행 ────────────────────────────────────────────────────────────────
 const help = `디바이스 랩 — node lab/lab.mjs <명령>   (문서 docs/26-DEVICE-LAB.md)
 
-환경    doctor · devices [세트] · create <기기|세트> · up <기기|세트> [--window] [--cold] [--wipe] · down <기기|세트|all>
+환경    doctor · devices [세트] · create <기기|세트> · up <기기|세트> [--window] [--cold] [--wipe] [--audio] · down <기기|세트|all>
 빌드    build <slug> --platform android|ios [--start-url URL] · import <slug> <apk> · fetch <slug> [--run id] · builds [slug]
 앱      install <기기> <slug> [--version V] [--fresh] · launch <기기> <slug> [--url 딥링크]
 상황    situations · situation <기기> <slug> <이름> [인자…]

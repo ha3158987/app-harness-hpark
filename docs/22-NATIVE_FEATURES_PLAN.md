@@ -94,7 +94,7 @@ updated: 2026-08-19
 | ATT 추적동의 | — | ✅ | `capacitor-plugin-app-tracking-transparency` | iOS `NSUserTrackingUsageDescription` | **iOS 전용.** Android는 not-applicable(no-op). |
 | 화면캡쳐 차단 | ✅ | ❌ | (SDK optional, **네이티브 미구현**) | — | Android=`FLAG_SECURE` 완전차단 가능. **iOS는 스크린샷 차단 불가**(촬영 감지/앱전환시 블러만). 현재 `blockCapture?` 는 no-op. |
 | 뷰어 밝기 | ✅ | ✅ | (SDK optional, **네이티브 미구현**) | — | `setBrightness?` 선언만, 구현 비어있음. |
-| **음성입력(STT)** | ❌ | ❌ | **SDK에 없음** → `@capacitor-community/speech-recognition` 추가 필요 | iOS `NSSpeechRecognitionUsageDescription`+`NSMicrophoneUsageDescription` / Android `RECORD_AUDIO` | 챗봇 가치 매우 높으나 **신규 플러그인+브릿지 메서드 추가** 필요. |
+| **음성입력(STT)** | ✅ | ✅ | `features.speechRecognition` → `@capacitor-community/speech-recognition` (브릿지 메서드 없음 — 웹이 `registerPlugin("SpeechRecognition")` 로 직접 호출) | iOS `NSSpeechRecognitionUsageDescription`+`NSMicrophoneUsageDescription`(8개 언어 자동 주입) / Android `RECORD_AUDIO`·`RecognitionService` queries 는 플러그인 매니페스트 머지 | 2026-10-16 하네스 배선 완료(characterchat ON). **셸 재빌드 후** 웹 마이크 버튼이 노출된다(구버전 앱은 `isPluginAvailable` false → 숨김). |
 | **음성출력(TTS)** | ❌ | ❌ | **SDK에 없음** → `@capacitor-community/text-to-speech` 추가 필요 | 없음 | 캐릭터 음성 답변. 신규 추가 필요. |
 | 인앱 리뷰요청 | ❌ | ❌ | **SDK에 없음** → `@capacitor-community/in-app-review` | 없음 | 리텐션 UX. 신규 추가 필요. |
 | 백그라운드 실행 | ⚠️ | ❌ | (SDK 미노출) | — | iOS는 임의 백그라운드 실행 불가(OS 제약). 챗봇은 푸시로 대체. |
@@ -192,6 +192,12 @@ updated: 2026-08-19
 - 검증: 재실행 시 Face ID/지문 잠금해제.
 
 **4-3. 음성입력(STT) (J) / 음성출력(TTS) (K)** — 신규 플러그인
+
+> **STT 는 2026-10-16 구현됨** — 아래 원안과 달리 **브릿지 SDK 를 거치지 않는다.** 하네스는
+> `features.speechRecognition` → `FEATURE_PLUGINS` 로 플러그인을 싣고 `IOS_USAGE` 로 두 문구를 넣을 뿐이고,
+> 웹(팝챗 `src/lib/voiceInput.ts`)이 `registerPlugin("SpeechRecognition")` + `Capacitor.isPluginAvailable` 로
+> 직접 잡는다. 그래서 브릿지 npm 재배포 없이 **셸 재빌드만으로** 켜진다(deriveCapabilities/CAP_METHOD 미변경).
+> TTS 는 아직 원안 그대로 미구현.
 - 하네스: 브릿지 SDK에 메서드 신설 필요(현재 없음):
   - `dist/index.js`(소스 추정 위치)에 `startSpeechRecognition()`/`speak()` 추가 + `@capacitor-community/speech-recognition`, `@capacitor-community/text-to-speech` 를 `generate-app.mjs` FEATURE_PLUGINS에 추가 + iOS 권한 문구(`IOS_USAGE`에 STT/마이크) 추가 + `deriveCapabilities`/`CAP_METHOD` 세 곳 갱신.
   - `index.d.ts`에 타입 추가.

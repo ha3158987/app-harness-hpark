@@ -52,6 +52,8 @@ export const IOS_USAGE_KEYS = [
   'NSLocationWhenInUseUsageDescription',
   'NSFaceIDUsageDescription',
   'NSUserTrackingUsageDescription',
+  'NSMicrophoneUsageDescription',
+  'NSSpeechRecognitionUsageDescription',
 ];
 
 /**
