@@ -14,8 +14,15 @@
     "VIEWER_TEXT": "1장. 계약직의 설움"
   },
   "preflight": {
-    "$comment": "런 시작·매트릭스 전에 확인하는 백엔드 — 죽어 있으면 결과를 FAIL 대신 BLOCKED 로 본다. 서울 dev API 는 평일 08~22시(KST)만 켜진다(Cloud Scheduler). 켜기: gcloud run services update poptale-dev-api --project poptale-nonprod --region asia-northeast3 --scaling=1",
-    "urls": ["${WEB}/", "https://dev.api.poptale.ai/api/v2/home"]
+    "$comment": "런 시작·매트릭스·flow 전에 확인하는 백엔드(urls)와 테스트 데이터(data: url 응답에 testData[key] 가 있어야 함) — 백엔드가 죽었으면 전부, 데이터가 낡았으면 그 키를 쓰는 플로우만 FAIL 대신 BLOCKED 로 본다. 서울 dev API 는 평일 08~22시(KST)만 켜진다(Cloud Scheduler). 켜기: gcloud run services update poptale-dev-api --project poptale-nonprod --region asia-northeast3 --scaling=1",
+    "urls": ["${WEB}/", "https://dev.api.poptale.ai/api/v2/home"],
+    "data": [
+      { "$comment": "aitoon-demo 가 누르는 AI툰 탭 카드", "key": "AITOON_DEMO_TITLE", "url": "https://dev.api.poptale.ai/api/v2/home?tab=aitoon" },
+      { "$comment": "작품 상세(ContentDTO.privateId·title) — detail·search·deeplinks·viewer", "key": "CONTENT_ID", "url": "https://dev.api.poptale.ai/api/v2/content/${CONTENT_ID}" },
+      { "key": "CONTENT_TITLE", "url": "https://dev.api.poptale.ai/api/v2/content/${CONTENT_ID}" },
+      { "$comment": "첫 회차 id(이어보기) = 무료 회차", "key": "FREE_EPISODE_ID", "url": "https://dev.api.poptale.ai/api/v2/content/series/first/${CONTENT_ID}" },
+      { "$comment": "뷰어 본문 HTML — 경로의 3474944927447562 는 /api/v2/contents/episodes/${FREE_EPISODE_ID}/html 응답 data.htmlUrl 에서 땄다", "key": "VIEWER_TEXT", "url": "https://dev.api-cdn.poptale.ai/contents/3474944927447562/${CONTENT_ID}/${FREE_EPISODE_ID}/index.html" }
+    ]
   },
   "defaultLocale": "ko",
   "labels": {

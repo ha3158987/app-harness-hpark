@@ -45,7 +45,8 @@ export function results(run) {
 }
 
 // Maestro JUnit: 실행 누락·도구 오류·건너뜀을 앱 테스트 통과로 세지 않는다.
-export function maestroResults(junit, commandOk) {
+// stale = { 플로우: [낡은 testData 키] }(lab preflight.data) — 그 플로우의 실패는 앱 결함이 아니라 BLOCKED 다.
+export function maestroResults(junit, commandOk, stale = {}) {
   const cases = [...junit.matchAll(/<testcase\b([^>]*?)\/>|<testcase\b([^>]*?)>([\s\S]*?)<\/testcase>/g)]
     .map((m) => {
       const attrs = m[1] ?? m[2];
@@ -56,8 +57,14 @@ export function maestroResults(junit, commandOk) {
         msg: body.match(/<(?:failure|error)\b[^>]*message="([^"]*)"/)?.[1] ?? body.match(/<(?:failure|error)\b[^>]*>([^<]*)/)?.[1]?.trim(),
       };
     }).filter((c) => c.name);
-  const executed = cases.some((c) => c.verdict === 'PASS' || c.verdict === 'FAIL');
-  return { cases, ok: commandOk && executed && !cases.some((c) => c.verdict === 'FAIL' || c.verdict === 'BLOCKED') };
+  for (const c of cases) {
+    if (stale[c.name] && c.verdict !== 'PASS') Object.assign(c, { verdict: 'BLOCKED', stale: true, msg: `test data stale: ${stale[c.name].join(', ')} — ${c.msg ?? ''}` });
+  }
+  const real = cases.filter((c) => !c.stale);
+  const executed = real.some((c) => c.verdict === 'PASS' || c.verdict === 'FAIL');
+  // 낡은 데이터 플로우가 실패하면 Maestro 종료 코드도 실패다 — 그때는 나머지 결과로만 본다
+  const toolOk = commandOk || real.length < cases.length;
+  return { cases, ok: toolOk && (executed || (cases.length > 0 && !real.length)) && !real.some((c) => c.verdict === 'FAIL' || c.verdict === 'BLOCKED') };
 }
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

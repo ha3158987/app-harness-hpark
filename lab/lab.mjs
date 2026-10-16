@@ -451,7 +451,8 @@ const commands = {
     const ctx = ctxFor(devId, slug);
     const suite = loadSuite(flags.suite ?? 'poptale-v2');
     const run_ = R.current(flags.run) ?? R.start({ suite: suite.id, slug, devices: devId });
-    const r = await runMaestro(ctx, suite, run_, { flow: flags.flow, preset: flags.preset ?? 'baseline' });
+    const { stale } = await preflight(suite); // 단독 실행은 백엔드가 죽어도 돌린다 — 경고를 보고 사람이 판단한다
+    const r = await runMaestro(ctx, suite, run_, { flow: flags.flow, preset: flags.preset ?? 'baseline', stale });
     console.log(r.summary);
     if (!r.ok) process.exitCode = 1;
   },
@@ -464,7 +465,7 @@ const commands = {
     const presets = (flags.presets ?? 'baseline').split(',');
     const run_ = R.start({ suite: suite.id, slug, devices: flags.devices ?? 'smoke', build: flags.version ?? 'latest', mode: 'matrix' });
     console.log(`런 ${run_.id} — 기기 ${devs.length} × 프리셋 ${presets.length}`);
-    const down = await preflight(suite);
+    const { down, stale } = await preflight(suite);
     if (down.length) {
       for (const d of devs) {
         for (const sc of suite.scenarios.filter((x) => x.flow)) {
@@ -483,7 +484,7 @@ const commands = {
       console.log(`· ${d.id} ← ${b.version}+${b.code}`);
       for (const p of presets) {
         await applySituation(ctx, 'reset');
-        const r = await runMaestro(ctx, suite, run_, { preset: p });
+        const r = await runMaestro(ctx, suite, run_, { preset: p, stale });
         if (!r.ok) failed++;
         console.log(`${r.ok ? '✓' : '✗'} ${d.id} · ${p} — ${r.summary}`);
       }
@@ -493,6 +494,7 @@ const commands = {
     }
     console.log(R.report(run_, { scenarios: suite.scenarios, devices: ALL }));
     if (failed) process.exitCode = 1;
+    else if (Object.keys(stale).length) process.exitCode = 2; // 낡은 데이터로 못 본 플로우를 CI 성공으로 숨기지 않는다
   },
 };
 
@@ -506,18 +508,50 @@ function loadSuite(id) {
 }
 
 // 스위트 사전 점검 — 백엔드가 죽어 있으면 화면 테스트 결과가 전부 환경 탓이 된다(2026-10-06 22시 dev API 503 실측).
+// preflight.data — testData 값이 dev 콘텐츠 변경으로 낡으면 플로우가 앱 결함처럼 실패한다(2026-10-15 aitoon-demo 실측).
+//   [{ key, url }] = url 응답 본문에 testData[key] 가 있어야 한다. 없으면 그 키를 쓰는 플로우를 BLOCKED 로 본다.
+// 반환: { down: [백엔드 실패], stale: { 플로우: [낡은 키] } }
 async function preflight(suite) {
-  const urls = (suite.preflight?.urls ?? []).map((u) => expand(u, suite.testData ?? {}));
+  const vars = suite.testData ?? {};
+  const get = (u) => fetch(u, { signal: AbortSignal.timeout(20_000) }).catch((e) => ({ ok: false, status: e.name }));
   const down = [];
-  for (const u of urls) {
-    const r = await fetch(u, { signal: AbortSignal.timeout(20_000) }).catch((e) => ({ ok: false, status: e.name }));
+  for (const u of (suite.preflight?.urls ?? []).map((x) => expand(x, vars))) {
+    const r = await get(u);
     if (!r.ok) down.push(`${u} → ${r.status}`);
   }
   if (down.length) {
     console.log(`⚠ 사전 점검 실패 — 결과는 BLOCKED(환경)로 본다:\n  ${down.join('\n  ')}${suite.preflight?.$comment ? `\n  참고: ${suite.preflight.$comment}` : ''}`);
     if (process.env.GITHUB_ACTIONS) console.log(`::warning::디바이스 랩 사전 점검 실패(백엔드) — ${down.join(' · ')}`);
+    return { down, stale: {} }; // 백엔드가 죽었으면 데이터 점검은 의미 없다
   }
-  return down;
+  const stale = {};
+  const bad = [];
+  for (const { key, url } of suite.preflight?.data ?? []) {
+    const u = expand(url, vars);
+    const r = await get(u);
+    const body = r.ok ? await r.text().catch(() => '') : '';
+    if (body.includes(String(vars[key]))) continue;
+    bad.push(`${key}="${vars[key]}" ← ${u} ${r.ok ? '본문에 없음' : `→ ${r.status}`}`);
+    for (const f of flowsUsing(suite, key)) (stale[f] ??= []).push(key);
+  }
+  if (bad.length) {
+    const flows = Object.keys(stale);
+    console.log(`⚠ 테스트 데이터 낡음 — 영향 플로우(${flows.join(', ') || '없음'})는 BLOCKED 로 본다. suite.json testData 를 dev 값으로 고쳐라:\n  ${bad.join('\n  ')}`);
+    if (process.env.GITHUB_ACTIONS) console.log(`::warning::디바이스 랩 테스트 데이터 낡음 — ${bad.join(' · ')}`);
+  }
+  return { down, stale };
+}
+
+// testData 키를 쓰는 플로우 이름 — 직접(${KEY}) 또는 그 키로 만든 딥링크(${LINK_<이름>})
+function flowsUsing(suite, key) {
+  const dir = join(suite.dir, 'flows');
+  if (!existsSync(dir)) return [];
+  const refs = [key, ...Object.entries(suite.deeplinks ?? {})
+    .filter(([k, v]) => !k.startsWith('$') && String(v).includes(`\${${key}}`))
+    .map(([k]) => `LINK_${k.replace(/-/g, '_').toUpperCase()}`)];
+  return readdirSync(dir).filter((f) => f.endsWith('.yaml'))
+    .filter((f) => refs.some((r) => readFileSync(join(dir, f), 'utf8').includes(`\${${r}}`)))
+    .map((f) => f.replace(/\.yaml$/, ''));
 }
 
 // '${WEB}/detail/${CONTENT_ID}' → 값 치환(모르는 변수는 그대로 둔다)
@@ -549,7 +583,7 @@ function maestroBin() {
   return run(IS_WIN ? 'where' : 'which', ['maestro']).out.split(/\r?\n/)[0]?.trim() || null;
 }
 
-async function runMaestro(ctx, suite, run_, { flow, preset = 'baseline' }) {
+async function runMaestro(ctx, suite, run_, { flow, preset = 'baseline', stale = {} }) {
   const bin = maestroBin();
   if (!bin) die('Maestro 가 없다 — docs/26 §2');
   const steps = suite.presets?.[preset];
@@ -590,8 +624,9 @@ async function runMaestro(ctx, suite, run_, { flow, preset = 'baseline' }) {
     cwd: suite.dir,
   }); } finally { webHelper?.close(); }
   const junit = existsSync(join(out, 'junit.xml')) ? readFileSync(join(out, 'junit.xml'), 'utf8') : '';
-  const { cases, ok } = R.maestroResults(junit, r.ok);
-  if (!cases.length || !r.ok) {
+  const { cases, ok } = R.maestroResults(junit, r.ok, stale);
+  const staleN = cases.filter((c) => c.stale).length;
+  if (!cases.length || (!r.ok && !staleN)) {
     R.record(run_, { device: ctx.dev.id, scenario: `preset:${preset}`, verdict: 'BLOCKED', situations: preset,
       note: `Maestro 실행 확인 실패(exit ${r.code}, 결과 ${cases.length}개): ${(r.err || r.out).slice(-1500)}`, source: 'maestro' });
   }

@@ -174,6 +174,11 @@ iOS 시뮬레이터 빌드는 서명이 필요 없다. Firebase 앱인데 iOS pl
 - 플로우(`flows/*.yaml`): 화면 문구는 **`${L_<키>}`** 로 쓴다 — 프리셋의 언어(`locale`)에 맞는 문구를 랩이 `suite.json labels` 에서 넘긴다(웹 메시지 팩 키를 주석에 적어 둠). 테스트 데이터는 `${CONTENT_ID}` 등, 딥링크는 `${LINK_<이름>}`.
 - 공용 도우미 `_open-home.yaml`(앱 새로 띄워 홈까지)·`_dismiss-popup.yaml`(홈 이벤트 팝업 닫기) — 태그 `helper` 는 단독 실행되지 않는다. Android 전용은 태그 `android-only`.
 - 스크린샷 이름 `<플로우>--<단계>` 로 찍으면 리포트에서 해당 시나리오 아래로 모인다.
+- **사전 점검(`suite.json preflight`)** — `run start`·`matrix`·`flow` 가 먼저 돈다.
+  - `urls`: 백엔드 생존. 하나라도 죽었으면 `matrix` 는 플로우를 전부 BLOCKED 로 적고 멈춘다(exit 2).
+  - `data`: `[{ "key": "AITOON_DEMO_TITLE", "url": "…/home?tab=aitoon" }]` — `url`(testData 치환됨) 응답 본문에 `testData[key]` 값이 그대로 있어야 한다. dev 콘텐츠가 바뀌어 없으면, 그 키를 쓰는 플로우(`${KEY}` 또는 그 키로 만든 `${LINK_*}` 를 쓰는 `flows/*.yaml`, 자동으로 찾음)의 실패를 FAIL 대신 **BLOCKED `test data stale: <키>`** 로 적는다. 플로우는 그대로 돌고(그래서 통과하면 PASS), 다른 플로우 판정엔 영향이 없다. `matrix` 는 다른 실패가 없으면 exit 2.
+  - 경고가 뜨면 `testData` 를 dev 실제 값으로 고친다(2026-10-15 AI툰 데모 교체가 계기). 새 testData 키를 플로우에 쓰면 그 값을 확인할 dev API 를 `data` 에 같이 넣는다 — 엔드포인트는 웹(poptale-web-v2 `src/services`) 이 부르는 것을 응답으로 확인해 고른다.
+  - 사람·에이전트가 `run start` 로 손으로 돌릴 때도 같은 경고가 나온다 — 해당 시나리오는 `verdict … BLOCKED --note "test data stale: <키>"` 로 적는다.
 
 ## 9. CI — `device-lab.yml`
 
