@@ -4,7 +4,7 @@ title: DEVICE-LAB — 빌드 버전별 기기 화면 테스트(에뮬레이터·
 category: 테스트
 audience: 개발자
 status: active
-updated: 2026-10-15
+updated: 2026-10-16
 ---
 
 # DEVICE-LAB — 빌드 버전별 기기 화면 테스트
@@ -216,7 +216,9 @@ WebView 화면은 Robo 가 깊이 못 들어간다 — 실기기층은 "실제 �
 | 중급기 흉내(코어 2)에서 Maestro 드라이버가 ANR 로 죽음 | 바쁜 호스트 + 2코어 게스트 | 코어 수로 성능을 흉내 내지 않는다(실기기 ③층). `MAESTRO_DRIVER_STARTUP_TIMEOUT` 240초 |
 | 플로우가 홈 탭을 못 찾음 | 홈 이벤트 팝업(모달)이 뒤 화면을 접근성 트리에서 숨김 | `_dismiss-popup` 먼저, 대기는 `${L_OK}\|${L_WEBNOVEL}` |
 | 딥링크 플로우가 '제목 보임'을 통과했는데 다음 단계 실패 | 콜드 스타트 딥링크는 홈을 거쳐 이동 — 홈에도 같은 작품 카드(최근 본)가 있다 | 목적 화면에만 있는 요소(상세 = '1화 무료로 읽기 시작')를 기다린다 |
-| 검색 입력칸을 placeholder 로 못 누름 | 접근성 이름은 숨김 label(`search.input.label` = 검색어) | 문구 `L_SEARCH_INPUT` |
+| (Android) 검색 입력칸을 placeholder 로 못 누름 | 접근성 이름은 숨김 label(`search.input.label` = 검색어) | 문구 `L_SEARCH_INPUT` |
+| (iOS) 검색에서 `inputText '작전명'` 뒤 '작전명 보임' 실패 — 한글 입력 문제로 보였음(10-15) | 한글 탓이 아니다. iOS 접근성 트리엔 숨김 label 이 입력칸과 **별도 요소**로 잡혀 `tapOn ${L_SEARCH_INPUT}` 이 label 자리(돋보기 옆 88,105)를 눌렀고 입력칸에 포커스가 안 가 키보드가 안 떴다. 포커스만 잡히면 Maestro iOS `inputText` 는 한글을 그대로 친다(10-16 재현) | iOS 갈래는 입력칸 자체(placeholder `L_SEARCH_PH`)를 누른다. Android 의 CDP 입력(`type-query.js`)은 adb 디버그 WebView 전용이라 iOS 엔 안 쓴다 |
+| iOS 첫 키보드에 'Speed up your typing by sliding…' 소개 시트 | 새 시뮬레이터에서 키보드가 처음 뜰 때 한 번 나온다 | 화면 아래만 가리고 입력·Enter 는 된다 — 판정과 무관 |
 | `obscuredControls` 에 가로 스크롤 줄 밖 탭이 '가려짐'으로 나옴 | 스크롤로 닿는 항목을 가려짐으로 셌다(10-06 '탭 불가' 오판) | 이제 `scrolledOutControls` 로 따로 센다 — 결함이 아니라 '더 있다는 표시가 있나'를 볼 대상 |
 | 글꼴 상황(`font`)에서 rem 으로 거는 CSS 조건이 안 걸림 | 기기 WebView 는 글자만 키우고 rem·em·ic 길이는 그대로(ch·ex·cap·lh 만 커짐, 10-07 실측) | 웹은 ch 로 조건을 건다. Playwright 로 흉내 낼 땐 루트를 두고 본문 글자만 키운다 |
 | 공유를 눌렀는데 시트가 안 뜬 듯 | 과부하로 그리기만 늦음(최상단은 이미 ChooserActivity) | `lab health` 로 최상단 화면 확인 후 판정 |

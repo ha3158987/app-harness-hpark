@@ -5,17 +5,20 @@ tags: [smoke]
 ---
 - runFlow: _open-home.yaml
 - tapOn: ${L_SEARCH}
-# 입력칸의 접근성 이름은 placeholder 가 아니라 숨김 label(search.input.label)
-- tapOn: ${L_SEARCH_INPUT}
 - runFlow:
     when:
       platform: Android
     commands:
+      # Android 입력칸의 접근성 이름은 placeholder 가 아니라 숨김 label(search.input.label)
+      - tapOn: ${L_SEARCH_INPUT}
       - runScript: ../scripts/type-query.js
 - runFlow:
     when:
       platform: iOS
     commands:
+      # iOS 는 숨김 label 이 별도 요소로 잡혀 '검색어'를 누르면 돋보기 자리(label)를 눌러 포커스가 안 간다.
+      # 입력칸 자체는 placeholder 로 보이므로 그걸 누른다. 포커스만 잡히면 한글 inputText 는 된다.
+      - tapOn: ${L_SEARCH_PH}
       - inputText: ${SEARCH_QUERY}
 - assertVisible: ${SEARCH_QUERY}
 - pressKey: Enter
