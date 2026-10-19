@@ -24,6 +24,7 @@
   },
   "features": {
     "push": true,
+    "pushConversation": true,
     "deepLink": true,
     "biometric": true,
     "share": true,

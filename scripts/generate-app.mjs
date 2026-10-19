@@ -545,6 +545,324 @@ function patchAndroidPushPermission(buildDir) {
   log.ok('AndroidManifest: POST_NOTIFICATIONS (push)');
 }
 
+// ── 캐릭터 대화 알림 (features.pushConversation · Android) ────────────────────
+// 캐릭터 선톡을 "사람이 보낸 메시지"처럼 — MessagingStyle + 대화 숏컷(알림 설정의 "대화" 섹션).
+// 전제: BE 가 Android 에 **data-only 메시지**(android.notification 없음)를 보낼 때만 아래 서비스가
+// 그린다. notification 메시지는 FCM SDK 가 종전대로 그린다(아이콘·채널만 meta-data 로 맞춘다).
+//
+// ★ 서비스 충돌 해소: @capacitor/push-notifications 가 com.google.firebase.MESSAGING_EVENT 를 받는
+//   MessagingService 를 매니페스트에 등록한다. FCM 은 그 액션을 받는 서비스 **하나만** 호출하므로
+//   우리 서비스를 그냥 추가하면 플러그인이 토큰(onNewToken)·포그라운드 수신 이벤트를 잃는다.
+//   → 플러그인 서비스를 **상속**하고(대화 키가 없으면 super 로 넘겨 종전 동작 유지, 토큰 전달은 상속),
+//     매니페스트 머저 `tools:node="remove"` 로 플러그인 항목을 빼고 우리 것만 등록한다. Gradle 무변경.
+// ★ Kotlin 아님: 앱 모듈(app/build.gradle)에 kotlin-android 플러그인이 없다(MainActivity 도 .java).
+//   플러그인 추가 = Gradle 변경이라 Java 로 작성한다.
+// ★ 탭 라우팅: 플러그인 handleOnNewIntent 는 extras 에 "google.message_id" 가 있을 때만 data 로 묶어
+//   pushNotificationActionPerformed 를 쏜다(브릿지가 data.url 로 딥링크). FCM SDK 가 notification 메시지
+//   탭 인텐트에 넣는 것과 같은 모양 — data 전부 + google.message_id — 으로 extras 를 만든다.
+const PUSH_CONVERSATION_CHANNEL_ID = 'character_messages';
+const PUSH_CONVERSATION_MARK = 'harness-push-conversation';
+// 우리가 상속·대체하는 플러그인 서비스. 플러그인 버전이 올라가 이름이 바뀌면 상속도 remove 도 조용히
+// 깨지므로, node_modules 의 플러그인 매니페스트에서 MESSAGING_EVENT 를 받는 실제 서비스명을 읽어 대조한다.
+const PUSH_PLUGIN_SERVICE = 'com.capacitorjs.plugins.pushnotifications.MessagingService';
+
+function assertPushPluginService(buildDir) {
+  const manifest = join(buildDir, 'node_modules', '@capacitor', 'push-notifications', 'android', 'src', 'main', 'AndroidManifest.xml');
+  if (!existsSync(manifest)) {
+    fail(`pushConversation: ${manifest} 가 없다 — @capacitor/push-notifications 가 설치돼야 서비스 상속을 검증할 수 있다(--skip-install 이면 먼저 설치).`);
+  }
+  const xml = readFileSync(manifest, 'utf8');
+  const services = [...xml.matchAll(/<service\b[^>]*android:name="([^"]+)"[\s\S]*?<\/service>/g)]
+    .filter((m) => m[0].includes('com.google.firebase.MESSAGING_EVENT'))
+    .map((m) => m[1]);
+  if (services.length !== 1 || services[0] !== PUSH_PLUGIN_SERVICE) {
+    fail(`pushConversation: @capacitor/push-notifications 의 FCM 서비스가 예상(${PUSH_PLUGIN_SERVICE})과 다르다 — 받음: ${JSON.stringify(services)}. ` +
+      'CharacterMessagingService 의 상속 대상과 매니페스트 tools:node="remove" 대상을 generate-app.mjs 에서 같이 갱신하라.');
+  }
+}
+
+function androidConversationServiceJava(cfg) {
+  return `package ${cfg.appId};
+
+// ${PUSH_CONVERSATION_MARK}: generate-app 자동 생성 (features.pushConversation). 손으로 고치지 마라 — 재생성 시 덮어쓴다.
+// 상세: docs/12-PUSH-NOTIFICATIONS.md §7
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.os.Build;
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.app.Person;
+import androidx.core.content.pm.ShortcutInfoCompat;
+import androidx.core.content.pm.ShortcutManagerCompat;
+import androidx.core.graphics.drawable.IconCompat;
+import com.google.firebase.messaging.RemoteMessage;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Collections;
+import java.util.Map;
+
+public class CharacterMessagingService extends ${PUSH_PLUGIN_SERVICE} {
+    private static final String TAG = "CharacterMessaging";
+    static final String CHANNEL_ID = "${PUSH_CONVERSATION_CHANNEL_ID}";
+    private static final String[] REQUIRED = { "characterId", "characterName", "avatarUrl", "conversationId", "title", "body", "url" };
+    private static final int AVATAR_PX = 256;
+    private static final int AVATAR_TIMEOUT_MS = 5000;
+
+    @Override
+    public void onMessageReceived(@NonNull RemoteMessage message) {
+        Map<String, String> data = message.getData();
+        if (message.getNotification() == null && hasAll(data)) {
+            try {
+                showConversation(message, data);
+                return; // 우리가 그렸다 — 플러그인으로 넘기지 않는다.
+            } catch (Exception e) {
+                Log.w(TAG, "conversation notification failed, falling back to plugin", e);
+            }
+        }
+        super.onMessageReceived(message);
+    }
+
+    private static boolean hasAll(Map<String, String> data) {
+        for (String k : REQUIRED) {
+            String v = data.get(k);
+            if (v == null || v.trim().isEmpty()) return false;
+        }
+        return true;
+    }
+
+    // 채널은 첫 data-only 메시지 수신 시점에 만들어진다. notification 메시지(FCM SDK 가 그림)가 먼저 오면
+    // default_notification_channel_id 가 가리키는 채널이 아직 없어 SDK 폴백 채널로 뜬다 — 웹이
+    // PushNotifications.createChannel({ id: "character_messages" }) 로 미리 만들어 두면 해소된다.
+    static void ensureChannel(Context ctx) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null || nm.getNotificationChannel(CHANNEL_ID) != null) return;
+        NotificationChannel ch = new NotificationChannel(CHANNEL_ID,
+                ctx.getString(R.string.harness_push_channel_character_messages), NotificationManager.IMPORTANCE_HIGH);
+        nm.createNotificationChannel(ch);
+    }
+
+    private void showConversation(RemoteMessage message, Map<String, String> data) {
+        ensureChannel(this);
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            Log.i(TAG, "notifications disabled — skip");
+            return;
+        }
+        String characterId = data.get("characterId");
+        String characterName = data.get("characterName");
+        String conversationId = data.get("conversationId");
+        String body = data.get("body");
+        int notificationId = conversationId.hashCode(); // 같은 대화 = 같은 알림(교체)
+
+        Bitmap avatarBitmap = downloadAvatar(data.get("avatarUrl"));
+        if (avatarBitmap == null) avatarBitmap = initialsAvatar(characterName);
+        IconCompat avatar = IconCompat.createWithBitmap(circle(avatarBitmap));
+
+        Person character = new Person.Builder()
+                .setKey(characterId).setName(characterName).setIcon(avatar).setImportant(true).build();
+        Person me = new Person.Builder().setKey("me").setName(getString(R.string.app_name)).build();
+
+        Intent tap = tapIntent(message, data);
+        ShortcutInfoCompat shortcut = new ShortcutInfoCompat.Builder(this, characterId)
+                .setShortLabel(characterName).setLongLabel(characterName)
+                .setIcon(avatar).setPerson(character).setLongLived(true)
+                .setCategories(Collections.singleton("android.shortcut.conversation"))
+                .setIntent(new Intent(tap))
+                .build();
+        try {
+            ShortcutManagerCompat.pushDynamicShortcut(this, shortcut);
+        } catch (Exception e) {
+            Log.w(TAG, "pushDynamicShortcut failed", e); // 숏컷 없이도 알림은 뜬다(대화 섹션에만 안 올라감)
+        }
+
+        PendingIntent content = PendingIntent.getActivity(this, notificationId, tap,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        NotificationCompat.MessagingStyle style = new NotificationCompat.MessagingStyle(me)
+                .addMessage(body, System.currentTimeMillis(), character);
+        Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setStyle(style)
+                .setShortcutId(characterId)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setSmallIcon(R.drawable.ic_stat_push)
+                .setLargeIcon(avatarBitmap)
+                .setContentTitle(data.get("title"))
+                .setContentText(body)
+                .setContentIntent(content)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .build();
+        NotificationManagerCompat.from(this).notify(notificationId, n);
+    }
+
+    // FCM SDK 가 notification 메시지 탭에 쓰는 인텐트와 같은 모양: 런처 Activity + data 전부 + google.message_id.
+    private Intent tapIntent(RemoteMessage message, Map<String, String> data) {
+        Intent i = new Intent(this, MainActivity.class);
+        i.setAction(Intent.ACTION_MAIN);
+        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        for (Map.Entry<String, String> e : data.entrySet()) i.putExtra(e.getKey(), e.getValue());
+        String id = message.getMessageId();
+        i.putExtra("google.message_id", id != null ? id : String.valueOf(System.currentTimeMillis()));
+        return i;
+    }
+
+    private static Bitmap downloadAvatar(String url) {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setConnectTimeout(AVATAR_TIMEOUT_MS);
+            conn.setReadTimeout(AVATAR_TIMEOUT_MS);
+            conn.setInstanceFollowRedirects(true);
+            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return null;
+            try (InputStream in = conn.getInputStream()) {
+                Bitmap raw = BitmapFactory.decodeStream(in);
+                if (raw == null) return null;
+                return Bitmap.createScaledBitmap(raw, AVATAR_PX, AVATAR_PX, true);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "avatar download failed: " + e.getMessage());
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    // 다운로드 실패 시: 이름 첫 글자를 흰색으로 올린 단색 원.
+    private static Bitmap initialsAvatar(String name) {
+        Bitmap bmp = Bitmap.createBitmap(AVATAR_PX, AVATAR_PX, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bmp);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float hue = (Math.abs(name.hashCode()) % 360);
+        p.setColor(Color.HSVToColor(new float[] { hue, 0.45f, 0.75f }));
+        c.drawCircle(AVATAR_PX / 2f, AVATAR_PX / 2f, AVATAR_PX / 2f, p);
+        p.setColor(Color.WHITE);
+        p.setTextSize(AVATAR_PX * 0.5f);
+        p.setTextAlign(Paint.Align.CENTER);
+        String initial = name.substring(0, name.offsetByCodePoints(0, 1));
+        Rect b = new Rect();
+        p.getTextBounds(initial, 0, initial.length(), b);
+        c.drawText(initial, AVATAR_PX / 2f, AVATAR_PX / 2f - b.exactCenterY(), p);
+        return bmp;
+    }
+
+    private static Bitmap circle(Bitmap src) {
+        int size = Math.min(src.getWidth(), src.getHeight());
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        c.drawCircle(size / 2f, size / 2f, size / 2f, p);
+        p.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN));
+        c.drawBitmap(src, (size - src.getWidth()) / 2f, (size - src.getHeight()) / 2f, p);
+        return out;
+    }
+}
+`;
+}
+
+function patchAndroidPushConversation(buildDir, cfg) {
+  const androidDir = join(buildDir, 'android');
+  if (!existsSync(androidDir)) return;
+  assertPushPluginService(buildDir);
+  const main = join(androidDir, 'app', 'src', 'main');
+  const resDir = join(main, 'res');
+
+  // 1) 서비스 소스 (항상 덮어쓴다 — 생성물이다)
+  const javaDir = join(main, 'java', ...cfg.appId.split('.'));
+  mkdirSync(javaDir, { recursive: true });
+  writeFileSync(join(javaDir, 'CharacterMessagingService.java'), androidConversationServiceJava(cfg), 'utf8');
+
+  // 2) 채널 이름 문자열. values/strings.xml 은 patchAndroidLocalizations 가 app_name 만 손대므로 별도 파일.
+  mkdirSync(join(resDir, 'values'), { recursive: true });
+  writeFileSync(join(resDir, 'values', 'harness_push.xml'),
+    '<?xml version="1.0" encoding="utf-8"?>\n' +
+    `<!-- ${PUSH_CONVERSATION_MARK}: generate-app 자동 생성 -->\n<resources>\n` +
+    '    <string name="harness_push_channel_character_messages">캐릭터 메시지</string>\n' +
+    '</resources>\n', 'utf8');
+
+  // 3) 상태바 아이콘 자리. 안드로이드 알림 small icon 은 **24dp 흰색 실루엣(알파만)** 이어야 한다 —
+  //    컬러 앱 아이콘을 넣으면 흰 네모로 뭉개진다. 디자인 에셋이 올 때까지 단색 원형 벡터로 컴파일만 되게 한다.
+  //    앱 아이콘에서 자동 생성하지 않는다(의도적). 이미 파일이 있으면(디자인 반영) 건드리지 않는다.
+  const drawableDir = join(resDir, 'drawable');
+  mkdirSync(drawableDir, { recursive: true });
+  const icon = join(drawableDir, 'ic_stat_push.xml');
+  if (!existsSync(icon)) {
+    writeFileSync(icon,
+      '<?xml version="1.0" encoding="utf-8"?>\n' +
+      `<!-- ${PUSH_CONVERSATION_MARK}: 임시 플레이스홀더(단색 원). 디자인 에셋(24dp 흰색 실루엣)으로 교체할 것 -->\n` +
+      '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n' +
+      '    android:width="24dp" android:height="24dp"\n' +
+      '    android:viewportWidth="24" android:viewportHeight="24">\n' +
+      '    <path android:fillColor="#FFFFFFFF"\n' +
+      '        android:pathData="M12,2a10,10 0 1,0 0,20a10,10 0 1,0 0,-20z"/>\n' +
+      '</vector>\n', 'utf8');
+    log.warn('android drawable/ic_stat_push.xml: 임시 단색 원 — 디자인 에셋(24dp 흰색 실루엣) 필요');
+  }
+
+  // 4) app/build.gradle: firebase-messaging 컴파일 가시성. @capacitor/push-notifications 와
+  //    @capacitor-community/fcm 은 firebase-messaging 을 `implementation`(비노출)으로만 들고 있어
+  //    앱 모듈이 FirebaseMessagingService/RemoteMessage 를 못 본다 → 상속하려면 선언이 필요하다.
+  //    플러그인과 같은 버전·같은 해석 규칙(firebaseMessagingVersion ?: 25.0.1)이라 APK 내용은 불변.
+  const gradleFile = join(androidDir, 'app', 'build.gradle');
+  if (existsSync(gradleFile) && !readFileSync(gradleFile, 'utf8').includes(PUSH_CONVERSATION_MARK)) {
+    const snippet =
+`
+// ${PUSH_CONVERSATION_MARK}: CharacterMessagingService 가 FirebaseMessagingService 를 상속하기 위한
+// 컴파일 가시성. 플러그인(@capacitor/push-notifications)과 같은 버전 규칙 — APK 에 새 라이브러리는 안 들어간다.
+dependencies {
+    implementation "com.google.firebase:firebase-messaging:\${project.hasProperty('firebaseMessagingVersion') ? rootProject.ext.firebaseMessagingVersion : '25.0.1'}"
+}
+`;
+    writeFileSync(gradleFile, readFileSync(gradleFile, 'utf8') + snippet, 'utf8');
+    log.ok('android/app/build.gradle: firebase-messaging 컴파일 의존성 (pushConversation)');
+  }
+
+  // 5) 매니페스트: 플러그인 서비스 제거 + 우리 서비스 등록 + FCM 기본 아이콘/채널 meta-data
+  const manifest = join(main, 'AndroidManifest.xml');
+  if (!existsSync(manifest)) return;
+  let xml = readFileSync(manifest, 'utf8');
+  if (xml.includes(PUSH_CONVERSATION_MARK)) { log.ok('AndroidManifest: 캐릭터 대화 알림 (이미 적용)'); return; }
+  if (!xml.includes('xmlns:tools=')) {
+    xml = xml.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android"',
+      '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools"');
+  }
+  const block =
+`
+        <!-- ${PUSH_CONVERSATION_MARK}: 캐릭터 대화 알림 (generate-app 자동 주입, features.pushConversation) -->
+        <!-- 플러그인 서비스는 머지에서 제거하고, 그것을 상속한 우리 서비스만 MESSAGING_EVENT 를 받는다 -->
+        <service android:name="${PUSH_PLUGIN_SERVICE}" tools:node="remove" />
+        <service android:name=".CharacterMessagingService" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- notification 메시지(FCM SDK 가 그림)도 같은 아이콘·채널을 쓰게 한다 -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_push" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="${PUSH_CONVERSATION_CHANNEL_ID}" />
+`;
+  const close = xml.lastIndexOf('</application>');
+  if (close === -1) return;
+  xml = xml.slice(0, close) + block.replace(/^\n/, '') + '    ' + xml.slice(close);
+  writeFileSync(manifest, xml, 'utf8');
+  log.ok(`AndroidManifest: CharacterMessagingService + 채널 ${PUSH_CONVERSATION_CHANNEL_ID} + 기본 아이콘 (pushConversation)`);
+}
+
 // ── 딥링크 도메인 증명 파일 (.well-known) ──────────────────────────────────
 // Universal Link(iOS) / App Link(Android) 는 **앱 설정만으로는 동작하지 않는다.**
 // 도메인이 "이 앱을 신뢰한다"고 선언하는 파일 2개를 웹이 서빙해야 한다.
@@ -1970,6 +2288,8 @@ function main() {
   // 7b-2) 푸시 배선 (features.push)
   if (cfg.features.push) {
     patchAndroidPushPermission(buildDir);
+    // Android 캐릭터 대화 알림(MessagingStyle + 대화 숏컷). data-only 메시지만 그린다 — docs/12 §7
+    if (cfg.features.pushConversation) patchAndroidPushConversation(buildDir, cfg);
     // iOS 원격 푸시(FCM): 엔타이틀먼트 + 백그라운드 모드는 항상, plist 등록/Firebase 초기화는 firebase.fcm 일 때만.
     patchIosPushEntitlement(buildDir);
     patchIosPushBackgroundMode(buildDir);

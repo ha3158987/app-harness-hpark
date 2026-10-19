@@ -4,7 +4,7 @@ title: 푸시 알림(FCM) 셋업 가이드 — 새 앱 출시용
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-08-10
+updated: 2026-10-16
 ---
 
 # 푸시 알림(FCM) 셋업 가이드 — 새 앱 출시용
@@ -47,7 +47,7 @@ app-harness 로 새 앱을 만들 때 **푸시 알림(원격 FCM)** 을 붙이�
 - iOS `Info.plist`: `UIBackgroundModes = remote-notification`
 - iOS pbxproj: `GoogleService-Info.plist` 를 번들 리소스로 등록
 - iOS `AppDelegate`: `FirebaseApp.configure()` 주입
-- Android: 푸시 권한(POST_NOTIFICATIONS 등)
+- Android: 푸시 권한(POST_NOTIFICATIONS 등). `features.pushConversation` 이면 캐릭터 대화 알림 서비스까지 — §7
 
 **release.yml (CI)**
 - `@capacitor/assets` 로 아이콘/스플래시 생성(`apps/<slug>/icon.png` 소스)
@@ -166,3 +166,57 @@ base64 -i google-services.json     | tr -d '\n' | gh secret set GOOGLE_SERVICES_
 - [ ] 웹: bridge + `@capacitor-community/fcm` 의존성 + 배포
 - [ ] 백엔드: `deviceEndpoint` 수신 + FCM v1 발송(정본 프로젝트 SA)
 - [ ] `version.code` +1 → 빌드/배포 → 토큰 확인 → 테스트 메시지 수신 확인
+
+---
+
+## 7. Android 캐릭터 대화 알림 — MessagingStyle + 대화 섹션 (`features.pushConversation`)
+
+iOS §6 의 Android 짝. 캐릭터 선톡을 **메신저 메시지처럼** 그린다 — 아바타·이름이 붙은 `MessagingStyle` 알림, 그리고 캐릭터가 알림 설정의 **"대화" 섹션**에 long-lived 숏컷으로 올라간다(Android 11+). 기본 구현(03 "캐릭터를 연락처처럼").
+
+### 전제 — BE 가 **data-only 메시지**를 보낼 때만 그린다
+- FCM 은 `android.notification` 이 있는 메시지(notification 메시지)를 **백그라운드에서 SDK 가 직접 그리고 앱 코드를 부르지 않는다.** 그래서 아래 서비스는 `notification` 블록이 **없는** data-only 메시지에서만 동작한다.
+- notification 메시지(control 그룹)는 종전대로 SDK 가 그린다. 다만 매니페스트 meta-data 로 **같은 아이콘·같은 채널**을 쓰게 맞춰 두었다(아래).
+- BE 의 Android data-only 전환은 별도 작업이다. 전환 전까지는 이 코드가 호출되지 않는다.
+
+### 플래그
+```jsonc
+{ "features": { "push": true, "pushConversation": true } }   // 기본 false · 현재 characterchat-dev 만
+```
+
+### generate-app 이 하는 일 (플래그 on 앱만 — off 앱의 생성물은 main 과 바이트 단위로 같다)
+| 생성물 | 내용 |
+|---|---|
+| `java/<appId>/CharacterMessagingService.java` | 아래 "서비스" 참조. **Java** 다 — 앱 모듈에 kotlin-android 플러그인이 없다(MainActivity 도 .java). |
+| `AndroidManifest.xml` | 플러그인 서비스 `tools:node="remove"` + 우리 서비스 등록(`MESSAGING_EVENT`) + `default_notification_icon=@drawable/ic_stat_push` + `default_notification_channel_id=character_messages`. 루트에 `xmlns:tools` 가 없으면 추가한다. |
+| `res/drawable/ic_stat_push.xml` | 상태바 아이콘 **자리**. 임시 단색 원(컴파일용). 이미 파일이 있으면 건드리지 않는다. |
+| `res/values/harness_push.xml` | 채널 이름 문자열 "캐릭터 메시지" |
+| `app/build.gradle` | `implementation "com.google.firebase:firebase-messaging:<플러그인과 같은 규칙>"` — 아래 "왜" 참조 |
+
+### 플러그인 서비스를 상속·대체한다 — 왜
+- `@capacitor/push-notifications` 는 `com.capacitorjs.plugins.pushnotifications.MessagingService` 를 `com.google.firebase.MESSAGING_EVENT` 수신자로 등록한다. FCM 은 그 액션을 받는 서비스를 **하나만** 호출한다. 우리 서비스를 그냥 추가하면 플러그인이 토큰 갱신(`onNewToken`)·포그라운드 수신 이벤트를 **잃는다.**
+- 그래서 우리 서비스는 플러그인 서비스를 **상속**하고, 매니페스트 머저로 플러그인 항목을 **제거**한 뒤 우리 것만 등록한다. 대화 키가 없으면 `super.onMessageReceived` 로 넘기므로 기존 동작은 그대로다. `onNewToken` 은 오버라이드하지 않는다(상속으로 플러그인에 전달).
+- 플러그인 버전이 올라가 서비스 클래스명이 바뀌면 상속도 remove 도 조용히 깨진다 → generate-app 이 `node_modules` 의 플러그인 매니페스트에서 실제 서비스명을 읽어 대조하고, 다르면 **생성 단계에서 에러**를 낸다.
+- **firebase-messaging 컴파일 의존성**: 플러그인(`@capacitor/push-notifications`, `@capacitor-community/fcm`)이 firebase-messaging 을 `implementation`(비노출)으로만 들고 있어 앱 모듈이 `FirebaseMessagingService`/`RemoteMessage` 를 못 본다. 상속을 위해 **컴파일 가시성만** 추가하는 것이고, 플러그인과 같은 버전·같은 해석 규칙(`firebaseMessagingVersion ?: 25.0.1`)이라 **APK 내용은 불변**이다.
+
+### 서비스 동작 (`onMessageReceived`)
+1. `notification` 블록이 없고 `data` 에 `characterId`·`characterName`·`avatarUrl`·`conversationId`·`title`·`body`·`url` 이 **전부** 있을 때만 진행. 하나라도 없으면 아무것도 안 그리고 `super` 로 넘긴다.
+2. 채널 `character_messages`("캐릭터 메시지", IMPORTANCE_HIGH) 가 없으면 만든다.
+3. `avatarUrl` 을 `HttpURLConnection` 으로 받는다(연결·읽기 **타임아웃 5초**, 외부 라이브러리 없음). 실패하면 이름 첫 글자 **이니셜 아이콘**. 원형으로 잘라 `IconCompat` 로 만든다.
+4. `ShortcutManagerCompat.pushDynamicShortcut` — id=`characterId`, `setPerson`, `setLongLived(true)`, 카테고리 `android.shortcut.conversation`, 인텐트=MainActivity + 아래 extras. 실패해도 알림은 뜬다(대화 섹션에만 안 올라감).
+5. `NotificationCompat.MessagingStyle(me).addMessage(body, now, Person(characterName, avatar))` + `setShortcutId(characterId)` + `CATEGORY_MESSAGE` + `setSmallIcon(ic_stat_push)` + `setAutoCancel(true)`. **같은 `conversationId` 는 같은 notification id**(교체).
+6. 탭 인텐트 extras = **`data` 전부 + `google.message_id`** — FCM SDK 가 notification 메시지 탭에 넣는 것과 같은 모양. 플러그인 `handleOnNewIntent` 는 `google.message_id` 가 있을 때만 extras 를 `data` 로 묶어 `pushNotificationActionPerformed` 를 쏘고, 브릿지가 종전처럼 `data.url` 로 딥링크한다. 콜드 스타트도 `BridgeActivity` 가 런치 인텐트를 같은 경로로 넘긴다.
+
+### 채널 생성 시점 — 알아둘 것
+채널은 **첫 data-only 메시지 수신 시점**에 만들어진다(서비스가 `onNewToken` 을 오버라이드하지 않으므로 그 전엔 없다). notification 메시지가 먼저 오면 `default_notification_channel_id` 가 가리키는 채널이 없어 SDK 폴백 채널로 뜬다. 웹이 `PushNotifications.createChannel({ id: 'character_messages', name: '캐릭터 메시지', importance: 4 })` 를 앱 시작 시 호출하면 해소된다(웹 레포 작업).
+
+### 상태바 아이콘 요구사항 — 디자인 에셋 필요
+- Android 알림 small icon 은 **24dp, 흰색 실루엣(알파 채널만)** 이어야 한다. 컬러 앱 아이콘을 넣으면 흰 네모로 뭉개진다. 그래서 **앱 아이콘에서 자동 생성하지 않는다.**
+- 지금 들어 있는 `ic_stat_push.xml` 은 단색 원 플레이스홀더다. 디자인 에셋(벡터 24×24, `#FFFFFF`)이 오면 generate-app 의 플레이스홀더를 교체한다.
+
+### 실기기 확인 절차 (BE 가 Android data-only 로 전환한 뒤)
+- [ ] 플래그 on 앱 설치 → 로그인 → 토큰 확보
+- [ ] 7개 data 키를 넣은 data-only 메시지 1건 → 아바타·캐릭터 이름이 붙은 메시지 알림, 상태바에 `ic_stat_push`
+- [ ] 알림 길게 누르기 → "대화" 섹션(설정 > 알림 > 대화)에 캐릭터가 뜨는지
+- [ ] 탭 → 앱이 `data.url` 로 이동(기존 notification 메시지와 동일)
+- [ ] `avatarUrl` 을 깨진 URL 로 1건 → 이니셜 아이콘으로 뜨는지(5초 안에)
+- [ ] `characterId` 를 빼고 1건 → 아무것도 안 뜨는지(data-only 라 플러그인도 그리지 않는다 — 의도된 동작, BE 가 키를 빼먹으면 조용히 사라지므로 BE 쪽 검증 필수)

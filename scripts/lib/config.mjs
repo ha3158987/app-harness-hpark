@@ -11,6 +11,11 @@ const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // features 기본값 — new-app 이 명시 안 한 기능은 안전한 OFF 로.
 const DEFAULT_FEATURES = {
   push: false,
+  // iOS Communication Notifications — 캐릭터 선톡 푸시를 "사람이 보낸 메시지"처럼 보이게 한다
+  // (아바타가 앱 아이콘 자리에, 요약 알림·Focus 를 기본으로 통과). features.push 와 firebase.fcm 이
+  // 켜진 앱에서만 의미가 있고, BE 가 data 에 characterId·characterName·avatarUrl·conversationId 를
+  // 보낼 때만 동작한다(없으면 일반 알림으로 폴백). 상세: docs/12-PUSH-NOTIFICATIONS.md §6
+  pushConversation: false,
   // 푸시 라우팅 정책: data.link 의 경로 화이트리스트(허용 prefix 배열). null=모든 경로 허용.
   // 예: ['/recommend', '/detail/', '/viewer', '/event'] — Poptale 1.1.9+176 정책 참조.
   pushPolicy: { allowedPaths: null },
@@ -288,6 +293,12 @@ export function loadConfig(repoRoot, slug) {
       err(slug, 'forceUpdate.source="remoteConfig" 인데 firebase.enabled/remoteConfig 가 켜져 있지 않음 — ' +
         '둘 다 true 여야 원격 설정을 읽을 수 있다.');
     }
+  }
+  if (typeof features.pushConversation !== 'boolean') {
+    err(slug, `features.pushConversation 은 boolean (받음: ${JSON.stringify(features.pushConversation)})`);
+  }
+  if (features.pushConversation && !features.push) {
+    err(slug, 'features.pushConversation=true 인데 features.push 가 꺼져 있음 — 커뮤니케이션 알림은 푸시 위에서만 동작한다.');
   }
   // pushPolicy.allowedPaths: null=전허용, 배열=화이트리스트(문자열 prefix)
   const allowed = features.pushPolicy?.allowedPaths;
