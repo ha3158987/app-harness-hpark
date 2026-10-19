@@ -8,7 +8,7 @@
   "startUrl": "https://chat.dev.poptale.ai",
   "version": {
     "name": "1.0.0",
-    "code": 21
+    "code": 22
   },
   "locales": {
     "default": "en",
