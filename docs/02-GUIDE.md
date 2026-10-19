@@ -267,6 +267,9 @@ flowchart TB
 - `features.deferredDeepLink` 는 하위호환으로 `marketing.attribution` 으로 자동 매핑.
 - `features.appChannelCompat`: 기존 웹에 `window.AppChannel.postMessage("scheme://...")` 패턴이
   박혀 있을 때 활성. `harness-adapter` 의 `installAppChannelShim({scheme})` 으로 폴리필.
+- `features.pushConversation`(boolean, 기본 false, 2026-10-16): iOS Communication Notifications — 푸시 data 에
+  `characterId`·`characterName`·`avatarUrl`·`conversationId` 가 있으면 캐릭터 아바타 알림으로 바꾼다. `features.push` 필수,
+  `firebase.fcm` 이 켜져야 동작. 상세·BE 계약: [12 §6](./12-PUSH-NOTIFICATIONS.md).
 - `features.pushPolicy.allowedPaths`: FCM data.link 의 경로 화이트리스트. null = 전허용,
   배열이면 prefix 매칭(예: `['/recommend','/detail/','/viewer']`).
 - `features.viewer.captureBlock`: 지정 경로 prefix 에서만 화면 캡쳐 차단. SPA 라우팅 자동 감지는

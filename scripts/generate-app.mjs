@@ -1461,6 +1461,76 @@ ${block}</dict>
   log.ok('iOS App.entitlements: aps-environment = production (push)');
 }
 
+// ── iOS Communication Notifications (features.pushConversation) ────────────────
+// 캐릭터 선톡 푸시를 "사람이 보낸 메시지"처럼 보이게 한다 — 아바타가 앱 아이콘 자리에 크게 뜨고,
+// 요약 알림·Focus 를 기본으로 통과한다(Apple 문서 명시). 필요한 세 가지:
+//   (a) App.entitlements `com.apple.developer.usernotifications.communication`
+//   (b) App Info.plist `NSUserActivityTypes = [INSendMessageIntent]`
+//   (c) NSE 가 INSendMessageIntent 를 기부(donate)하고 content.updating(from:) 으로 알림을 바꾼다 → nseSwift()
+// ⚠️ (a) 를 넣는 순간 App ID 에 Communication Notifications capability 가 켜져 있어야 서명이 통과한다
+//    (aps-environment 와 같은 실패모드) → App ID capability + match 프로파일 재생성 선행. docs/12 §6.
+// https://developer.apple.com/documentation/usernotifications/implementing-communication-notifications
+
+// (a) 엔타이틀먼트. patchIosPushEntitlement 와 같은 방식 — 없으면 추가, 있으면 안 고침.
+function patchIosCommunicationEntitlement(buildDir) {
+  const iosAppDir = join(buildDir, 'ios', 'App', 'App');
+  if (!existsSync(iosAppDir)) return;
+  const entFile = join(iosAppDir, 'App.entitlements');
+  const KEY = 'com.apple.developer.usernotifications.communication';
+  const block = `\t<key>${KEY}</key>\n\t<true/>\n`;
+  if (existsSync(entFile)) {
+    let xml = readFileSync(entFile, 'utf8');
+    if (xml.includes(KEY)) return;
+    const close = xml.lastIndexOf('</dict>');
+    if (close === -1) return;
+    xml = xml.slice(0, close) + block + xml.slice(close);
+    writeFileSync(entFile, xml);
+  } else {
+    const plist =
+`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+${block}</dict>
+</plist>
+`;
+    writeFileSync(entFile, plist);
+  }
+  log.ok(`iOS App.entitlements: ${KEY} = true (pushConversation)`);
+}
+
+// (b) NSUserActivityTypes. 이 선언이 없으면 iOS 가 INSendMessageIntent 기부를 받지 않아
+//     엔타이틀먼트가 있어도 일반 알림으로 뜬다(조용히 실패한다).
+function patchIosCommunicationActivityTypes(buildDir) {
+  const plistFile = join(buildDir, 'ios', 'App', 'App', 'Info.plist');
+  if (!existsSync(plistFile)) return;
+  let xml = readFileSync(plistFile, 'utf8');
+  const INTENT = 'INSendMessageIntent';
+  if (xml.includes(INTENT)) return; // idempotent
+  const KEY = 'NSUserActivityTypes';
+  if (xml.includes(`<key>${KEY}</key>`)) {
+    // 다른 패치/템플릿이 이미 배열을 만들었다면 그 안에 끼운다.
+    const re = new RegExp(`(<key>${KEY}</key>\\s*<array>)`);
+    const next = xml.replace(re, `$1\n\t\t<string>${INTENT}</string>`);
+    if (next === xml) {
+      log.warn(`iOS Info.plist: ${KEY} 가 있지만 배열이 아님 — ${INTENT} 수동 추가 필요.`);
+      return;
+    }
+    xml = next;
+  } else {
+    const block =
+      `\t<key>${KEY}</key>\n` +
+      '\t<array>\n' +
+      `\t\t<string>${INTENT}</string>\n` +
+      '\t</array>';
+    const close = xml.lastIndexOf('</dict>');
+    if (close === -1) return;
+    xml = xml.slice(0, close) + block + '\n' + xml.slice(close);
+  }
+  writeFileSync(plistFile, xml);
+  log.ok(`iOS Info.plist: ${KEY} ${INTENT} (pushConversation)`);
+}
+
 // (2) UIBackgroundModes remote-notification (백그라운드/사일런트 푸시 수신).
 // iOS 수출 규정 준수(ITSAppUsesNonExemptEncryption).
 //
@@ -1642,7 +1712,10 @@ const NSE_IDS = {
   embed: 'FC00000000000000000C0010',
 };
 
-const NSE_SWIFT = `// 하네스 자동 생성 (scripts/generate-app.mjs) — 직접 수정하면 재생성 시 덮어씁니다.
+// NSE Swift 소스. 플래그 off 면 종전과 **바이트 단위로 같은** 파일이 나와야 한다(기존 앱 산출물 불변).
+function nseSwift(cfg) {
+  const conversation = !!cfg.features.pushConversation;
+  return `// 하네스 자동 생성 (scripts/generate-app.mjs) — 직접 수정하면 재생성 시 덮어씁니다.
 //
 // 푸시 알림에 캐릭터 프로필 사진을 붙이는 확장. APNs 는 페이로드만으로 이미지를
 // 붙일 수 없어서, 서버가 \`mutable-content: 1\` 로 이 확장을 깨우고 여기서 이미지를
@@ -1651,14 +1724,21 @@ const NSE_SWIFT = `// 하네스 자동 생성 (scripts/generate-app.mjs) — 직
 // 다운로드/첨부는 FCM SDK 헬퍼가 한다 — \`apns.fcm_options.image\` 를 읽는다.
 // 직접 URLSession 을 굴리지 않는 이유: 캐싱·타임아웃·파일 확장자 판별을 SDK 가
 // 이미 처리하고, 서버가 보내는 키와 계약이 한곳에 모인다.
-
+${conversation ? `//
+// features.pushConversation: data 에 characterId·characterName·avatarUrl·conversationId 가
+// 전부 있으면 Communication Notification(INSendMessageIntent) 으로 바꾼다 — 캐릭터 아바타가
+// 앱 아이콘 자리에 크게 뜨고 요약 알림·Focus 를 기본으로 통과한다. 이 경로에서는 아바타가
+// 이미 보이므로 FCM 이미지 첨부는 건너뛴다. 키가 하나라도 없거나 에러가 나면 위의 FCM 경로.
+// https://developer.apple.com/documentation/usernotifications/implementing-communication-notifications
+` : ''}
 import UserNotifications
-import FirebaseMessaging
+import FirebaseMessaging${conversation ? '\nimport Intents' : ''}
 
 final class NotificationService: UNNotificationServiceExtension {
   private var contentHandler: ((UNNotificationContent) -> Void)?
   private var bestAttempt: UNMutableNotificationContent?
-
+${conversation ? `  private var avatarTask: URLSessionDownloadTask?
+` : ''}
   override func didReceive(
     _ request: UNNotificationRequest,
     withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
@@ -1670,18 +1750,125 @@ final class NotificationService: UNNotificationServiceExtension {
       return
     }
     self.bestAttempt = mutable
-    Messaging.serviceExtension().populateNotificationContent(mutable, withContentHandler: contentHandler)
+${conversation ? `
+    if #available(iOS 15.0, *), let message = ConversationMessage(userInfo: request.content.userInfo) {
+      applyCommunication(message, to: mutable, fallback: {
+        Messaging.serviceExtension().populateNotificationContent(mutable, withContentHandler: contentHandler)
+      })
+      return
+    }
+` : ''}    Messaging.serviceExtension().populateNotificationContent(mutable, withContentHandler: contentHandler)
   }
 
   override func serviceExtensionTimeWillExpire() {
     // 시간이 다 되면 지금까지 만든 내용으로 낸다. 이걸 빼면 이미지 다운로드가 느릴 때
     // **알림이 아예 안 뜬다** — 사진보다 알림이 뜨는 게 중요하다.
-    if let handler = contentHandler, let content = bestAttempt {
-      handler(content)
+${conversation ? `    avatarTask?.cancel()
+` : ''}    if let handler = contentHandler, let content = bestAttempt {
+${conversation ? `      contentHandler = nil
+` : ''}      handler(content)
     }
   }
-}
+${conversation ? `
+  // MARK: - Communication Notification (features.pushConversation)
+
+  /// BE 가 data 에 보내는 4개 키. 하나라도 없거나 비어 있으면 nil → 일반 FCM 경로.
+  private struct ConversationMessage {
+    let characterId: String
+    let characterName: String
+    let avatarUrl: URL
+    let conversationId: String
+
+    init?(userInfo: [AnyHashable: Any]) {
+      func text(_ key: String) -> String? {
+        guard let raw = userInfo[key] as? String else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+      }
+      guard
+        let characterId = text("characterId"),
+        let characterName = text("characterName"),
+        let avatarText = text("avatarUrl"),
+        let avatarUrl = URL(string: avatarText),
+        let conversationId = text("conversationId")
+      else { return nil }
+      self.characterId = characterId
+      self.characterName = characterName
+      self.avatarUrl = avatarUrl
+      self.conversationId = conversationId
+    }
+  }
+
+  @available(iOS 15.0, *)
+  private func applyCommunication(
+    _ message: ConversationMessage,
+    to content: UNMutableNotificationContent,
+    fallback: @escaping () -> Void
+  ) {
+    // 아바타는 확장 임시 디렉터리에 내려받는다. 8초 안에 못 받으면 이미지 없이 진행한다 —
+    // NSE 전체 시간 제한(약 30초) 안에서 알림이 뜨는 게 사진보다 중요하다.
+    downloadAvatar(message.avatarUrl) { [weak self] imageData in
+      guard let self = self else { return }
+      let handle = INPersonHandle(value: message.characterId, type: .unknown)
+      let sender = INPerson(
+        personHandle: handle,
+        nameComponents: nil,
+        displayName: message.characterName,
+        image: imageData.map { INImage(imageData: $0) },
+        contactIdentifier: nil,
+        customIdentifier: message.characterId
+      )
+      let intent = INSendMessageIntent(
+        recipients: nil,
+        outgoingMessageType: .outgoingMessageText,
+        content: content.body,
+        speakableGroupName: nil,
+        conversationIdentifier: message.conversationId,
+        serviceName: nil,
+        sender: sender,
+        attachments: nil
+      )
+      let interaction = INInteraction(intent: intent, response: nil)
+      interaction.direction = .incoming
+      interaction.donate(completion: nil)
+      do {
+        let updated = try content.updating(from: intent)
+        self.deliver(updated)
+      } catch {
+        // 인텐트 적용 실패 — 종전 FCM 경로(이미지 첨부)로 그대로 낸다.
+        fallback()
+      }
+    }
+  }
+
+  private func downloadAvatar(_ url: URL, completion: @escaping (Data?) -> Void) {
+    let config = URLSessionConfiguration.ephemeral
+    config.timeoutIntervalForRequest = 8
+    config.timeoutIntervalForResource = 8
+    let session = URLSession(configuration: config)
+    let task = session.downloadTask(with: url) { location, response, _ in
+      defer { session.finishTasksAndInvalidate() }
+      let status = (response as? HTTPURLResponse)?.statusCode ?? 200
+      guard let location = location, (200..<300).contains(status) else {
+        completion(nil)
+        return
+      }
+      // downloadTask 의 임시 파일은 이 클로저가 끝나면 지워지므로 여기서 바로 읽는다.
+      completion(try? Data(contentsOf: location))
+    }
+    avatarTask = task
+    task.resume()
+  }
+
+  /// 한 번만 내보낸다 — serviceExtensionTimeWillExpire 와 경합해 두 번 부르면 안 된다.
+  private func deliver(_ content: UNNotificationContent) {
+    guard let handler = contentHandler else { return }
+    contentHandler = nil
+    handler(content)
+  }
+` : ''}}
 `;
+}
 
 function nseInfoPlist() {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -1748,6 +1935,10 @@ function patchIosNotificationServiceExtension(buildDir, cfg) {
   if (txt.includes(NSE_IDS.target) || txt.includes(`${NSE_NAME}.appex`)) {
     // 이미 등록됨 — Podfile 만 확인(먼저 실패한 실행의 잔여 상태 보정).
     patchIosPodfileNotificationExtension(buildDir);
+    // Swift 소스는 생성물이라 매번 다시 쓴다 — features.pushConversation 을 켜고 끄는 게
+    // 기존 build/ 에도 반영돼야 한다. 내용이 같으면 파일도 같다(off 앱 산출물 불변).
+    const swiftFile = join(iosApp, NSE_NAME, `${NSE_NAME}.swift`);
+    if (existsSync(swiftFile)) writeFileSync(swiftFile, nseSwift(cfg));
     return;
   }
   // 확장 타깃 이름이 Podfile 표기와 어긋나면 안 되므로 `target '…'`(홑따옴표) 형태를
@@ -1813,7 +2004,7 @@ function patchIosNotificationServiceExtension(buildDir, cfg) {
   // 소스 파일 먼저 — pbxproj 만 고쳐 놓고 파일이 없으면 빌드가 깨진다.
   const extDir = join(iosApp, NSE_NAME);
   mkdirSync(extDir, { recursive: true });
-  writeFileSync(join(extDir, `${NSE_NAME}.swift`), NSE_SWIFT);
+  writeFileSync(join(extDir, `${NSE_NAME}.swift`), nseSwift(cfg));
   writeFileSync(join(extDir, 'Info.plist'), nseInfoPlist());
 
   const I = NSE_IDS;
@@ -2300,6 +2491,15 @@ function main() {
       // 이 켜진 경우에만 의미가 있다(패치가 pod 'FirebaseMessaging' 을 추가한다).
       // patchNativeVersion 뒤에 와야 한다 — 확장 버전을 App 타깃에서 읽어 맞춘다.
       patchIosNotificationServiceExtension(buildDir, cfg);
+      // Communication Notifications(features.pushConversation) — 확장이 INSendMessageIntent 를
+      // 기부하려면 앱 쪽 엔타이틀먼트 + NSUserActivityTypes 가 있어야 한다. NSE 안의 코드는
+      // 위 patchIosNotificationServiceExtension 이 cfg 를 보고 넣는다.
+      if (cfg.features.pushConversation) {
+        patchIosCommunicationEntitlement(buildDir);
+        patchIosCommunicationActivityTypes(buildDir);
+      }
+    } else if (cfg.features.pushConversation) {
+      log.warn('features.pushConversation=true 인데 firebase.enabled/fcm 이 꺼져 있음 — 알림 확장(NSE)이 생성되지 않아 커뮤니케이션 알림이 동작하지 않는다.');
     }
   }
   log.step('iOS 권한 사용 설명(Info.plist) 점검');

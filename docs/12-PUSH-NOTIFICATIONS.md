@@ -169,6 +169,58 @@ base64 -i google-services.json     | tr -d '\n' | gh secret set GOOGLE_SERVICES_
 
 ---
 
+## 6. iOS Communication Notifications — 캐릭터를 연락처처럼 (`features.pushConversation`)
+
+캐릭터 선톡 푸시를 "앱 알림"이 아니라 "사람이 보낸 메시지"로 보이게 한다. iOS 15+ 에서 **캐릭터 아바타가 앱 아이콘 자리에 크게** 뜨고, **요약 알림(Scheduled Summary)·Focus 를 기본으로 통과**한다.
+Apple 문서: <https://developer.apple.com/documentation/usernotifications/implementing-communication-notifications>
+
+### 플래그
+```jsonc
+{
+  "features": { "push": true, "pushConversation": true },   // 기본 false
+  "firebase": { "enabled": true, "fcm": true }               // 알림 확장(NSE)이 생겨야 동작
+}
+```
+- `push` 가 꺼져 있으면 config 검증 에러. `firebase.fcm` 이 꺼져 있으면 NSE 가 안 생겨 경고만 남는다.
+- 현재 켠 앱: `characterchat-dev` 만. 프로덕션은 실기기 확인 뒤 별도로 켠다.
+
+### generate-app 이 하는 일 (플래그 on 앱만)
+- `App.entitlements`: `com.apple.developer.usernotifications.communication = true`
+- 앱 `Info.plist`: `NSUserActivityTypes = [INSendMessageIntent]` — 없으면 기부가 무시돼 일반 알림으로 뜬다(조용한 실패).
+- `NotificationService.swift`: `import Intents` + 아래 커뮤니케이션 경로. 플래그 off 앱의 생성물은 종전과 바이트 단위로 같다.
+
+### BE 가 `data` 에 보내야 할 키
+| 키 | 값 | 용도 |
+|---|---|---|
+| `characterId` | 캐릭터 ID(문자열) | `INPersonHandle` · 발신자 식별 |
+| `characterName` | 표시 이름 | 알림 제목 자리의 발신자 이름 |
+| `avatarUrl` | https 이미지 URL | 앱 아이콘 자리의 아바타 |
+| `conversationId` | 대화방 ID(문자열) | 같은 대화끼리 묶임(`conversationIdentifier`) |
+
+- `apns.payload.aps.mutable-content: 1` 은 종전대로 필수(NSE 를 깨운다). 본문은 `notification.body` 가 메시지 내용이 된다.
+- FCM `data` 값은 전부 문자열이어야 한다(숫자 ID 도 문자열로).
+
+### 동작과 폴백
+1. 4개 키가 **전부** 있고 비어 있지 않으면 → 아바타를 확장 임시 디렉터리로 내려받는다(**타임아웃 8초**, 실패하면 이미지 없이 진행).
+2. `INPerson` → `INSendMessageIntent` → `INInteraction(direction: .incoming).donate()` → `content.updating(from: intent)` 로 알림을 바꾼다.
+3. 이 경로에서는 **FCM 이미지 첨부(`fcm_options.image`)를 건너뛴다** — 아바타가 이미 보인다.
+4. 키가 하나라도 없거나, iOS 15 미만이거나, `updating(from:)` 이 실패하면 → 종전 `Messaging.serviceExtension().populateNotificationContent` 경로(일반 알림 + 이미지 첨부).
+5. 시간 제한(`serviceExtensionTimeWillExpire`)에 걸리면 지금까지 만든 내용으로 내보낸다(알림은 반드시 뜬다).
+
+### 사람이 할 일 (순서)
+- [ ] Apple Developer → Identifiers → 앱 App ID → **Communication Notifications** 체크 → Save
+- [ ] match 프로파일 재생성: `/opt/homebrew/bin/fastlane ios regen_profile slug:<slug>` (안 하면 서명에서 깨진다 — Step 5 와 같은 실패모드)
+- [ ] BE 가 위 4개 키를 `data` 에 넣어 발송
+
+### 실기기 확인 절차
+- [ ] 플래그 on 앱을 sandbox 빌드(Xcode Run / 개발 프로파일)로 실기기에 설치 → 로그인 → FCM 토큰 확보
+- [ ] sandbox APNs(또는 FCM HTTP v1) 로 `mutable-content: 1` + 4개 data 키를 넣은 푸시 1건 발송
+- [ ] 잠금 화면에서 **앱 아이콘 대신 캐릭터 아바타**(앱 아이콘은 우하단 작은 배지)와 캐릭터 이름 확인
+- [ ] `avatarUrl` 을 빼고 1건 더 → 일반 알림(+이미지 첨부)으로 뜨는지 폴백 확인
+- [ ] Focus 켠 상태에서 한 건 → 설정 > 집중 모드 > 허용된 사람에 캐릭터가 후보로 뜨는지 확인
+
+---
+
 ## 7. Android 캐릭터 대화 알림 — MessagingStyle + 대화 섹션 (`features.pushConversation`)
 
 iOS §6 의 Android 짝. 캐릭터 선톡을 **메신저 메시지처럼** 그린다 — 아바타·이름이 붙은 `MessagingStyle` 알림, 그리고 캐릭터가 알림 설정의 **"대화" 섹션**에 long-lived 숏컷으로 올라간다(Android 11+). 기본 구현(03 "캐릭터를 연락처처럼").
