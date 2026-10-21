@@ -30,7 +30,7 @@
    node scripts/generate-app.mjs --slug <slug> --platform android
    cd build/<slug>/android && ./gradlew assembleDebug      # 디버그 APK
    ```
-4. **웹 통합** — 웹 서비스에 `@harness/bridge` 추가하고 필요한 기능 호출(`docs/06-INTEGRATION.md`).
+4. **웹 통합** — 웹 서비스에 `@ha3158987/harness-bridge` 추가하고 필요한 기능 호출(`docs/06-INTEGRATION.md`).
 5. **배포** — 태그 푸시 `git tag <slug>-v1.0.0 && git push origin <slug>-v1.0.0`
    또는 Actions 수동 실행. 베타/내부 트랙까지 자동(`docs/08-DEPLOY.md`). 프로덕션은 수동.
 

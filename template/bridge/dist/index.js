@@ -1,4 +1,4 @@
-// @harness/bridge — 공유 JS 브릿지 SDK
+// @ha3158987/harness-bridge — 공유 JS 브릿지 SDK
 //
 // 설계 원칙 (STRATEGY/README):
 //  - OS/기기 분기 로직은 여기(브릿지) 한 곳에만. 웹은 AppBridge.capabilities 로 피처 디텍션만.

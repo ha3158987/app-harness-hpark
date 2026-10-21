@@ -11,7 +11,7 @@
 //   loginBtn.onclick = () => login('google', () => startWebGoogleOAuth());
 //   buyBtn.onclick   = () => buy('coin_100', () => myWebCheckout('coin_100'));
 
-import { AppBridge } from '@harness/bridge';
+import { AppBridge } from '@ha3158987/harness-bridge';
 
 /** 앱(네이티브 셸) 안인가? 모든 분기의 기준. */
 export const isApp = () => AppBridge.isNative;

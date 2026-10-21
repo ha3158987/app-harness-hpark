@@ -1,198 +1,115 @@
-# Appharness — AIPIA Web→Native Harness (Capacitor)
+# app-harness-hpark
 
-> ⚠️ **범용 하네스가 아니라 AIPIA 전사 앱 하네스.** 식별자/도메인/스택/SDK 선택은
-> [`docs/01-AIPIA-CONVENTIONS.md`](docs/01-AIPIA-CONVENTIONS.md) 의 전사 표준을 따른다.
+**배포된 웹 프로젝트를 iOS·Android 웹뷰 앱으로 빠르게 감싸기 위한 개인용 하네스입니다.** 새 프로젝트마다 앱 설정을 만들고 웹에 공유 브릿지를 연결하면, 같은 Capacitor 셸과 빌드 도구를 다시 사용할 수 있습니다. 이 저장소에는 웹 서비스의 화면이나 백엔드가 들어 있지 않습니다. 앱은 설정된 웹 주소를 실행 중에 불러옵니다.
 
-AIPIA 의 여러 웹 서비스(Poptale, AIPIA, ...)를 **하나의 얇은 네이티브 셸 + 공유 브릿지**로 감싸
-iOS/Android 앱으로 *반복 추출* 하는 하네스. 앱은 `server.url` 로 **배포된 웹을 원격 로드**하고,
-웹은 `@harness/bridge` 로 네이티브 기능을 호출한다. 모든 작업은 **Claude Code 스킬**로 자동화.
+이 코드는 [AIPIA의 app-harness](https://github.com/aipia-team/app-harness)를 기반으로 만든 공개 사본입니다. 기존 `apps/`의 설정과 `scripts/lib/config.mjs`의 기본값에는 AIPIA의 앱 ID, 도메인, 인증·분석·스토어 구성이 남아 있습니다. **새 프로젝트에 그대로 배포하지 말고 자신의 서비스에 맞게 바꾸세요.** 이 사본의 Git 이력은 공개를 위해 재작성되었으므로 커밋 해시와 작성자 정보가 원본의 기여 이력을 나타내지는 않습니다.
+
+## 어떻게 동작하나요?
 
 ```mermaid
 flowchart LR
-  W["AIPIA 웹 서비스<br/>(Poptale, AIPIA, ...)"]
-  CFG["apps/&lt;slug&gt;/app.config.json<br/>(앱 1개의 모든 것)"]
-  GEN["generate-app.mjs"]
-  APP["Capacitor 셸<br/>(APK / IPA)"]
-  STORE["App Store / Play"]
-
-  CFG --> GEN --> APP
-  W -- "원격 로드" --> APP
-  APP -- "fastlane (CI)" --> STORE
+  W["별도로 배포한 웹 서비스"] -->|원격 로드| A["Capacitor 앱 셸"]
+  C["apps/<slug>/app.config.json"] --> G["scripts/generate-app.mjs"] --> A
+  B["template/bridge · AppBridge"] --> A
+  W -->|브릿지 API 호출| B
+  A --> O["Android APK/AAB · iOS IPA"]
 ```
 
----
+- **앱 설정**: `apps/<slug>/app.config.json`에 앱 이름, 앱 ID, 시작 URL(`startUrl`), 허용 도메인, 기능 등을 정의합니다. 생성기는 이 설정으로 `build/<slug>/`에 네이티브 프로젝트를 만듭니다.
+- **웹 서비스**: 별도 저장소에서 개발·배포합니다. 앱 셸은 배포된 웹을 원격으로 불러오므로 일반적인 화면 변경은 웹 배포로 반영할 수 있습니다. 네이티브 코드나 앱 설정 변경에는 앱 재빌드가 필요합니다.
+- **공유 브릿지**: `template/bridge/`의 `AppBridge`가 푸시, 딥링크, 공유, 인증, 인앱결제 등 필요한 네이티브 기능을 웹에 제공합니다. 기능 지원 여부는 앱 설정과 빌드에 따라 달라집니다.
+- **빌드와 배포**: `scripts/`, `fastlane/`, `.github/workflows/`가 프로젝트 생성, 검사, 빌드, 내부 배포를 담당합니다. 스토어 계정·서명키·서비스 백엔드는 별도로 준비해야 합니다.
 
-## 시작 동선 (3가지 입장)
+## 새 웹 프로젝트를 앱으로 만들기
 
-| 당신이 누구냐 | 어디부터 | 결과물 |
-|---|---|---|
-| **새 앱을 하네스에 추가하는 개발자** | [`docs/01-AIPIA-CONVENTIONS.md`](docs/01-AIPIA-CONVENTIONS.md) → [`ONBOARDING.md`](ONBOARDING.md) | `apps/<slug>/app.config.json` + 디버그 APK |
-| **Poptale 이전을 맡은 담당자** | [`docs/21-POPTALE-MIGRATION.md`](docs/21-POPTALE-MIGRATION.md) ⭐ | 10주 일정 + 호환성 매트릭스 + 플러그인 SPEC |
-| **하네스 자체를 손보는 사람** | [`docs/02-GUIDE.md`](docs/02-GUIDE.md) → [`docs/03-STRATEGY.md`](docs/03-STRATEGY.md) | 스키마/스킬/CI 변경 |
+### 1. 개발 환경 준비
 
----
-
-## 새 앱 1줄 부트스트랩
-
-```js
-import { aipiaPreset } from './scripts/lib/config.mjs';
-import { writeFileSync, mkdirSync } from 'node:fs';
-
-// 슬러그 하나만 정하면 90% 완성된 config 생성
-const cfg = aipiaPreset({ slug: 'newservice', appName: 'New Service' });
-mkdirSync('apps/newservice', { recursive: true });
-writeFileSync('apps/newservice/app.config.json', JSON.stringify(cfg, null, 2));
-```
-
-자동 도출되는 값: 번들 ID(`com.aipia.newservice`), Firebase 프로젝트 3개
-(`dev-aipia-newservice` / `stage-aipia-newservice` / `aipia-newservice`), 도메인
-(`https://newservice.ai`), K-market 4 socials, Adbrix+Amplitude, Crashlytics+WhaTap,
-다크모드, AppChannel 호환 등 — 전부 [`docs/01-AIPIA-CONVENTIONS.md`](docs/01-AIPIA-CONVENTIONS.md) 표준.
-
-남은 작업: 서비스별 IAP 상품 등록, 푸시 화이트리스트, 아이콘/스플래시.
-
----
-
-## 지원 기능 (요약)
-
-- **앱 기능**: 푸시 · 딥링크 · 강제업데이트 · 카메라 · 생체인증 · 시큐어스토리지 · 로컬알림 · 햅틱 · 클립보드 · 위치 · 공유 · 안전영역 · 다크모드 · **화면캡쳐 방지**(경로별) · **뷰어 밝기**
-- **인증**: 소셜(apple/google/kakao/naver/facebook/x/threads/**line**/**discord**) + 이메일 — 총 10종 · 회원가입 온보딩 · 게스트→실계정 병합 · 회원탈퇴 · 생체 빠른 로그인
-  · **기본은 외부 인증서버 위탁**([25-AUTH-DELEGATION.md](docs/25-AUTH-DELEGATION.md)) — 앱은 공급자와 직접 OAuth 를 돌고 자격증명을 서비스 BE 로 넘긴다
-  · 중앙 IdP 자체 구축(Keycloak)은 **코드에서 제거됐다**(#25) — `auth.idp` 가 남아 있으면 빌드가 멈춘다([10-AUTH.md](docs/10-AUTH.md) 는 배경 기록)
-- **결제**: 인앱결제(디지털 재화) · 웹앱 가격 분기 · **Google purchase token 압축**(Poptale 노하우) · 서버 지갑
-- **마케팅/분석**: Adbrix(어트리뷰션) · Amplitude(분석) — AIPIA 표준. (AppsFlyer 슬롯 유지)
-- **모니터링**: Firebase Crashlytics(크래시) · WhaTap(APM) — AIPIA 표준
-- **호환성**: 기존 웹의 `window.AppChannel.postMessage("<scheme>://...")` 패턴 **무수정** 동작 — `installAppChannelShim()`
-- **운영**: 권한 고지 · 개인정보/성인인증 · CI 자동배포 · 푸시 경로 화이트리스트(보안)
-
-원칙: **하네스=네이티브 배관, 웹=`if(isNative) AppBridge.xxx()` 연결, 백엔드=검증/게이팅, 콘솔=신고.**
-
----
-
-## 빠른 시작 (수동 흐름)
+Node.js 24(`.nvmrc`; 최소 22)를 사용합니다. Android 빌드에는 JDK 21과 Android SDK가, iOS 빌드에는 macOS와 Xcode가 필요합니다. 플랫폼별 상세 요구사항은 [설정 가이드](docs/05-SETUP.md)와 [기기 지원 표](docs/19-DEVICE-SUPPORT.md)를 참고하세요.
 
 ```bash
-node scripts/doctor.mjs                                   # 환경 + 모든 앱 config 점검
+nvm use
+npm ci
+node scripts/doctor.mjs
+npm test
+```
+
+`doctor.mjs`는 로컬 도구와 저장소 안의 앱 설정을 점검합니다. 기존 예시 앱에 관한 경고가 나오더라도 새 프로젝트의 설정을 별도로 확인하세요.
+
+### 2. 앱 설정 만들기
+
+`apps/<slug>/app.config.json`을 만듭니다. 기존 `apps/`의 파일은 형식을 살펴보는 예시로만 사용하고, 필드 정의는 [GUIDE의 설정 스키마](docs/02-GUIDE.md)를 따르세요. 적어도 다음을 새 프로젝트에 맞게 점검해야 합니다.
+
+| 항목 | 확인할 내용 |
+|---|---|
+| `slug`, `appName`, `appId` | 앱 식별자와 화면에 표시할 이름 |
+| `startUrl`, `navigation` | 배포한 웹의 HTTPS 주소, 웹뷰 이동 및 앱 링크 호스트 |
+| `auth`, `iap`, `features` | 서비스 백엔드 계약과 실제로 사용할 네이티브 기능 |
+| `firebase`, `marketing`, `monitoring` | 새 프로젝트의 콘솔·SDK 구성 |
+| `legal`, `permissions`, `assets` | 정책 URL, 권한 문구, 아이콘과 스플래시 |
+
+새 앱을 계속 추가할 계획이라면 `scripts/lib/config.mjs`의 `AIPIA_DEFAULTS`와 `aipiaPreset()`도 검토하세요. 원본 조직에 맞춘 값을 개인 프로젝트의 기본값으로 사용하면 잘못된 번들 ID·도메인·외부 서비스 설정이 생성될 수 있습니다.
+
+### 3. 웹에 브릿지 연결하기
+
+웹 프로젝트에서 GitHub Packages의 `@ha3158987/harness-bridge`를 사용합니다. 패키지가 발행된 뒤 웹 프로젝트의 npm 설정에 `@ha3158987` 스코프의 레지스트리를 지정하고 설치하세요. **공개 패키지 설치에도 GitHub 인증이 필요합니다.** 로컬 설치에는 `read:packages` 권한이 있는 GitHub classic PAT를 `GITHUB_PACKAGES_TOKEN` 환경변수로 주입하고, 토큰 값을 저장소에 기록하지 마세요.
+
+```ini
+@ha3158987:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+```bash
+npm install @ha3158987/harness-bridge@beta @capacitor/core
+```
+
+```js
+import { AppBridge } from '@ha3158987/harness-bridge';
+
+await AppBridge.ready();
+if (AppBridge.isNative) {
+  // 앱에서만 필요한 흐름을 연결합니다.
+}
+```
+
+위 명령은 브릿지와 Capacitor 코어만 설치합니다. 브릿지가 동적으로 불러오는 Capacitor 플러그인의 **JS 패키지도 웹 프로젝트에 설치**해야 합니다. 사용 기능별 목록과 브라우저 폴백, 어댑터 패턴은 [웹 통합 가이드](docs/06-INTEGRATION.md)를 보세요. 원본 문서의 `@harness/bridge` 예시는 이 사본의 패키지명 `@ha3158987/harness-bridge`로 바꿔 읽어야 합니다. 이 저장소의 앱 셸은 `template/bridge/`를 로컬 의존성으로 설치하며, 별도 웹 프로젝트는 발행된 패키지를 사용합니다.
+
+### 4. 앱 생성 및 디버그 빌드
+
+설정에 사용한 슬러그로 프로젝트를 생성합니다. 생성된 `build/<slug>/`는 빌드 산출물입니다.
+
+```bash
 node scripts/generate-app.mjs --slug <slug> --platform android
-cd build/<slug>/android && ./gradlew assembleDebug        # 서명 없는 디버그 APK
+cd build/<slug>/android
+./gradlew assembleDebug
 ```
 
-- 새 서비스 추가 흐름 → [`ONBOARDING.md`](ONBOARDING.md)
-- 웹에 기능 연결 → [`docs/06-INTEGRATION.md`](docs/06-INTEGRATION.md)
-- config 스키마(정본) → [`docs/02-GUIDE.md`](docs/02-GUIDE.md) §6
-- 인계 문서(Poptale) → [`docs/21-POPTALE-MIGRATION.md`](docs/21-POPTALE-MIGRATION.md)
+Android APK의 위치, iOS 빌드·서명 및 내부 테스트 배포 절차는 [배포 가이드](docs/07-HOWTO-DEPLOY.md)를 따르세요. 인증·결제·푸시처럼 외부 서비스가 필요한 기능은 해당 콘솔, 백엔드, 키 파일을 준비해야 실제로 동작합니다.
 
----
+## 저장소 둘러보기
 
-## 레포 레이아웃
-
-```
-Appharness/
-├── docs/01-AIPIA-CONVENTIONS.md         ⭐ 전사 컨벤션 정본 (번들ID·도메인·SDK·이벤트명)
-├── docs/21-POPTALE-MIGRATION.md         ⭐ Poptale Flutter → 하네스 이전 인계 문서
-├── docs/02-GUIDE.md / ONBOARDING.md / docs/06-INTEGRATION.md / docs/10-AUTH.md / docs/11-IAP.md / ...
-├── apps/<slug>/app.config.json  # 앱 정의(단일 진실 공급원) + icon.png/splash.png
-│   ├── aipia/                   #   AIPIA 본 앱 레퍼런스
-│   ├── characterchat/           #   팝챗 prod (com.aipia.characterchat)
-│   ├── characterchat-dev/       #   팝챗 dev  (com.aipia.characterchat.dev)
-│   ├── poptale/                 #   Poptale prod (com.aipia.poptale)
-│   ├── poptale-dev/             #   Poptale dev  (com.aipia.poptale.dev)
-│   ├── poptale-v2-dev/          #   Poptale V2 리더(새 웹) 검증용 (com.aipia.poptale.v2.dev)
-│   └── poptale-global/          #   Poptale 글로벌 (com.aipia.poptale.global)
-├── template/
-│   ├── src/                     # 오프라인/에러 폴백 셸
-│   ├── bridge/                  # 공유 브릿지 (Capacitor 플러그인 + JS SDK + 타입)
-│   ├── integration/             #   harness-adapter.js (AppChannel shim 포함)
-│   └── plugins/                 # 네이티브 플러그인 작업 사양서 (코드 아님)
-│       ├── adbrix/SPEC.md       #   P0
-│       └── whatap/SPEC.md       #   P1/보류
-├── build/<slug>/                # 생성된 Capacitor 프로젝트 (gitignore)
-├── scripts/                     # generate-app.mjs, doctor.mjs
-│   └── lib/config.mjs           #   스키마 + AIPIA_DEFAULTS + aipiaPreset()
-├── fastlane/                    # 빌드/업로드 lane
-├── .github/workflows/release.yml # CI 자동배포
-├── .github/workflows/device-lab.yml # 기기 매트릭스 화면 테스트(빌드 버전별)
-├── lab/                         # 디바이스 랩 — node lab/lab.mjs (docs/26-DEVICE-LAB.md)
-│   ├── devices.json             #   기기 카탈로그 정본(Android·iOS, 세트 smoke/kr/full)
-│   └── suites/<스위트>/          #   시나리오(scenarios.json) · Maestro 플로우(flows/)
-└── .claude/skills/              # 자동화 스킬(new-app, integrate-web, build-*, ...)
-```
-
----
-
-## 📚 문서
-
-문서 **22개**는 전부 [`docs/`](docs/) 에 번호순으로 있다.
-**색인은 [`CLAUDE.md`](CLAUDE.md) 하나뿐이다** — 목적별 라우팅 · 카테고리 · 대상 독자 · 상태를 한 표에서 본다.
-(Claude Code 가 매 세션 자동으로 읽는 파일이라 사람과 AI 가 같은 색인을 본다.)
-
-| 급하면 이것부터 | |
+| 위치 | 역할 |
 |---|---|
-| 새 앱을 추가한다 | [`01-AIPIA-CONVENTIONS`](docs/01-AIPIA-CONVENTIONS.md) → [`04-NEW-APP-CHECKLIST`](docs/04-NEW-APP-CHECKLIST.md) |
-| 테스터에게 배포한다 | [`07-HOWTO-DEPLOY`](docs/07-HOWTO-DEPLOY.md) |
-| 하네스 동작을 알고 싶다 | [`02-GUIDE`](docs/02-GUIDE.md) |
-| 플러그인 사양 | [`template/plugins/`](template/plugins/) |
+| `apps/<slug>/` | 앱별 설정과 이미지 자산; 기존 파일은 AIPIA 예시 |
+| `template/bridge/` | 웹용 JS SDK와 Android·iOS 네이티브 플러그인 |
+| `template/integration/` | 웹 서비스에 적용할 어댑터 예시 |
+| `template/src/` | 로딩·오프라인 상황의 셸 화면 |
+| `scripts/` | 설정 검사와 Capacitor 프로젝트 생성 |
+| `fastlane/`, `.github/workflows/` | 서명·빌드·내부 배포 자동화 |
+| `lab/` | 에뮬레이터·시뮬레이터 화면 테스트 도구와 시나리오 |
+| `docs/` | 설정 스키마, 기능 통합, 배포 절차와 원본 설계 기록 |
 
----
+## 사용 전 확인
 
-## 환경 / 요구사항
+- 이 저장소에 있는 AIPIA 앱 설정은 새 계정의 앱·도메인·스토어 등록을 대신하지 않습니다. 새 프로젝트의 번들 ID, 인증 콜백, 앱 링크, Firebase, IAP 상품과 정책 URL을 각각 확인하세요.
+- 비밀번호, 토큰, 서명키 및 서비스 계정 파일은 Git에 커밋하지 마세요. 로컬 환경변수·별도 파일 또는 저장소 시크릿으로 관리합니다.
+- 앱 셸은 웹을 보여주고 네이티브 기능을 연결합니다. 로그인 판정, 세션, 영수증 검증, 사용자 데이터는 해당 서비스의 백엔드 책임입니다.
+- TestFlight·Play 내부 테스트와 프로덕션 공개는 별개입니다. 스토어 공개 전에는 각 플랫폼의 콘솔 설정과 심사를 확인하세요.
 
-| 항목 | 값 |
-|---|---|
-| Capacitor | 8 |
-| Node | **24** (`.nvmrc` — 웹 레포와 같은 버전). 최소 22 — Capacitor CLI 8 이 20 을 거부한다 — `nvm use` |
-| pnpm (웹 측) | 10.5.2 (AIPIA 웹 표준) |
-| JDK (Android) | **21 필수** |
-| Android SDK | platform 35, build-tools 35 (target 36 — AIPIA 표준 🅰️) |
-| Android 최소 OS | **API 29 (Android 10)** 🅰️ |
-| iOS 최소 | **15.0** 🅰️ |
-| iOS 빌드 | macOS + Xcode 26 (또는 CI macOS 러너) |
+## 더 읽기
 
-점검 명령: `node scripts/doctor.mjs`
-
----
-
-## 현재 상태 (정직)
-
-### 검증됨 ✅
-- Android `assembleDebug` 빌드 (전 기능 + 8 소셜 + IAP + 안전영역)
-- **iOS — `.ipa` 생성과 TestFlight 업로드만 검증** — fastlane `ios build`(.ipa, match) / `ios beta` 동작. 앱 내부 기능은 아래 참고
-- 백엔드 레퍼런스 스모크(게스트/기기/지갑)
-- `aipiaPreset()` 자동 생성 → loadConfig 검증 통과
-- 6개 앱 config (`aipia`, `characterchat`, `characterchat-dev`, `poptale`, `poptale-dev`, `poptale-global`) doctor 오류 0
-
-### 구현됨, 실기기 검증 전 🔧
-- **iOS 실기기 기능** — APNs 수신 · NSE 실행 · 유니버설 링크(AASA) 연결. **빌드/업로드 성공이 기능 동작을 보장하지 않는다**
-- **Adbrix 네이티브 플러그인** (어트리뷰션 · 디퍼드 딥링크 버퍼링) — 코드는 있으나 cold/warm start · 앱 종료 후 복구 · 중복 이벤트 · 버퍼 소비 시점이 미검증. **cold install → 광고 링크 클릭 → 최초 실행 수신**을 실기기로 확인할 것
-
-### 미검증 ⚠️
-- WhaTap 네이티브 플러그인 — `template/plugins/whatap/SPEC.md` 작업 사양만 있음, 실제 SDK 통합은 dev 가 채워야 함 (Kakao/Naver 네이티브 SDK 사양은 2026-09-11 삭제 — 소셜 로그인은 브라우저 OAuth/브로커, `docs/25` §3)
-- Poptale 마이그 호환성 매트릭스(`docs/21-POPTALE-MIGRATION.md §3`) — 10개 항목 PASS/FAIL 검증 미실행
-
-### 외부 의존(사람 몫) 🙋
-- Apple Developer Program / Google Play Console 계정 · 멤버십
-- Apple/Google/Kakao/Naver Developer Console 의 앱 등록 + 키 해시
-- 스토어 IAP 상품 · 가격 티어 · 개인정보 라벨
-- Firebase 프로젝트 3개(`{env}-aipia-<slug>`) 생성 + google-services 파일
-- Adbrix/Amplitude/WhaTap 대시보드 앱 등록
-- ~~IdP 배포(Keycloak)~~ — **제거됐다**(#25). 인증은 외부 인증서버 위탁이 기본이다
-
-자세히: [`docs/01-AIPIA-CONVENTIONS.md §14·§15`](docs/01-AIPIA-CONVENTIONS.md), [`docs/02-GUIDE.md §5`](docs/02-GUIDE.md).
-
----
-
-## 안전 원칙 (변하지 않는 것들)
-
-- **시크릿/키 절대 config·레포 금지** — GitHub Secrets / fastlane match / 환경변수만
-- **프로덕션 스토어 공개는 사람이 승인** — 자동화는 베타/내부 트랙까지
-- **빅뱅 금지** — 동작하는 앱(Poptale Flutter)은 패리티 검증 전까지 깨지 않는다
-- **자격증명/결제정보 자동 입력 금지**
-- **회원탈퇴 엔드포인트 필수** — 스토어 정책
-
----
-
-## 라이센스 / 컨택
-
-- 사내 비공개 레포(aipia-team org)
-- 컨벤션/하네스 관련 문의: AIPIA 팀 내부 채널
-- Poptale 이전 인계: [`docs/21-POPTALE-MIGRATION.md §2`](docs/21-POPTALE-MIGRATION.md) 책임 분담 표 참조
+- [ONBOARDING.md](ONBOARDING.md) — 새 서비스 추가 순서
+- [GUIDE](docs/02-GUIDE.md) — 전체 구조와 `app.config.json` 스키마
+- [INTEGRATION](docs/06-INTEGRATION.md) — 웹 브릿지 API와 어댑터
+- [APP-FEATURES](docs/18-APP-FEATURES.md) — 지원 기능과 패키지
+- [HOWTO-DEPLOY](docs/07-HOWTO-DEPLOY.md) — 빌드·테스터 배포
+- [AUTH-DELEGATION](docs/25-AUTH-DELEGATION.md) — 인증 계약과 브릿지 패키지 버전

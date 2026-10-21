@@ -1,5 +1,5 @@
-// @harness/bridge — 타입 정의
-// 웹 서비스는 `import { AppBridge } from '@harness/bridge'` 로 사용한다.
+// @ha3158987/harness-bridge — 타입 정의
+// 웹 서비스는 `import { AppBridge } from '@ha3158987/harness-bridge'` 로 사용한다.
 
 export type StatusBarStyle = 'light' | 'dark';
 export type Platform = 'ios' | 'android' | 'web';

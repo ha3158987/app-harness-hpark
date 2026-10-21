@@ -1,0 +1,40 @@
+name: publish-bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      dist_tag:
+        description: npm distribution tag
+        required: true
+        type: choice
+        default: beta
+        options:
+          - beta
+          - latest
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@ha3158987'
+      - run: npm ci
+      - run: npm test
+      - run: npm publish --dry-run --tag "$DIST_TAG"
+        working-directory: template/bridge
+        env:
+          DIST_TAG: ${{ inputs.dist_tag }}
+      - run: npm publish --tag "$DIST_TAG"
+        working-directory: template/bridge
+        env:
+          DIST_TAG: ${{ inputs.dist_tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

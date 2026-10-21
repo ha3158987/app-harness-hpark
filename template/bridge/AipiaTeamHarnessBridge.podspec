@@ -7,9 +7,9 @@ Pod::Spec.new do |s|
   s.version = package['version']
   s.summary = package['description']
   s.license = 'MIT'
-  s.homepage = 'https://example.com/harness'
-  s.author = 'Harness'
-  s.source = { :git => 'https://example.com/harness.git', :tag => s.version.to_s }
+  s.homepage = 'https://github.com/ha3158987/app-harness-hpark'
+  s.author = 'ha3158987'
+  s.source = { :git => 'https://github.com/ha3158987/app-harness-hpark.git', :tag => s.version.to_s }
   s.source_files = 'ios/Sources/**/*.{swift,h,m,c,cc,mm,cpp}'
   s.ios.deployment_target = '15.0'
   s.dependency 'Capacitor'

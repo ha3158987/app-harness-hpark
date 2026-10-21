@@ -1,11 +1,12 @@
 {
-  "name": "@aipia-team/harness-bridge",
+  "name": "@ha3158987/harness-bridge",
   "version": "1.5.0-beta.6",
   "description": "공유 JS 브릿지 SDK + 커스텀 Capacitor 플러그인(AppBridge). 각 웹 서비스가 import 하고, 셸이 네이티브 기능을 열어준다.",
+  "author": "ha3158987 <65105537+ha3158987@users.noreply.github.com>",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aipia-team/app-harness.git"
+    "url": "git+https://github.com/ha3158987/app-harness-hpark.git"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
