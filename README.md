@@ -4,6 +4,8 @@
 
 웹은 기존 저장소에서 개발·배포합니다. 이 하네스는 앱별 설정으로 Capacitor 셸을 만들고, 배포된 웹을 앱 안에 불러옵니다. 푸시·딥링크·인앱결제 같은 기기 기능은 웹에 설치한 `@ha3158987/harness-bridge`로 연결합니다.
 
+![웹 서비스마다 네이티브 작업을 반복하는 기존 방식과, 앱별 설정·AppBridge·공유 하네스로 서비스별 iOS·Android 앱을 만드는 방식 비교](assets/harness-overview.svg)
+
 ## 새 앱 만들기
 
 1. `apps/<slug>/app.config.json`에 앱 이름, `appId`, 웹 주소(`startUrl`), 사용할 기능을 설정합니다. [설정 스키마](docs/02-GUIDE.md)
