@@ -4,20 +4,21 @@ title: AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
 category: 기능연동
 audience: 개발자
 status: active
-updated: 2026-10-08
+updated: 2026-10-21
 ---
 
 # AUTH DELEGATION — 외부 인증서버 위탁 (기본 인증 규약)
 
-**하네스로 만드는 모든 앱의 기본 인증 방식이다.** 서비스가 이미 운영 중인 외부 인증서버에
-인증을 위탁하고, 하네스는 자격증명을 **운반만** 한다.
+**인증을 사용하는 앱의 위탁 규약이다.** 서비스가 외부 인증서버에 인증을 위탁할 때,
+하네스는 자격증명을 **운반만** 한다.
 
 첫 적용은 **팝챗(characterchat) + poptale-auth** 이고, 이후 앱(팝테일 글로벌)은 **config 만 바꿔 같은 경로**를 따른다.
 
 > ✅ **2026-09-03 확정 · 2026-09-11 문서 반영 — 팝챗 앱은 브로커(§3 A′)다.** 앱이 공급자와 직접 OAuth 를
 > 돌지 않고(길 B 미사용), 서비스 BE 의 `start` 를 인앱 브라우저로 열어 인증서버가 커스텀 스킴으로 돌려준
-> `code` 를 앱 WebView 가 상환한다. 하네스 배선은 `auth.oauthReturnScheme: true` 하나(#34). 신규 앱의
-> 기본도 이 형태다. 길 B 는 poptale(국내)·aipia 가 쓴다. §3·§4·§7 은 두 형태를 나눠 적었다.
+> `code` 를 앱 WebView 가 상환한다. 하네스 배선은 `auth.oauthReturnScheme: true` 하나(#34). 당시 신규 앱의
+> 기본으로 정한 형태다. 현재는 빈 설정 템플릿에서 시작해 인증이 필요한 서비스에서 A′ 또는 B 를 선택한다.
+> 길 B 는 poptale(국내)·aipia 가 쓴다. §3·§4·§7 은 두 형태를 나눠 적었다.
 >
 > ✅ **2026-10-07 — 팝테일 V2(`poptale-v2-dev`)도 A′ 브로커다.** 게이트웨이는 poptale-backend(`client=poptale`),
 > 앱 복귀는 `com.aipia.poptale.v2.dev://oauth/callback`. 팝챗과 다른 점은 브릿지 엔드포인트가 BE 가 아니라
@@ -26,9 +27,10 @@ updated: 2026-10-08
 > **IdP 를 자체 구축하는 경로(Keycloak)는 레거시다.** 신규 앱은 쓰지 않는다 — [`10-AUTH.md`](10-AUTH.md).
 > 우리가 IdP 를 지으려던 이유는 "IdP 가 없어서" 였는데, 이제 운영 중인 것이 있으므로 지을 이유가 없다.
 >
-> ✅ **코드 반영은 PR #25 로 끝났다.** `aipiaPreset` 이 소셜 provider 마다 `auth.oauth.<provider>.clientId`
-> 자리를 만들어 내보내므로 `new-app` 으로 만든 앱은 clientId 를 넣을 자리가 있다. 자체 IdP 모드
-> 제거도 같은 PR 에 담겼다 — 아래 §8 이 그 결과다.
+> ✅ **PR #25 코드 변경:** `aipiaPreset` 에 소셜 provider 별 `auth.oauth.<provider>.clientId`
+> 자리가 추가됐고 자체 IdP 모드가 제거됐다(§8). 현재 `new-app` 스킬은
+> `apps/app.config.template.json` 을 복사한다. 네이티브 OAuth 앱의 provider 와 공개 clientId 는
+> 해당 서비스의 실제 값으로 개별 입력한다.
 
 > [`10-AUTH.md`](10-AUTH.md) 의 IdP 설정·Keycloak 체크리스트 절과 레퍼런스 백엔드 `backend/auth-reference` 는
 > **2026-09-11 에 삭제했다**(제거된 경로의 문서·코드를 레포에 남기지 않는다). 그 문서의 *공급자별 토큰 교환표*는
@@ -90,8 +92,9 @@ updated: 2026-10-08
 | **팝테일 V2(poptale-v2-dev)** | **A′ 브로커** | **poptale-backend · `poptale`** | **`com.aipia.poptale.v2.dev://oauth/callback`** | 2026-10-07 계약(바다 승인) — 팝챗과 같은 구조. BE 가 유일한 게이트웨이이고 인증서버 토큰은 BE 금고에만 둔다. 레거시 Flutter 앱은 레거시 경로 유지 |
 | poptale · poptale-dev · aipia | **B** | 자체 BE | `<appId>://oauth/<p>` | 자체 BE 가 공급자 자격증명을 받는 기존 구조. 변경 없음 |
 
-**신규 앱의 기본은 A′ 다.** 길 B 는 표준 OAuth 라 인증서버에 독립적이지만, 위 계정 분열 위험을 앱 쪽
-clientId 관리로 떠안는다. A′ 는 그 위험이 구조적으로 없고, 앱은 복귀 스킴 하나만 등록한다.
+**서비스 BE 가 OAuth 를 처리한다면 A′ 를 사용한다.** 앱이 공급자 OAuth 를 직접 처리하는 계약이면 길 B 를 사용한다.
+길 B 는 표준 OAuth 라 인증서버에 독립적이지만, 위 계정 분열 위험을 앱 쪽 clientId 관리로 떠안는다.
+A′ 는 그 위험이 구조적으로 없고, 앱은 복귀 스킴 하나만 등록한다.
 
 ### A′ 의 규약 — 앱 · 웹 · 인증서버가 맞춰야 할 것
 
@@ -409,7 +412,7 @@ npm view @aipia-team/harness-bridge dist-tags        # { beta: '1.5.0-beta.5', l
 
 ## 7. config — 두 형태
 
-### A′ 브로커 앱 (팝챗 실값 형태 — `apps/characterchat*/app.config.json`)
+### A′ 브로커 앱 (기존 팝챗 설정 예시)
 
 ```jsonc
 "auth": {
@@ -424,8 +427,9 @@ npm view @aipia-team/harness-bridge dist-tags        # { beta: '1.5.0-beta.5', l
 }
 ```
 
-`new-app` 스킬은 `aipiaPreset({ slug, appName, authMode: 'broker' })` 로 이 모양을 만든다
-(`scripts/lib/config.mjs`). 팝테일 글로벌은 팝챗 BE 계약을 그대로 쓴다(2026-09-11 확정) — 호스트만 바뀐다.
+`new-app` 스킬은 `apps/app.config.template.json` 을 복사한다. 브로커 인증을 사용하는 앱은
+`auth.providers: []` 와 `auth.oauthReturnScheme: true` 를 설정하고, 필요한 엔드포인트는 해당 서비스의
+실제 계약에 맞춰 채운다. 팝테일 글로벌은 팝챗 BE 계약을 그대로 썼다(2026-09-11 확정) — 호스트만 바뀐다.
 ⚠️ 팝챗 prod 호스트 `api.chat.poptale.ai` 는 **미확인 추정치**로 남아 있다(§9).
 
 **팝테일 V2(`apps/poptale-v2-dev`)** 는 같은 모양에서 엔드포인트 4개가 V2 웹의 같은 오리진 BFF 이고 `signupEndpoint` 가
@@ -468,6 +472,9 @@ npm view @aipia-team/harness-bridge dist-tags        # { beta: '1.5.0-beta.5', l
   // idp 는 넣지 않는다 — §8 참조
 }
 ```
+
+새 네이티브 OAuth 앱에서는 예시의 provider 목록이나 clientId 를 복사하지 말고, 해당 서비스에서 실제 사용하는
+provider 와 공개 `auth.oauth.<provider>.clientId` 를 개별 확인해 입력한다.
 
 `features` 의 **`deepLink` · `secureStorage` 를 켜야 한다.** 딥링크가 꺼져 있으면 OAuth 복귀
 자체가 안 되고, 시큐어 스토리지가 없으면 세션을 기기에 붙들 수 없다.

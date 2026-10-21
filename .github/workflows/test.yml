@@ -6,14 +6,14 @@
 #     scripts/lib/config.mjs(KNOWN_AUTH_PROVIDERS) 를 같이 고치게 강제한다.
 #     하나만 고치면 다른 데서 막히는데, 로컬에서만 도는 가드는 가드가 아니다.
 #   - config 스키마 검증 (auth.idp 같은 금지 키 · 미지원 provider 는 err() 로 죽는다)
-#   - scripts/doctor.mjs — 5개 앱 config 를 훑어 오류 0 인지 본다(경고는 exit 0).
+#   - scripts/doctor.mjs — 등록된 앱 config 를 훑어 오류 0 인지 본다(경고는 exit 0).
 #
 # node-version 을 '22' 로 박지 않고 node-version-file 로 .nvmrc 를 읽는 이유:
 # .nvmrc 가 이 레포의 Node 버전 단일 출처다. 여기에 리터럴을 또 쓰면 .nvmrc 를
 # 올릴 때 CI 가 조용히 옛 버전에 남는다.
 #
-# 릴리즈 게이트(--release)는 일부러 넣지 않았다 — aipia · poptale 이 의도적으로
-# 실패하므로 매 실행이 빨개진다. 게이트는 release.yml 이 태그 빌드에서 돌린다.
+# 릴리즈 게이트(--release)는 앱별 서명·인증·스토어 설정을 요구하므로 여기서 돌리지 않는다.
+# 게이트는 release.yml 이 태그 빌드에서 돌린다.
 name: test
 
 on:

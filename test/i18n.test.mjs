@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { LOCALES, normalizeLocales, normalizeLocalized, resolveLocalized, baseLocaleOf } from '../scripts/lib/i18n.mjs';
@@ -57,13 +58,41 @@ test('locales 미선언 앱의 기본 문구 언어는 한국어로 유지된다
   assert.equal(baseLocaleOf({ locales: L8 }), 'en');
 });
 
-test('등록된 모든 앱이 로딩되고 appName 은 언제나 문자열이다', () => {
-  for (const slug of readdirSync(join(ROOT, 'apps'))) {
+function assertLocalizedConfig(cfg, slug) {
+  assert.equal(typeof cfg.appName, 'string', `${slug}: appName 이 문자열이어야 한다(웹/네이티브가 그대로 읽음)`);
+  const desc = cfg.tracking.att.usageDescription;
+  assert.ok(desc === null || typeof desc === 'string', `${slug}: att.usageDescription 이 문자열/null 이어야 한다`);
+  for (const l of cfg.locales.supported) assert.ok(LOCALES[l], `${slug}: 알 수 없는 로케일 ${l}`);
+}
+
+test('로케일 맵이 있는 앱 설정을 읽으면 런타임 문자열로 정규화된다', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'ah-i18n-config-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const slug = 'sample';
+  const appDir = join(root, 'apps', slug);
+  mkdirSync(appDir, { recursive: true });
+  writeFileSync(join(appDir, 'app.config.json'), JSON.stringify({
+    slug,
+    appName: { en: 'Sample', 'ko-KR': '샘플' },
+    appId: 'com.example.sample',
+    startUrl: 'https://example.com',
+    locales: { default: 'en', supported: ['en', 'ko-KR'] },
+    tracking: { att: { usageDescription: { en: 'Analytics', 'ko-KR': '분석' } } },
+  }));
+  const cfg = loadConfig(root, slug);
+  assertLocalizedConfig(cfg, slug);
+  assert.equal(cfg.appName, 'Sample');
+  assert.equal(cfg.tracking.att.usageDescription, 'Analytics');
+});
+
+test('실제 앱 설정 파일이 있는 디렉터리만 로딩한다', () => {
+  for (const entry of readdirSync(join(ROOT, 'apps'), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const slug = entry.name;
+    const file = join(ROOT, 'apps', slug, 'app.config.json');
+    if (!existsSync(file)) continue;
     const cfg = loadConfig(ROOT, slug);
-    assert.equal(typeof cfg.appName, 'string', `${slug}: appName 이 문자열이어야 한다(웹/네이티브가 그대로 읽음)`);
-    const desc = cfg.tracking.att.usageDescription;
-    assert.ok(desc === null || typeof desc === 'string', `${slug}: att.usageDescription 이 문자열/null 이어야 한다`);
-    for (const l of cfg.locales.supported) assert.ok(LOCALES[l], `${slug}: 알 수 없는 로케일 ${l}`);
+    assertLocalizedConfig(cfg, slug);
   }
 });
 

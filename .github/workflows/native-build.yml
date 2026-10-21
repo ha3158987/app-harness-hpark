@@ -2,7 +2,7 @@
 #
 # 왜: test.yml 은 Node 테스트뿐이라 Kotlin/Swift 가 깨져도 PR 이 초록이다. 지금까지는 태그 릴리즈(release.yml)에서야
 #     처음 컴파일됐다 — 그때 깨지면 스토어 배포가 막힌다. 여기서는 서명·업로드 없이 디버그/시뮬레이터 빌드만 한다.
-# 앱: characterchat — Firebase·푸시·소셜 키가 없어 시크릿 없이 두 플랫폼 모두 빌드된다.
+# 테스트 중에만 중립 앱 설정을 만들어 두 플랫폼을 시크릿 없이 빌드한다.
 # 비용: macOS 러너는 분당 $0.062(Linux 의 10배). 경로 필터로 네이티브 변경 PR 에만 돈다.
 name: native-build
 
@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SLUG: characterchat
+  SLUG: harness-smoke
 
 jobs:
   android:
@@ -36,6 +36,18 @@ jobs:
         with: { distribution: 'temurin', java-version: '21' }
       - uses: android-actions/setup-android@v4
       - run: npm ci
+      - name: 중립 스모크 앱 설정
+        run: |
+          mkdir -p "apps/$SLUG"
+          cat > "apps/$SLUG/app.config.json" <<EOF
+          {
+            "slug": "$SLUG",
+            "appName": "Harness Smoke",
+            "appId": "com.example.harnesssmoke",
+            "startUrl": "https://example.com",
+            "version": { "name": "1.0.0", "code": 1 }
+          }
+          EOF
       - name: Capacitor 프로젝트 생성(디버그)
         run: node scripts/generate-app.mjs --slug "$SLUG" --platform android
       - name: assembleDebug
@@ -56,6 +68,18 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version-file: '.nvmrc', cache: npm }
       - run: npm ci
+      - name: 중립 스모크 앱 설정
+        run: |
+          mkdir -p "apps/$SLUG"
+          cat > "apps/$SLUG/app.config.json" <<EOF
+          {
+            "slug": "$SLUG",
+            "appName": "Harness Smoke",
+            "appId": "com.example.harnesssmoke",
+            "startUrl": "https://example.com",
+            "version": { "name": "1.0.0", "code": 1 }
+          }
+          EOF
       - name: Capacitor 프로젝트 생성(디버그)
         run: node scripts/generate-app.mjs --slug "$SLUG" --platform ios
       - name: 시뮬레이터 빌드(서명 없음)

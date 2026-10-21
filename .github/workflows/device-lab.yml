@@ -17,13 +17,11 @@ on:
     paths:
       - 'lab/**'
       - '.github/workflows/device-lab.yml'
-      - 'apps/poptale-v2-dev/**'
   workflow_dispatch:
     inputs:
       slug:
         description: '앱 slug (apps/<slug>) — 스위트가 있는 앱'
         required: true
-        default: 'poptale-v2-dev'
         type: string
       platforms:
         description: '플랫폼'
@@ -90,9 +88,19 @@ jobs:
           const fs = require('fs');
           const env = process.env;
           const cat = JSON.parse(fs.readFileSync('lab/devices.json', 'utf8'));
-          let slug = env.IN_SLUG || 'poptale-v2-dev', platforms = env.IN_PLATFORMS || 'android', devices = env.IN_DEVICES || 'smoke';
+          let slug = env.IN_SLUG || '', platforms = env.IN_PLATFORMS || 'android', devices = env.IN_DEVICES || 'smoke';
           if (env.EVENT === 'push') { slug = env.TAG.replace(/-v[^-]*$/, ''); platforms = 'both'; devices = 'smoke'; }
-          if (env.EVENT === 'pull_request') { platforms = 'android'; devices = 'smoke'; }
+          if (env.EVENT === 'pull_request') {
+            platforms = 'android'; devices = 'smoke';
+            // PR 에서는 설정 파일이 있는 앱 중 랩 스위트가 있는 첫 앱을 사용한다.
+            const candidates = fs.readdirSync('lab/suites').sort().flatMap((s) =>
+              JSON.parse(fs.readFileSync(`lab/suites/${s}/suite.json`, 'utf8')).slugs);
+            slug = candidates.find((s) => fs.existsSync(`apps/${s}/app.config.json`)) || '';
+          }
+          if (env.EVENT === 'workflow_dispatch' && !fs.existsSync(`apps/${slug}/app.config.json`)) {
+            console.error(`::error::apps/${slug}/app.config.json 없음 — 등록된 앱 slug 를 입력하세요`);
+            process.exit(1);
+          }
           // 스위트가 이 slug 를 다루는지
           const suites = fs.readdirSync('lab/suites').filter((s) => JSON.parse(fs.readFileSync(`lab/suites/${s}/suite.json`, 'utf8')).slugs.includes(slug));
           const all = [...cat.android.devices.map((d) => ({ ...d, p: 'android' })), ...cat.ios.devices.map((d) => ({ ...d, p: 'ios' }))];
@@ -107,7 +115,7 @@ jobs:
           };
           for (const [k, v] of Object.entries(out)) console.log(`${k}=${v}`);
           console.error(out);
-          if (!out.suite) console.error(`::notice::${slug} 를 다루는 스위트가 lab/suites 에 없어 건너뛴다`);
+          if (!out.suite) console.error(`::notice::설정 파일과 랩 스위트가 있는 앱이 없어 기기 테스트를 건너뛴다`);
           EOF
 
   build-android:

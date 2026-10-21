@@ -1,0 +1,14 @@
+{
+  "slug": "",
+  "appName": "",
+  "appId": "",
+  "startUrl": "",
+  "version": { "name": "1.0.0", "code": 1 },
+  "assets": { "icon": "icon.png", "splash": "splash.png" },
+  "auth": { "providers": [] },
+  "iap": { "products": [] },
+  "firebase": { "enabled": false },
+  "ios": { "teamId": null, "usesNonExemptEncryption": null },
+  "android": { "sha256CertFingerprints": [] },
+  "legal": { "privacyUrl": "", "termsUrl": "" }
+}

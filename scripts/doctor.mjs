@@ -29,10 +29,12 @@ if (/[^\x00-\x7F]/.test(ROOT)) w(`레포 경로에 non-ASCII 포함(${ROOT}) —
 
 head('앱 정의 (apps/*)');
 const appsDir = join(ROOT, 'apps');
-const slugs = existsSync(appsDir)
+const appDirs = existsSync(appsDir)
   ? readdirSync(appsDir).filter((d) => statSync(join(appsDir, d)).isDirectory())
   : [];
-if (!slugs.length) w('등록된 앱 없음 — new-app 으로 추가');
+const slugs = appDirs.filter((d) => existsSync(join(appsDir, d, 'app.config.json')));
+if (!slugs.length) w('등록된 앱 없음 — 빈 설정 템플릿을 복사해 앱을 추가하세요');
+if (appDirs.length > slugs.length) w(`설정 없는 자산 폴더 ${appDirs.length - slugs.length}개는 검사하지 않습니다`);
 const seenIds = new Map();
 for (const slug of slugs) {
   console.log(`\n  [${slug}]`);
