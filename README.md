@@ -62,6 +62,8 @@ npm test
 npm install @ha3158987/harness-bridge@beta @capacitor/core
 ```
 
+`@beta`는 현재 소스의 `1.5.0-beta.6`을 설치합니다. 원본 패키지와 같은 기본 안정판 `1.4.0`은 태그 없이 설치할 수 있습니다.
+
 ```js
 import { AppBridge } from '@ha3158987/harness-bridge';
 
